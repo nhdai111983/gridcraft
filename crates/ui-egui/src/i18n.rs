@@ -9,6 +9,9 @@
 
 use serde::{Deserialize, Serialize};
 
+// NexusOffices: product names shown in the interface (`tr` brands what it returns).
+mod brand;
+pub use brand::{brand, nexus_text};
 mod cs;
 mod de;
 mod es;
@@ -130,7 +133,8 @@ impl Language {
             Self::Fr => fr::translate(text),
             Self::Sr => sr::translate(text),
         };
-        translated.unwrap_or_else(|| text.rsplit_once('|').map_or(text, |(_, label)| label))
+        // NexusOffices: the product names shown are Nexus Sheets / NexusOffices (`brand`).
+        brand::branded(translated.unwrap_or_else(|| text.rsplit_once('|').map_or(text, |(_, label)| label)))
     }
 }
 
@@ -599,7 +603,7 @@ mod tests {
         for (i, (en, ja)) in JAPANESE.iter().enumerate() {
             assert!(!ja.is_empty());
             assert!(JAPANESE.iter().take(i).all(|(other, _)| en != other));
-            assert_eq!(Language::En.tr(en), en.rsplit_once('|').map_or(*en, |(_, label)| label));
+            assert_eq!(Language::En.tr(en), brand(en.rsplit_once('|').map_or(*en, |(_, label)| label)));
         }
         for (english, _) in JAPANESE {
             assert!(zh::translate(english).is_some_and(|text| !text.is_empty()), "missing Simplified Chinese: {english}");

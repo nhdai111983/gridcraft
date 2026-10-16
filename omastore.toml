@@ -1,11 +1,11 @@
 kind = "app"
 categories = ["Office"]
-icon = "assets/app-icon/hicolor/256x256/apps/ai.storyteller.gridcraft.png"
+icon = "nexus/assets/hicolor/256x256/apps/vn.sonnytech.nexus.sheets.png"
 
 [linux.x86_64]
-asset = "gridcraft-{version}-linux-x86_64.tar.gz"
-exec = "gridcraft-{version}-linux-x86_64/bin/gridcraft"
+asset = "NexusSheets-{version}-linux-x86_64.tar.gz"
+exec = "NexusSheets-{version}-linux-x86_64/bin/nexus-sheets"
 
 [linux.aarch64]
-asset = "gridcraft-{version}-linux-aarch64.tar.gz"
-exec = "gridcraft-{version}-linux-aarch64/bin/gridcraft"
+asset = "NexusSheets-{version}-linux-aarch64.tar.gz"
+exec = "NexusSheets-{version}-linux-aarch64/bin/nexus-sheets"
