@@ -1065,7 +1065,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                 "agents" => {
                     ui.label("Nexus Sheets is fully drivable by agents. Every menu item, button and gesture is a command:");
                     ui.add_space(4.0);
-                    ui.monospace("nexus-sheets --control 7979        # JSON-lines control channel\nnexus-sheets-cli mcp --connect 7979   # MCP bridged to this window\nnexus-sheets-cli mcp                   # headless MCP server");
+                    ui.monospace("nexus-sheets --control 7979           # JSON-lines control channel\nnexus-sheets-cli mcp --connect 7979   # MCP bridged to this window\nnexus-sheets-cli mcp                  # headless MCP server");
                     ui.add_space(4.0);
                     ui.label(format!("{} engine commands are available. See docs/mcp.md and docs/control-protocol.md.", gridcraft_engine::command_specs().len()));
                 }

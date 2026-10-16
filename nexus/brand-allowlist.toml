@@ -13,9 +13,9 @@ pattern = '^\s*//.*'
 reason = "Chú thích Rust (//, ///, //!) không biên dịch vào binary, người dùng không thấy"
 
 [[allow]]
-path = "**/*.rs"
+path = "crates/ui-egui/src/keytips/keytip_table/generated.rs"
 pattern = ' // .*$'
-reason = "Chú thích Rust cuối dòng, không biên dịch vào binary"
+reason = "Chú thích Rust cuối dòng (chép từ trường note của keytips.json), không biên dịch vào binary"
 
 [[allow]]
 path = "**/*.{toml,yml,yaml,sh,py,ps1,in,desktop}"

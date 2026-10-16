@@ -359,7 +359,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "screenshot",
             "Screenshot",
-            "Save a PNG screenshot of the Nexus Sheets window to `path`. Desktop app only (`gridcraft-cli mcp --connect 7979`).",
+            "Save a PNG screenshot of the Nexus Sheets window to `path`. Desktop app only (`nexus-sheets-cli mcp --connect 7979`).",
             obj(json!({"path": string("Output PNG path")}), &["path"]),
             true,
         ),

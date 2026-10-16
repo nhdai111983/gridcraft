@@ -119,6 +119,10 @@ impl Language {
     ///
     /// A label that needs two translations (Home's text "Orientation" vs Page Layout's print
     /// "Orientation") is keyed `context|label`: English shows only the part after the `|`.
+    ///
+    /// Invariant (NexusOffices): never pass workbook or other user text (sheet names, cell
+    /// values, file names, data-validation titles) to `tr`: what it returns goes through
+    /// [`brand`], which renames the product in interface labels only.
     pub fn tr(self, text: &str) -> &str {
         let translated = match self {
             Self::En => None,

@@ -7,10 +7,11 @@ use std::io::Read;
 use gridcraft_engine::Session;
 use serde_json::json;
 
-fn tmp(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("gridcraft-nexus-brand-{}", std::process::id()));
+/// A fresh directory for one test (tests run in parallel), removed by the test when it ends.
+fn tmp_dir(test: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("nexus-sheets-brand-{}-{test}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    dir.join(name)
+    dir
 }
 
 fn part(xlsx: &std::path::Path, name: &str) -> String {
@@ -41,7 +42,8 @@ fn default_author_is_nexus() {
     s.execute("cell.set", json!({"cell": "A1", "input": "Xin chào"})).unwrap();
     // A note added without an author is signed with the default user name.
     s.execute("review.newNote", json!({"cell": "A1", "text": "ghi chú"})).unwrap();
-    let path = tmp("new.xlsx");
+    let dir = tmp_dir("author");
+    let path = dir.join("new.xlsx");
     s.execute("file.saveAs", json!({"path": path.to_str().unwrap()})).unwrap();
 
     let app = part(&path, "docProps/app.xml");
@@ -56,6 +58,7 @@ fn default_author_is_nexus() {
     let doc = reopened.doc().unwrap();
     let authors: Vec<&str> = doc.wb.active().unwrap().comments.values().map(|c| c.author.as_str()).collect();
     assert_eq!(authors, ["Nexus Sheets User"]);
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
@@ -63,13 +66,15 @@ fn pdf_export_names_nexus_sheets() {
     let mut s = Session::new();
     s.new_workbook();
     s.execute("cell.set", json!({"cell": "A1", "input": "1"})).unwrap();
-    let path = tmp("sheet.pdf");
+    let dir = tmp_dir("pdf");
+    let path = dir.join("sheet.pdf");
     s.execute("file.saveAs", json!({"path": path.to_str().unwrap()})).unwrap();
     let pdf = std::fs::read(&path).unwrap();
     let has = |needle: &[u8]| pdf.windows(needle.len()).any(|w| w == needle);
     assert!(has(b"/Producer (Nexus Sheets PDF)"));
     assert!(has(b"/Creator (Nexus Sheets)"));
     assert!(!has(b"GridCraft"));
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]

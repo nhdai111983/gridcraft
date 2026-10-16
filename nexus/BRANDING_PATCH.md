@@ -38,7 +38,7 @@ Cơ chế chính:
 | `crates/engine/src/cmd/solver.rs` | Tiêu đề báo cáo Solver ghi vào workbook "Nexus Sheets … Report" (+ test) | Có |
 | `crates/engine/src/cmd/whatif.rs` | Chú thích dữ liệu Scenario Manager ghi vào workbook | Có |
 | `crates/engine/src/cmd/spelling.rs` | Thông báo thiếu từ điển | Có |
-| `crates/engine/src/cmd/extra.rs` | Mô tả lệnh `home.addIns` (hiện qua list_commands/MCP) | Có |
+| `crates/engine/src/cmd/extra.rs` | Mô tả lệnh `home.addIns` (hiện qua list_commands/MCP) và gợi ý `nexus-sheets-cli mcp` | Có |
 | `crates/functions/src/info.rs` | `INFO("osversion")` trả "Nexus Sheets" (giá trị ghi vào ô) | Có |
 | `crates/xlsx/src/write.rs` | `docProps/app.xml` `<Application>Nexus Sheets</Application>` | Có — tên app qua biến build |
 | `crates/xlsx/src/pivot.rs` | `refreshedBy="Nexus Sheets"` trong pivot cache ghi vào file | Có |
@@ -48,14 +48,16 @@ Cơ chế chính:
 | `crates/pdf/src/tests.rs` | Assert Producer mới | Đi cùng `lib.rs` |
 | `crates/mcp/src/server.rs` | `serverInfo.title = "Nexus Sheets"`, INSTRUCTIONS; **`serverInfo.name` giữ `"gridcraft"`** (định danh máy) | Có |
 | `crates/mcp/src/backend.rs` | Thông báo kết nối app | Có |
-| `crates/mcp/src/tools.rs` | Mô tả tool execute_command/list_commands/screenshot | Có |
-| `apps/gridcraft/src/main.rs` | Tiêu đề cửa sổ, app id, tên eframe, `--version`, log, icon cửa sổ từ `nexus/assets/`, thư mục cấu hình `Nexus Sheets` (macOS/Windows) / `nexus-sheets` (XDG) — không đụng cấu hình GridCraft | Có |
+| `crates/mcp/src/tools.rs` | Mô tả tool execute_command/list_commands/screenshot (lệnh `nexus-sheets-cli mcp --connect`) | Có |
+| `crates/mcp/src/headless.rs` | Thông báo `NO_UI` (tool UI ở chế độ headless) chỉ lệnh `nexus-sheets --control` / `nexus-sheets-cli mcp --connect` | Có — tên binary qua biến build |
+| `apps/gridcraft/src/main.rs` | Tiêu đề cửa sổ, app id, tên eframe, `--version`, log, tiền tố `nexus-sheets:` của panic hook trên stderr, icon cửa sổ từ `nexus/assets/`, thư mục cấu hình `Nexus Sheets` (macOS/Windows) / `nexus-sheets` (XDG) — không đụng cấu hình GridCraft | Có |
 | `apps/gridcraft/src/native_menu.rs` | Menu macOS: tên app/About Nexus Sheets, bỏ mục getartcraft.com và Discord ArtCraft trong Help | Có |
 | `apps/gridcraft/tests/mac_menu_appkit.rs` | Assert tên menu app mới (chỉ chạy trên macOS) | Đi cùng `native_menu.rs` |
 | `apps/gridcraft/src/print.rs` | Tên job in "Nexus Sheets document" | Có |
 | `apps/gridcraft/build.rs` | Resource Windows: icon Nexus, ProductName, CompanyName Sonnytech, LegalCopyright (ghi công), OriginalFilename `nexus-sheets.exe` | Có |
-| `apps/gridcraft-cli/src/main.rs` | Lỗi kết nối app (gợi ý `nexus-sheets --control`) | Có |
-| `apps/gridcraft-cli/src/check.rs` | Dòng báo cáo "mismatch signatures (expected → Nexus Sheets)" | Có |
+| `apps/gridcraft-cli/src/main.rs` | USAGE, `--version` và tiền tố lỗi dùng tên cài đặt `nexus-sheets-cli`; lỗi kết nối app (gợi ý `nexus-sheets --control`) | Có — tên binary qua biến build |
+| `apps/gridcraft-cli/tests/cli.rs` | Assert `--version` = `nexus-sheets-cli <ver>` | Đi cùng `main.rs` |
+| `apps/gridcraft-cli/src/check.rs` | Dòng báo cáo "mismatch signatures (expected → Nexus Sheets)", tiền tố lỗi `nexus-sheets-cli:` | Có |
 | `apps/gridcraft-web/index.html` | `<title>Nexus Sheets</title>`, favicon Nexus, "Loading Nexus Sheets…" | Có |
 | `apps/gridcraft-web/src/web.rs` | Thông báo lỗi khởi động bản web | Có |
 | `packaging/windows/gridcraft.wxs` | MSI: Name/Manufacturer Sonnytech, **UpgradeCode + GUID component mới**, cài `nexus-sheets.exe`/`nexus-sheets-cli.exe` vào `Program Files\Nexus Sheets`, ProgId `Sonnytech.NexusSheets.*`, khoá `Software\Sonnytech\Nexus Sheets\…`, `RegisteredApplications\NexusSheets`, App Paths `nexus-sheets.exe`, hộp thoại cài đặt, bỏ URL ARP getartcraft/Discord (About → repo fork) | Một phần (biến WiX) |
@@ -86,7 +88,8 @@ Sinh bằng `python3 -c "import uuid; print(uuid.uuid4())"` ngày 2026-10-16.
 ### File mới (không tính là patch)
 `crates/ui-egui/src/i18n/brand.rs`, `crates/ui-egui/src/nexus.rs`, `crates/engine/tests/nexus_brand.rs`
 (test `default_author_is_nexus`, PDF Producer, `INFO("osversion")`), `crates/mcp/tests/nexus_brand.rs`
-(serverInfo), `packaging/linux/vn.sonnytech.nexus.sheets.desktop`,
+(serverInfo, tên lệnh trong tool/NO_UI), `apps/gridcraft-cli/tests/nexus_brand.rs` (USAGE/`--version`/tiền tố lỗi),
+`packaging/linux/vn.sonnytech.nexus.sheets.desktop`,
 `packaging/linux/vn.sonnytech.nexus.sheets.metainfo.xml.in` (MIME dùng lại file upstream
 `ai.storyteller.gridcraft.mime.xml`, cài dưới tên APP_ID), `nexus/assets/*` (logo tạm
 `nexus-sheets.svg` + PNG/ICO/ICNS/hicolor sinh bằng `nexus/assets/render-icons.py`).
@@ -107,9 +110,6 @@ craft-print) chỉ là nguồn build (T5/§4.8 mirror), không phải gọi mạ
 ## Việc còn nợ (đã allowlist có lý do, hoặc không bị brand-check bắt)
 - Đề xuất PR upstream (white-label): hằng `APP_NAME`/`SETTINGS_DIR`/`APP_ID` lấy từ biến build
   (`GRIDCRAFT_APP_NAME`…) → fork chỉ còn đặt biến, bỏ phần lớn patch ở trên.
-- Tên lệnh chữ thường trong văn bản trợ giúp (`gridcraft-cli` trong USAGE/`--version` của CLI, mô tả
-  tool MCP "gridcraft-cli mcp --connect", gợi ý `home.addIns`) chưa đổi thành `nexus-sheets-cli`
-  (brand-check không bắt chữ thường); gói cài đặt dùng tên `nexus-sheets(-cli)`.
 - Control channel (`ui.state`) báo `message.title` = "Nexus Sheets" nhưng tiêu đề dialog `About`/`start`
   trong JSON vẫn là khoá tiếng Anh ("About GridCraft"), chỉ phần hiển thị được brand.
 - Gói FreeBSD (`packaging/freebsd/package.sh`) và Flatpak (`packaging/linux/flatpak*`) chưa đổi — chưa
