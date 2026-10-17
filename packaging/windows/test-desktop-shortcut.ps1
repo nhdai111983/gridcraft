@@ -34,6 +34,11 @@ New-Item -ItemType Directory -Force -Path $Bin | Out-Null
 foreach ($f in 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md') {
   Copy-Item (Join-Path $Root $f) $Bin
 }
+# ...and the font licences it stages in licenses\ (FontLicences=yes): one original fixture file.
+$LicenceFixture = 'OFL-smoke-fixture.txt'
+New-Item -ItemType Directory -Force -Path (Join-Path $Bin 'licenses') | Out-Null
+'Installer smoke-test fixture standing in for a font licence text.' | Set-Content -Path (Join-Path (Join-Path $Bin 'licenses') $LicenceFixture) -Encoding utf8
+$InstalledNotices = @('NOTICE', 'ATTRIBUTION.md', "licenses\$LicenceFixture")
 
 function Assert-That([bool] $Condition, [string] $Message) {
   if (-not $Condition) { throw $Message }
@@ -92,6 +97,9 @@ function Assert-Package($Package) {
   foreach ($exe in 'nexus-sheets.exe', 'nexus-sheets-cli.exe') {
     Assert-That (Test-Path (Join-Path $InstallDir $exe)) "$exe missing after installation"
   }
+  foreach ($file in $InstalledNotices) {
+    Assert-That (Test-Path (Join-Path $InstallDir $file)) "$file missing after installation"
+  }
   Assert-That (Test-Path $StartLink) 'The existing Start Menu shortcut is missing'
 }
 
@@ -124,6 +132,9 @@ function Assert-Removed($Package) {
   Assert-That (-not (Test-Path (Join-Path $UninstallRoot $Package.Code))) 'MSI still registered after removal'
   Assert-That (-not (Test-Path (Join-Path $InstallDir 'nexus-sheets.exe'))) 'App executable remains after uninstall'
   Assert-That (-not (Test-Path (Join-Path $InstallDir 'nexus-sheets-cli.exe'))) 'CLI executable remains after uninstall'
+  foreach ($file in $InstalledNotices) {
+    Assert-That (-not (Test-Path (Join-Path $InstallDir $file))) "$file remains after uninstall"
+  }
   Assert-That (-not (Test-Path $DesktopLink)) 'Desktop shortcut remains after uninstall'
   Assert-That (-not (Test-Path $StartLink)) 'Start Menu shortcut remains after uninstall'
   Assert-That ($null -eq (Get-OptionalRegistryValue $ChoiceKey 'DesktopShortcut')) 'Saved choice remains after uninstall'
@@ -176,7 +187,7 @@ $packages = @()
 foreach ($version in '90.0.0', '90.0.1', '90.0.2') {
   $msi = Join-Path $WorkDir "gridcraft-$version.msi"
   & wix build (Join-Path $PSScriptRoot 'gridcraft.wxs') -arch x64 `
-    -d "Version=$version" -d "BinDir=$Bin" -d "IconPath=$Icon" -o $msi | Write-Host
+    -d "Version=$version" -d "BinDir=$Bin" -d "IconPath=$Icon" -d "FontLicences=yes" -o $msi | Write-Host
   if ($LASTEXITCODE -ne 0) { throw "WiX failed to build $version" }
   $packages += [pscustomobject]@{ Path = $msi; Code = (Get-ProductCode $msi); Version = $version }
 }

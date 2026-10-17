@@ -48,31 +48,47 @@ warn() {
 copy_docs() {
   local dest="$1" f
   for f in README.md LICENSE COPYRIGHT; do
-    if [ -f "$ROOT/$f" ]; then cp "$ROOT/$f" "$dest/"; fi
+    if [ -f "$ROOT/$f" ]; then cp "$ROOT/$f" "$dest/" || return 1; fi
   done
+  copy_font_licences "$dest" || return 1
   copy_notices "$dest" || return 1
-  copy_font_licences "$dest"
 }
 
 # NexusOffices: the licences, NOTICE (Apache-2.0 §4(d)) and ATTRIBUTION.md (the bundled fonts and
 # assets with their licences) go in every package; the branded README links to NOTICE and
-# ATTRIBUTION.md. Required, so a package can't silently ship without them.
+# ATTRIBUTION.md. So do the OFL texts of the repo's own embedded fonts (assets/fonts/OFL-*.txt).
+# Run after copy_font_licences: a name that clashes with a craft-fonts OFL-<family>.txt on a
+# case-insensitive filesystem then fails instead of overwriting it. Every copy is checked, because
+# callers use `copy_notices … || …`, which turns errexit off inside the function.
 copy_notices() {
   local dest="$1" f
   for f in LICENSE-MIT LICENSE-APACHE NOTICE ATTRIBUTION.md; do
     if [ ! -f "$ROOT/$f" ]; then echo "error: $ROOT/$f is missing" >&2; return 1; fi
-    cp "$ROOT/$f" "$dest/"
+    cp "$ROOT/$f" "$dest/" || return 1
+  done
+  for f in "$ROOT"/assets/fonts/OFL-*.txt; do
+    [ -f "$f" ] || continue
+    if [ -e "$dest/${f##*/}" ]; then echo "error: $dest/${f##*/} already exists (font licence name clash)" >&2; return 1; fi
+    cp "$f" "$dest/" || return 1
   done
 }
 
 # Builds made with craft-fonts (CRAFT_FONTS_DIR, set by the release workflow) embed its fonts, so
 # the package carries their licences as OFL-<family-dir>.txt. Nothing without CRAFT_FONTS_DIR.
 copy_font_licences() {
-  local dest="$1" f
-  [ -n "${CRAFT_FONTS_DIR:-}" ] || return 0
-  for f in "$CRAFT_FONTS_DIR"/fonts/*/OFL.txt; do
-    if [ -f "$f" ]; then cp "$f" "$dest/OFL-$(basename "$(dirname "$f")").txt"; fi
-  done
+  local dest="$1" f n=0
+  if [ -n "${CRAFT_FONTS_DIR:-}" ]; then
+    for f in "$CRAFT_FONTS_DIR"/fonts/*/OFL.txt; do
+      [ -f "$f" ] || continue
+      cp "$f" "$dest/OFL-$(basename "$(dirname "$f")").txt" || return 1
+      n=$((n + 1))
+    done
+  fi
+  # NexusOffices: a release build (CRAFT_FONTS_REQUIRED=1) embeds craft-fonts, so its licences must ship.
+  if [ "${CRAFT_FONTS_REQUIRED:-}" = 1 ] && [ "$n" -eq 0 ]; then
+    echo "error: CRAFT_FONTS_REQUIRED=1 but no fonts/*/OFL.txt in CRAFT_FONTS_DIR (${CRAFT_FONTS_DIR:-unset})" >&2
+    return 1
+  fi
 }
 
 # Portable SHA-256 of a file (prints just the hash).

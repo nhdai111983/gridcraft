@@ -17,6 +17,11 @@
   Nexus Sheets' own too, so it installs and uninstalls next to GridCraft without touching it.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- NexusOffices: package.ps1 passes FontLicences=yes when it staged licenses\ (the OFL texts of
+       the embedded fonts); a build without that folder (a smoke test) leaves the group out. -->
+  <?ifndef FontLicences ?>
+  <?define FontLicences = "no" ?>
+  <?endif ?>
   <Package
       Name="Nexus Sheets"
       Manufacturer="Sonnytech"
@@ -150,13 +155,20 @@
     </AdminUISequence>
 
     <StandardDirectory Id="ProgramFiles6432Folder">
-      <Directory Id="INSTALLFOLDER" Name="Nexus Sheets" />
+      <Directory Id="INSTALLFOLDER" Name="Nexus Sheets">
+        <?if $(var.FontLicences) = "yes" ?>
+        <Directory Id="LicensesFolder" Name="licenses" />
+        <?endif ?>
+      </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
     <StandardDirectory Id="DesktopFolder" />
 
     <Feature Id="Main" Title="Nexus Sheets" Level="1">
       <ComponentGroupRef Id="GridcraftFiles" />
+      <?if $(var.FontLicences) = "yes" ?>
+      <ComponentGroupRef Id="GridcraftFontLicences" />
+      <?endif ?>
     </Feature>
   </Package>
 
@@ -233,5 +245,12 @@
             Value="1" Type="integer" KeyPath="yes" />
       </Component>
     </ComponentGroup>
+    <?if $(var.FontLicences) = "yes" ?>
+    <!-- NexusOffices: OFL texts of the embedded fonts, staged by package.ps1 in licenses\, one
+         auto-GUID component each. -->
+    <ComponentGroup Id="GridcraftFontLicences" Directory="LicensesFolder">
+      <Files Include="$(var.BinDir)\licenses\*" />
+    </ComponentGroup>
+    <?endif ?>
   </Fragment>
 </Wix>
