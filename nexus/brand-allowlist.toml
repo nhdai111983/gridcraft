@@ -62,6 +62,11 @@ path = ".github/workflows/{release.yml,windows-arm64.yml}"
 pattern = '^\s+app-(title|dir): GridCraft$'
 reason = "Workflow upstream đã tắt trên fork (spec §4.6); bản phát hành Nexus do workflow riêng (Task 12) tạo"
 
+[[allow]]
+path = ".github/workflows/{nexus-ci.yml,nexus-sync.yml}"
+pattern = 'github\.com/storytold/\$UPSTREAM_REPO'
+reason = "Workflow NexusOffices (template trong NexusOffices/templates/workflows) phải lấy upstream để đếm patch và đồng bộ; không phát hành, người dùng không thấy"
+
 # ---------------------------------------------------------------------------------------------
 # 2. Chuỗi giao diện đi qua Language::tr(), được brand() đổi thành Nexus Sheets/NexusOffices lúc chạy
 #    (test: crates/ui-egui/src/i18n/brand.rs::interface_lookups_show_nexus_names_in_every_language)
