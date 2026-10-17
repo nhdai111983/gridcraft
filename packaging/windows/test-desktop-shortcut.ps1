@@ -30,6 +30,10 @@ if ((Test-Path $InstallDir) -or (Test-Path $DesktopLink) -or (Test-Path $StartLi
 New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
 $Bin = Join-Path $WorkDir 'bin'
 New-Item -ItemType Directory -Force -Path $Bin | Out-Null
+# gridcraft.wxs installs the licences, NOTICE and ATTRIBUTION.md that package.ps1 stages beside the exes.
+foreach ($f in 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md') {
+  Copy-Item (Join-Path $Root $f) $Bin
+}
 
 function Assert-That([bool] $Condition, [string] $Message) {
   if (-not $Condition) { throw $Message }

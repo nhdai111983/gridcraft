@@ -45,7 +45,7 @@ reason = "Mô tả crate trong Cargo.toml: metadata nội bộ, crate không pub
 [[allow]]
 path = "{AGENTS.md,CLAUDE.md,ROADMAP.md,assets/app-icon/README.md,packaging/macos/dmg/README.md}"
 pattern = '.*'
-reason = "Tài liệu dev của upstream, không đóng gói (copy_docs chỉ chép README.md/LICENSE*; README.md đã viết lại cho Nexus Sheets và vẫn được quét)"
+reason = "Tài liệu dev của upstream, không đóng gói (copy_docs chỉ chép README.md/LICENSE*/NOTICE/ATTRIBUTION.md — brand-check bỏ qua LICENSE*/NOTICE*/ATTRIBUTION*; README.md đã viết lại cho Nexus Sheets và vẫn được quét)"
 
 [[allow]]
 path = "xtask/src/parity.rs"

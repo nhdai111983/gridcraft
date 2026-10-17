@@ -47,10 +47,22 @@ warn() {
 # Copy licence and readme files that exist into a package directory.
 copy_docs() {
   local dest="$1" f
-  for f in README.md LICENSE LICENSE-MIT LICENSE-APACHE COPYRIGHT; do
+  for f in README.md LICENSE COPYRIGHT; do
     if [ -f "$ROOT/$f" ]; then cp "$ROOT/$f" "$dest/"; fi
   done
+  copy_notices "$dest" || return 1
   copy_font_licences "$dest"
+}
+
+# NexusOffices: the licences, NOTICE (Apache-2.0 §4(d)) and ATTRIBUTION.md (the bundled fonts and
+# assets with their licences) go in every package; the branded README links to NOTICE and
+# ATTRIBUTION.md. Required, so a package can't silently ship without them.
+copy_notices() {
+  local dest="$1" f
+  for f in LICENSE-MIT LICENSE-APACHE NOTICE ATTRIBUTION.md; do
+    if [ ! -f "$ROOT/$f" ]; then echo "error: $ROOT/$f is missing" >&2; return 1; fi
+    cp "$ROOT/$f" "$dest/"
+  done
 }
 
 # Builds made with craft-fonts (CRAFT_FONTS_DIR, set by the release workflow) embed its fonts, so

@@ -87,6 +87,11 @@ $Stage = Join-Path $TargetDir "windows-package\$Arch"
 Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Stage | Out-Null
 Copy-Item (Join-Path $Bin 'gridcraft.exe'), (Join-Path $Bin 'gridcraft-cli.exe') $Stage
+# NexusOffices: the licences, NOTICE (Apache-2.0 §4(d)) and ATTRIBUTION.md travel beside the
+# binaries: the MSI installs them from here and the portable zip copies them below.
+foreach ($f in 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md') {
+  Copy-Item (Join-Path $Root $f) $Stage
+}
 
 & (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'gridcraft.exe') (Join-Path $Stage 'gridcraft-cli.exe')
 
@@ -108,7 +113,7 @@ New-Item -ItemType Directory -Force -Path $Portable | Out-Null
 # NexusOffices: the same binary names the MSI installs.
 Copy-Item (Join-Path $Stage 'gridcraft.exe') (Join-Path $Portable 'nexus-sheets.exe')
 Copy-Item (Join-Path $Stage 'gridcraft-cli.exe') (Join-Path $Portable 'nexus-sheets-cli.exe')
-foreach ($f in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE') {
+foreach ($f in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md') {
   $p = Join-Path $Root $f
   if (Test-Path $p) { Copy-Item $p $Portable }
 }

@@ -203,6 +203,20 @@
       <Component Id="GridcraftCli">
         <File Id="GridcraftCliExe" Source="$(var.BinDir)\gridcraft-cli.exe" Name="nexus-sheets-cli.exe" KeyPath="yes" />
       </Component>
+      <!-- NexusOffices: the licences, NOTICE (Apache-2.0 4(d)) and ATTRIBUTION.md, staged by
+           package.ps1, are installed beside the binaries. Auto GUIDs, like the CLI component. -->
+      <Component Id="GridcraftMitLicense">
+        <File Id="GridcraftMitLicenseFile" Source="$(var.BinDir)\LICENSE-MIT" KeyPath="yes" />
+      </Component>
+      <Component Id="GridcraftApacheLicense">
+        <File Id="GridcraftApacheLicenseFile" Source="$(var.BinDir)\LICENSE-APACHE" KeyPath="yes" />
+      </Component>
+      <Component Id="GridcraftNotice">
+        <File Id="GridcraftNoticeFile" Source="$(var.BinDir)\NOTICE" KeyPath="yes" />
+      </Component>
+      <Component Id="GridcraftAttribution">
+        <File Id="GridcraftAttributionFile" Source="$(var.BinDir)\ATTRIBUTION.md" KeyPath="yes" />
+      </Component>
 
       <!-- Persist both on and off, independently of the optional shortcut. AppSearch reads
            this before MajorUpgrade removes the previous product. -->

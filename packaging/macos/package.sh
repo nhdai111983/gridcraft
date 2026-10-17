@@ -105,6 +105,7 @@ cp "$WORK/bin/gridcraft" "$APP/Contents/MacOS/NexusSheets"
 cp "$ROOT/nexus/assets/nexus-sheets.icns" "$APP/Contents/Resources/NexusSheets.icns"
 # Licences of the embedded craft-fonts fonts (only when built with CRAFT_FONTS_DIR).
 copy_font_licences "$APP/Contents/Resources"
+copy_notices "$APP/Contents/Resources"
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHORT_VERSION@/$SHORT_VERSION/g" \
   -e "s/@BUILD_SHA@/${GRIDCRAFT_BUILD_SHA:-unknown}/g" \
   "$HERE/Info.plist.in" >"$APP/Contents/Info.plist"
