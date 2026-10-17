@@ -1,6 +1,186 @@
 # Allowlist cho `nexus-tools brand-check`.
 # Mỗi mục cho phép một chuỗi thương hiệu upstream xuất hiện ở một đường dẫn (tương đối so với gốc repo).
-# Ví dụ:
-# [[allow]]
-# path = "docs/**"
-# reason = "tài liệu lịch sử, không phát hành"
+# Nguyên tắc: khoanh hẹp `path` + `pattern`; mọi mục có lý do; không bao giờ allowlist chuỗi người
+# dùng nhìn thấy mà chưa được đổi. Việc còn nợ: nexus/BRANDING_PATCH.md.
+
+# ---------------------------------------------------------------------------------------------
+# 1. Không phát hành / không hiển thị: chú thích, test, metadata crate, tài liệu dev
+# ---------------------------------------------------------------------------------------------
+
+[[allow]]
+path = "**/*.rs"
+pattern = '^\s*//.*'
+reason = "Chú thích Rust (//, ///, //!) không biên dịch vào binary, người dùng không thấy"
+
+[[allow]]
+path = "crates/ui-egui/src/keytips/keytip_table/generated.rs"
+pattern = ' // .*$'
+reason = "Chú thích Rust cuối dòng (chép từ trường note của keytips.json), không biên dịch vào binary"
+
+[[allow]]
+path = "**/*.{toml,yml,yaml,sh,py,ps1,in,desktop}"
+pattern = '^\s*#.*'
+reason = "Chú thích trong file cấu hình/script, không hiện cho người dùng"
+
+[[allow]]
+path = "**/*.{xml,in,wxs,html,svg,plist}"
+pattern = '<!--[^:>]*'
+reason = "Chú thích XML/HTML/plist (từ <!-- tới hết dòng), không hiện cho người dùng"
+
+[[allow]]
+path = "packaging/windows/gridcraft.wxs"
+pattern = '^  (Nexus Sheets MSI \(NexusOffices, by Sonnytech; based on GridCraft\)|GridCraft or a sibling app:|Nexus Sheets. own too, so it installs and uninstalls next to GridCraft).*'
+reason = "Các dòng tiếp của chú thích XML đầu file wxs (ghi chú cho người bảo trì về UpgradeCode riêng), không vào MSI"
+
+[[allow]]
+path = "apps/gridcraft/src/main.rs"
+pattern = '"GridCraft doesn.t open \.\{ext\}"'
+reason = "Thông điệp assert trong module #[cfg(test)], không phát hành"
+
+[[allow]]
+path = "**/Cargo.toml"
+pattern = '^description = ".*"$'
+reason = "Mô tả crate trong Cargo.toml: metadata nội bộ, crate không publish, không hiện cho người dùng"
+
+[[allow]]
+path = "{AGENTS.md,CLAUDE.md,ROADMAP.md,assets/app-icon/README.md,packaging/macos/dmg/README.md}"
+pattern = '.*'
+reason = "Tài liệu dev của upstream, không đóng gói (copy_docs chỉ chép README.md/LICENSE*/NOTICE/ATTRIBUTION.md — brand-check bỏ qua LICENSE*/NOTICE*/ATTRIBUTION*; README.md đã viết lại cho Nexus Sheets và vẫn được quét)"
+
+[[allow]]
+path = "xtask/src/parity.rs"
+pattern = 'It counts as implemented when GridCraft'
+reason = "xtask sinh docs/parity-checklist.md (tài liệu dev), không vào binary phát hành"
+
+[[allow]]
+path = "crates/ui-egui/src/keytips/keytips.json"
+pattern = '"note": ".*"'
+reason = "Trường note là ghi chú cho người đóng góp; xtask keytips chỉ chép nó thành chú thích Rust trong generated.rs, không hiển thị"
+
+[[allow]]
+path = ".github/workflows/{release.yml,windows-arm64.yml}"
+pattern = '^\s+app-(title|dir): GridCraft$'
+reason = "Workflow upstream đã tắt trên fork (spec §4.6); bản phát hành Nexus do workflow riêng (Task 12) tạo"
+
+# ---------------------------------------------------------------------------------------------
+# 2. Chuỗi giao diện đi qua Language::tr(), được brand() đổi thành Nexus Sheets/NexusOffices lúc chạy
+#    (test: crates/ui-egui/src/i18n/brand.rs::interface_lookups_show_nexus_names_in_every_language)
+# ---------------------------------------------------------------------------------------------
+
+[[allow]]
+path = "crates/ui-egui/src/i18n/brand.rs"
+pattern = '.*'
+reason = "Chính bảng thay thế GridCraft→Nexus Sheets, ArtCraft→NexusOffices và test của nó"
+
+[[allow]]
+path = "crates/ui-egui/src/i18n.rs"
+pattern = '\("About\\nGridCraft", "GridCraft について"\)'
+reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets'"
+
+[[allow]]
+path = "crates/ui-egui/src/i18n/ko.rs"
+pattern = '"About\\nGridCraft" => "GridCraft\\n정보"'
+reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets'"
+
+[[allow]]
+path = "crates/ui-egui/src/i18n/{cs,pt}.rs"
+pattern = '"(About GridCraft|How agents drive GridCraft \(MCP / control channel\))" => "[^"]*"'
+reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets'"
+
+[[allow]]
+path = "crates/ui-egui/src/i18n/pt.rs"
+pattern = '"Join the ArtCraft Discord" => "Participe do Discord da ArtCraft"'
+reason = "Khoá catalog không còn được dùng (trang About đã viết lại trong nexus.rs, không còn link Discord); nếu dùng lại vẫn qua brand()"
+
+[[allow]]
+path = "crates/ui-egui/src/dialogs.rs"
+pattern = 'Dialog::custom\("(about", "About GridCraft|start", "GridCraft)"'
+reason = "Tiêu đề hộp thoại: dialogs.rs vẽ qua app.ui.language.tr(&d.title) nên hiển thị 'About Nexus Sheets'/'Nexus Sheets'"
+
+[[allow]]
+path = "crates/ui-egui/src/ribbon.rs"
+pattern = '"How agents drive GridCraft \(MCP / control channel\)"'
+reason = "Tooltip nút Agent Control: widgets::big_button tra qua tr() nên hiển thị 'Nexus Sheets'"
+
+# ---------------------------------------------------------------------------------------------
+# 3. Ghi công upstream (bắt buộc theo giấy phép MIT/Apache và LICENSE-brand: chỉ chữ, không logo)
+# ---------------------------------------------------------------------------------------------
+
+[[allow]]
+path = "crates/ui-egui/src/nexus.rs"
+pattern = '"NexusOffices (is developed from|được phát triển dựa trên) [^"]*"'
+reason = "Câu ghi công ArtCraft/GridCraft trong About (en/vi), chỉ bằng chữ"
+
+[[allow]]
+path = "crates/ui-egui/src/nexus.rs"
+pattern = '"Copyright \(c\) 2026 ArtCraft Team and the GridCraft contributors\. MIT OR Apache-2\.0\."'
+reason = "Thông báo bản quyền gốc của upstream (NOTICE), giữ nguyên trong About theo giấy phép"
+
+[[allow]]
+path = "crates/ui-egui/src/nexus.rs"
+pattern = '^\s+(assert_ne!\(SETTINGS_DIR(_XDG)?, .*|assert!\(text\.contains\("ArtCraft"\).*|assert!\(UPSTREAM_COPYRIGHT\.contains\("ArtCraft Team"\).*)$'
+reason = "Test trong module #[cfg(test)] kiểm câu ghi công và thư mục cấu hình riêng, không phát hành"
+
+[[allow]]
+path = "README.md"
+pattern = '^Nexus Sheets (được phát triển dựa trên GridCraft của ArtCraft|is developed from GridCraft by ArtCraft) \(MIT/Apache-2\.0\)\.$'
+reason = "Câu ghi công trong README (vi/en), chỉ bằng chữ, không logo/link ArtCraft"
+
+[[allow]]
+path = "apps/gridcraft/build.rs"
+pattern = '"Nexus Sheets \(c\) 2026 Sonnytech; based on GridCraft by the ArtCraft team\. MIT OR Apache-2\.0\."'
+reason = "LegalCopyright của exe Windows: ghi công upstream bằng chữ"
+
+[[allow]]
+path = "packaging/macos/Info.plist.in"
+pattern = '<string>Nexus Sheets © 2026 Sonnytech\. Based on GridCraft by the ArtCraft team\. MIT OR Apache-2\.0\.</string>'
+reason = "NSHumanReadableCopyright của bundle macOS: ghi công upstream bằng chữ"
+
+[[allow]]
+path = "packaging/linux/nfpm.yaml"
+pattern = '^  GridCraft by the ArtCraft team\.$'
+reason = "Mô tả gói deb/rpm: dòng tiếp của câu ghi công 'based on the open-source GridCraft by the ArtCraft team'"
+
+[[allow]]
+path = "packaging/linux/vn.sonnytech.nexus.sheets.metainfo.xml.in"
+pattern = '^\s+Nexus Sheets is developed from the open-source GridCraft by the ArtCraft team$'
+reason = "Mô tả AppStream: câu ghi công upstream bằng chữ"
+
+# ---------------------------------------------------------------------------------------------
+# 4. File upstream mà bản build/gói Nexus không dùng (giữ nguyên để giảm xung đột merge)
+# ---------------------------------------------------------------------------------------------
+
+[[allow]]
+path = "packaging/windows/app-build.rs.in"
+pattern = '.*'
+reason = "Template build.rs cũ của upstream (docs/releasing.md); không được biên dịch hay đóng gói — file thật là apps/gridcraft/build.rs (đã đổi)"
+
+[[allow]]
+path = "assets/app-icon/{gridcraft.svg,hicolor/scalable/apps/ai.storyteller.gridcraft.svg}"
+pattern = '.*'
+reason = "Icon tạm của upstream GridCraft; app/gói Nexus dùng nexus/assets/ (main.rs, build.rs, package.*); chỉ gói FreeBSD/Flatpak chưa phát hành còn trỏ tới (NỢ)"
+
+[[allow]]
+path = "packaging/linux/{ai.storyteller.gridcraft.desktop,ai.storyteller.gridcraft.metainfo.xml.in}"
+pattern = '.*'
+reason = "Desktop/AppStream của upstream; packaging/linux/package.sh của Nexus cài vn.sonnytech.nexus.sheets.* thay thế; chỉ gói FreeBSD/Flatpak chưa phát hành còn dùng (NỢ)"
+
+[[allow]]
+path = "{packaging/freebsd/package.sh,packaging/linux/flatpak-bundle.sh,packaging/linux/flatpak/*.yml}"
+pattern = '.*'
+reason = "Gói FreeBSD/Flatpak: workflow freebsd đã tắt (spec §4.6), Nexus P0 chưa phát hành hai gói này; NỢ: đổi tên trước khi phát hành (BRANDING_PATCH.md)"
+
+[[allow]]
+path = "packaging/macos/dmg/generate.py"
+pattern = '^(VOLUME = "GridCraft"|ICONS = \{"GridCraft\.app": .*)$'
+reason = "Công cụ dev sinh layout DMG của upstream; package.sh của Nexus không chép dmg-layout.DS_Store nữa (NỢ: sinh lại cho 'Nexus Sheets' trên macOS, Task 12)"
+
+[[allow]]
+path = "crates/ui-egui/src/i18n/{cs,de,es,fr,pt,ru,sr,zh}.rs"
+pattern = '"About\\nGridCraft" => "[^"\\]*\\nGridCraft"'
+reason = "Khoá + bản dịch catalog (nút About hai dòng); Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets' (test interface_lookups_show_nexus_names_in_every_language chạy mọi ngôn ngữ với khoá này)"
+
+[[allow]]
+path = "crates/ui-egui/src/ribbon.rs"
+pattern = 'big_button\(ui, Icon::Script, "About\\nGridCraft",'
+reason = "Nhãn nút là khoá catalog: big_button() gọi tr() → brand() nên hiển thị 'About\nNexus Sheets' (cùng test trên)"

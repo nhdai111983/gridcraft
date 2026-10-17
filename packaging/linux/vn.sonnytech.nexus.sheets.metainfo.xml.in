@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata for Nexus Sheets (NexusOffices, by Sonnytech). Template: package.sh
+     substitutes @VERSION@ and @DATE@ from Cargo.toml and the build date. -->
+<component type="desktop-application">
+  <id>vn.sonnytech.nexus.sheets</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <name>Nexus Sheets</name>
+  <summary>Calculate, analyse and chart data in workbooks</summary>
+  <developer id="vn.sonnytech">
+    <name>Sonnytech</name>
+  </developer>
+  <description>
+    <p>
+      Nexus Sheets is an open-source, native spreadsheet, part of the NexusOffices office suite
+      by Sonnytech. It opens and saves .xlsx workbooks and CSV/TSV files, evaluates hundreds of
+      worksheet functions, and formats, sorts, filters and charts your data.
+    </p>
+    <p>
+      Every action is a command that the included nexus-sheets-cli tool and AI agents (over MCP)
+      can run too, so workbooks can be built and checked without opening a window.
+    </p>
+    <p>
+      Nexus Sheets is developed from the open-source GridCraft by the ArtCraft team
+      (MIT/Apache-2.0).
+    </p>
+  </description>
+  <launchable type="desktop-id">vn.sonnytech.nexus.sheets.desktop</launchable>
+  <icon type="stock">vn.sonnytech.nexus.sheets</icon>
+  <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
+  <url type="homepage">https://github.com/nhdai111983/gridcraft</url>
+  <url type="bugtracker">https://github.com/nhdai111983/gridcraft/issues</url>
+  <categories>
+    <category>Office</category>
+    <category>Spreadsheet</category>
+  </categories>
+  <keywords>
+    <keyword>spreadsheet</keyword>
+    <keyword>workbook</keyword>
+    <keyword>formula</keyword>
+    <keyword>xlsx</keyword>
+    <keyword>csv</keyword>
+  </keywords>
+  <branding>
+    <color type="primary" scheme_preference="light">#bbf7d0</color>
+    <color type="primary" scheme_preference="dark">#15803d</color>
+  </branding>
+  <requires>
+    <display_length compare="ge">760</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <provides>
+    <binary>nexus-sheets</binary>
+    <binary>nexus-sheets-cli</binary>
+    <mediatype>application/vnd.openxmlformats-officedocument.spreadsheetml.sheet</mediatype>
+    <mediatype>application/vnd.ms-excel.sheet.macroEnabled.12</mediatype>
+    <mediatype>application/vnd.ms-excel.sheet.binary.macroEnabled.12</mediatype>
+    <mediatype>application/vnd.oasis.opendocument.spreadsheet</mediatype>
+    <mediatype>text/csv</mediatype>
+    <mediatype>text/tab-separated-values</mediatype>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

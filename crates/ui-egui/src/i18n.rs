@@ -9,6 +9,9 @@
 
 use serde::{Deserialize, Serialize};
 
+// NexusOffices: product names shown in the interface (`tr` brands what it returns).
+mod brand;
+pub use brand::{brand, nexus_text};
 mod cs;
 mod de;
 mod es;
@@ -116,6 +119,10 @@ impl Language {
     ///
     /// A label that needs two translations (Home's text "Orientation" vs Page Layout's print
     /// "Orientation") is keyed `context|label`: English shows only the part after the `|`.
+    ///
+    /// Invariant (NexusOffices): never pass workbook or other user text (sheet names, cell
+    /// values, file names, data-validation titles) to `tr`: what it returns goes through
+    /// [`brand`], which renames the product in interface labels only.
     pub fn tr(self, text: &str) -> &str {
         let translated = match self {
             Self::En => None,
@@ -130,7 +137,8 @@ impl Language {
             Self::Fr => fr::translate(text),
             Self::Sr => sr::translate(text),
         };
-        translated.unwrap_or_else(|| text.rsplit_once('|').map_or(text, |(_, label)| label))
+        // NexusOffices: the product names shown are Nexus Sheets / NexusOffices (`brand`).
+        brand::branded(translated.unwrap_or_else(|| text.rsplit_once('|').map_or(text, |(_, label)| label)))
     }
 }
 
@@ -599,7 +607,7 @@ mod tests {
         for (i, (en, ja)) in JAPANESE.iter().enumerate() {
             assert!(!ja.is_empty());
             assert!(JAPANESE.iter().take(i).all(|(other, _)| en != other));
-            assert_eq!(Language::En.tr(en), en.rsplit_once('|').map_or(*en, |(_, label)| label));
+            assert_eq!(Language::En.tr(en), brand(en.rsplit_once('|').map_or(*en, |(_, label)| label)));
         }
         for (english, _) in JAPANESE {
             assert!(zh::translate(english).is_some_and(|text| !text.is_empty()), "missing Simplified Chinese: {english}");

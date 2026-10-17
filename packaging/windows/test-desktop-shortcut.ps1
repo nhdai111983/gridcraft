@@ -2,7 +2,7 @@
 .SYNOPSIS
   Exercise the actual MSI's desktop-shortcut choices on a disposable GitHub Windows runner.
 .DESCRIPTION
-  Compiles original no-op GUI/CLI fixtures instead of Rust, uses GridCraft's existing icon,
+  Compiles original no-op GUI/CLI fixtures instead of Rust, uses Nexus Sheets' icon,
   and builds adjacent MSI versions. Installs the real package (including its registrations),
   checks default/explicit choices, repair and major upgrades, then uninstalls in finally.
   Run through the Packaging lint workflow, never on a developer's Windows installation.
@@ -16,20 +16,29 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows' -or $env:RUN
 }
 if (-not $WorkDir) { $WorkDir = Join-Path $env:RUNNER_TEMP 'gridcraft-shortcut-smoke' }
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$InstallDir = Join-Path $env:ProgramFiles 'GridCraft'
-$DesktopLink = Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'GridCraft.lnk'
-$StartLink = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'GridCraft.lnk'
-$ChoiceKey = 'HKLM:\Software\GridCraft\Installer'
-$ComponentKey = 'HKLM:\Software\GridCraft\Installer'
+$InstallDir = Join-Path $env:ProgramFiles 'Nexus Sheets'
+$DesktopLink = Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'Nexus Sheets.lnk'
+$StartLink = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Nexus Sheets.lnk'
+$ChoiceKey = 'HKLM:\Software\Sonnytech\Nexus Sheets\Installer'
+$ComponentKey = 'HKLM:\Software\Sonnytech\Nexus Sheets\Installer'
 $UninstallRoot = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
-$Icon = Join-Path $Root 'assets\app-icon\gridcraft.ico'
+$Icon = Join-Path $Root 'nexus\assets\nexus-sheets.ico'
 if ((Test-Path $InstallDir) -or (Test-Path $DesktopLink) -or (Test-Path $StartLink) -or
-    (Test-Path 'HKLM:\Software\GridCraft') -or (Test-Path 'HKCU:\Software\GridCraft')) {
-  throw 'Refusing to run against an existing GridCraft installation or its settings.'
+    (Test-Path 'HKLM:\Software\Sonnytech\Nexus Sheets') -or (Test-Path 'HKCU:\Software\Sonnytech\Nexus Sheets')) {
+  throw 'Refusing to run against an existing Nexus Sheets installation or its settings.'
 }
 New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
 $Bin = Join-Path $WorkDir 'bin'
 New-Item -ItemType Directory -Force -Path $Bin | Out-Null
+# gridcraft.wxs installs the licences, NOTICE and ATTRIBUTION.md that package.ps1 stages beside the exes.
+foreach ($f in 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md') {
+  Copy-Item (Join-Path $Root $f) $Bin
+}
+# ...and the font licences it stages in licenses\ (FontLicences=yes): one original fixture file.
+$LicenceFixture = 'OFL-smoke-fixture.txt'
+New-Item -ItemType Directory -Force -Path (Join-Path $Bin 'licenses') | Out-Null
+'Installer smoke-test fixture standing in for a font licence text.' | Set-Content -Path (Join-Path (Join-Path $Bin 'licenses') $LicenceFixture) -Encoding utf8
+$InstalledNotices = @('NOTICE', 'ATTRIBUTION.md', "licenses\$LicenceFixture")
 
 function Assert-That([bool] $Condition, [string] $Message) {
   if (-not $Condition) { throw $Message }
@@ -85,8 +94,11 @@ function Assert-Package($Package) {
   $key = Join-Path $UninstallRoot $Package.Code
   $registered = Get-ItemProperty -Path $key -ErrorAction Stop
   Assert-That ($registered.DisplayVersion -eq $Package.Version) "Wrong installed product version: $($Package.Version)"
-  foreach ($exe in 'gridcraft.exe', 'gridcraft-cli.exe') {
+  foreach ($exe in 'nexus-sheets.exe', 'nexus-sheets-cli.exe') {
     Assert-That (Test-Path (Join-Path $InstallDir $exe)) "$exe missing after installation"
+  }
+  foreach ($file in $InstalledNotices) {
+    Assert-That (Test-Path (Join-Path $InstallDir $file)) "$file missing after installation"
   }
   Assert-That (Test-Path $StartLink) 'The existing Start Menu shortcut is missing'
 }
@@ -95,7 +107,7 @@ function Assert-Desktop([bool] $Enabled) {
   Assert-That ((Test-Path $DesktopLink) -eq $Enabled) "Desktop shortcut presence should be $Enabled"
   $marker = Get-OptionalRegistryValue $ComponentKey 'DesktopShortcutComponent'
   Assert-That (($null -ne $marker) -eq $Enabled) 'Shortcut component marker must match the machine-wide shortcut'
-  Assert-That ($null -eq (Get-OptionalRegistryValue 'HKCU:\Software\GridCraft\Installer' 'DesktopShortcutComponent')) 'Shortcut component must not leave a per-user marker'
+  Assert-That ($null -eq (Get-OptionalRegistryValue 'HKCU:\Software\Sonnytech\Nexus Sheets\Installer' 'DesktopShortcutComponent')) 'Shortcut component must not leave a per-user marker'
   $choice = Get-ItemPropertyValue -Path $ChoiceKey -Name DesktopShortcut
   Assert-That ($choice -eq $(if ($Enabled) { '1' } else { '0' })) 'Installer did not persist the selected desktop choice'
   if (-not $Enabled) { return }
@@ -103,12 +115,12 @@ function Assert-Desktop([bool] $Enabled) {
   $shortcut = $null
   try {
     $shortcut = $shell.CreateShortcut($DesktopLink)
-    Assert-That ($shortcut.TargetPath -ieq (Join-Path $InstallDir 'gridcraft.exe')) 'Desktop shortcut targets the wrong executable'
+    Assert-That ($shortcut.TargetPath -ieq (Join-Path $InstallDir 'nexus-sheets.exe')) 'Desktop shortcut targets the wrong executable'
     Assert-That ($shortcut.WorkingDirectory.TrimEnd('\') -ieq $InstallDir.TrimEnd('\')) 'Desktop shortcut has the wrong working directory'
     Assert-That ($shortcut.IconLocation -match '^(.*),\s*0$') 'Desktop shortcut must use icon index zero'
     $iconPath = [Environment]::ExpandEnvironmentVariables($Matches[1].Trim('"'))
     Assert-That (Test-Path $iconPath) 'Desktop shortcut icon is missing'
-    Assert-That ((Get-FileHash $iconPath).Hash -eq (Get-FileHash $Icon).Hash) 'Desktop shortcut does not use the packaged GridCraft icon'
+    Assert-That ((Get-FileHash $iconPath).Hash -eq (Get-FileHash $Icon).Hash) 'Desktop shortcut does not use the packaged Nexus Sheets icon'
   } finally {
     foreach ($item in $shortcut, $shell) {
       if ($item) { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($item) | Out-Null }
@@ -118,8 +130,11 @@ function Assert-Desktop([bool] $Enabled) {
 
 function Assert-Removed($Package) {
   Assert-That (-not (Test-Path (Join-Path $UninstallRoot $Package.Code))) 'MSI still registered after removal'
-  Assert-That (-not (Test-Path (Join-Path $InstallDir 'gridcraft.exe'))) 'App executable remains after uninstall'
-  Assert-That (-not (Test-Path (Join-Path $InstallDir 'gridcraft-cli.exe'))) 'CLI executable remains after uninstall'
+  Assert-That (-not (Test-Path (Join-Path $InstallDir 'nexus-sheets.exe'))) 'App executable remains after uninstall'
+  Assert-That (-not (Test-Path (Join-Path $InstallDir 'nexus-sheets-cli.exe'))) 'CLI executable remains after uninstall'
+  foreach ($file in $InstalledNotices) {
+    Assert-That (-not (Test-Path (Join-Path $InstallDir $file))) "$file remains after uninstall"
+  }
   Assert-That (-not (Test-Path $DesktopLink)) 'Desktop shortcut remains after uninstall'
   Assert-That (-not (Test-Path $StartLink)) 'Start Menu shortcut remains after uninstall'
   Assert-That ($null -eq (Get-OptionalRegistryValue $ChoiceKey 'DesktopShortcut')) 'Saved choice remains after uninstall'
@@ -129,7 +144,7 @@ function Assert-Removed($Package) {
 function Uninstall-AsSystem($Package) {
   # Exercise removal under a different account without creating a user or credentials.
   # This function is covered by the disposable hosted-runner guard at the top of the script.
-  $taskName = 'GridCraft-shortcut-' + [Guid]::NewGuid().ToString('N')
+  $taskName = 'NexusSheets-shortcut-' + [Guid]::NewGuid().ToString('N')
   $log = Join-Path $WorkDir 'uninstall-as-system.log'
   $action = New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR 'System32\msiexec.exe') `
     -Argument "/x $($Package.Code) /qn /norestart /l*v `"$log`""
@@ -172,7 +187,7 @@ $packages = @()
 foreach ($version in '90.0.0', '90.0.1', '90.0.2') {
   $msi = Join-Path $WorkDir "gridcraft-$version.msi"
   & wix build (Join-Path $PSScriptRoot 'gridcraft.wxs') -arch x64 `
-    -d "Version=$version" -d "BinDir=$Bin" -d "IconPath=$Icon" -o $msi | Write-Host
+    -d "Version=$version" -d "BinDir=$Bin" -d "IconPath=$Icon" -d "FontLicences=yes" -o $msi | Write-Host
   if ($LASTEXITCODE -ne 0) { throw "WiX failed to build $version" }
   $packages += [pscustomobject]@{ Path = $msi; Code = (Get-ProductCode $msi); Version = $version }
 }

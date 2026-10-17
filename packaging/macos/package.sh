@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build, sign and (optionally) notarize the macOS release artifacts:
 #
-#   $DIST/gridcraft-<version>-macos-<arch>.dmg          GridCraft.app on a drag-to-Applications DMG
-#   $DIST/gridcraft-cli-<version>-macos-<arch>.zip      the headless CLI
+#   $DIST/NexusSheets-<version>-macos-<arch>.dmg          Nexus Sheets.app on a drag-to-Applications DMG
+#   $DIST/NexusSheets-cli-<version>-macos-<arch>.zip      the headless CLI (nexus-sheets-cli)
 #
 # Usage: packaging/macos/package.sh [--arch universal|aarch64|x86_64] [--skip-build]
 #
@@ -39,9 +39,9 @@ export MACOSX_DEPLOYMENT_TARGET=11.0
 IDENTITY="${MACOS_SIGN_IDENTITY:--}"
 SHORT_VERSION="${VERSION%%-*}"
 WORK="$CARGO_TARGET_DIR/macos-package"
-APP="$WORK/GridCraft.app"
-DMG="$DIST/gridcraft-$VERSION-macos-$ARCH.dmg"
-CLI_ZIP="$DIST/gridcraft-cli-$VERSION-macos-$ARCH.zip"
+APP="$WORK/Nexus Sheets.app"
+DMG="$DIST/NexusSheets-$VERSION-macos-$ARCH.dmg"
+CLI_ZIP="$DIST/NexusSheets-cli-$VERSION-macos-$ARCH.zip"
 
 NOTARIZE=0
 if [ "$IDENTITY" = "-" ]; then
@@ -52,7 +52,7 @@ else
   warn "macOS: APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID incomplete; signed but not notarized"
 fi
 
-echo "==> GridCraft $VERSION for macOS ($ARCH), identity: $IDENTITY, notarize: $NOTARIZE"
+echo "==> Nexus Sheets $VERSION for macOS ($ARCH), identity: $IDENTITY, notarize: $NOTARIZE"
 
 # ---- build -------------------------------------------------------------------------------------
 if [ "$SKIP_BUILD" = 0 ]; then
@@ -97,14 +97,16 @@ notarize() {
   fi
 }
 
-# ---- GridCraft.app ----------------------------------------------------------------------------
+# ---- Nexus Sheets.app -------------------------------------------------------------------------
 echo "==> assembling $APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # Executable and icon carry the display name (CFBundleExecutable / CFBundleIconFile).
-cp "$WORK/bin/gridcraft" "$APP/Contents/MacOS/GridCraft"
-cp "$ROOT/assets/app-icon/gridcraft.icns" "$APP/Contents/Resources/GridCraft.icns"
+cp "$WORK/bin/gridcraft" "$APP/Contents/MacOS/NexusSheets"
+cp "$ROOT/nexus/assets/nexus-sheets.icns" "$APP/Contents/Resources/NexusSheets.icns"
 # Licences of the embedded craft-fonts fonts (only when built with CRAFT_FONTS_DIR).
 copy_font_licences "$APP/Contents/Resources"
+# NexusOffices: licences, NOTICE, ATTRIBUTION.md and the repo fonts' OFL texts (after the craft-fonts ones).
+copy_notices "$APP/Contents/Resources"
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHORT_VERSION@/$SHORT_VERSION/g" \
   -e "s/@BUILD_SHA@/${GRIDCRAFT_BUILD_SHA:-unknown}/g" \
   "$HERE/Info.plist.in" >"$APP/Contents/Info.plist"
@@ -113,13 +115,13 @@ printf 'APPL????' >"$APP/Contents/PkgInfo"
 
 # Sign inside-out: nested code first, then the bundle itself (no --deep on the final signature).
 # Today the only nested code is the main executable; frameworks/helpers would be signed here too.
-sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP/Contents/MacOS/GridCraft"
+sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP/Contents/MacOS/NexusSheets"
 sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP"
 codesign --verify --strict --deep --verbose=2 "$APP"
 
 if [ "$NOTARIZE" = 1 ]; then
-  ditto -c -k --keepParent "$APP" "$WORK/GridCraft-notarize.zip"
-  notarize "$WORK/GridCraft-notarize.zip"
+  ditto -c -k --keepParent "$APP" "$WORK/NexusSheets-notarize.zip"
+  notarize "$WORK/NexusSheets-notarize.zip"
   xcrun stapler staple "$APP"
   xcrun stapler validate "$APP"
   spctl --assess --type execute -vvv "$APP"
@@ -129,17 +131,16 @@ fi
 echo "==> building $DMG"
 STAGE="$WORK/dmg"
 mkdir -p "$STAGE"
-ditto "$APP" "$STAGE/GridCraft.app"
+ditto "$APP" "$STAGE/Nexus Sheets.app"
 ln -s /Applications "$STAGE/Applications"
-# Finder window layout: background, icon size and positions (packaging/macos/dmg/README.md).
-mkdir -p "$STAGE/.background"
-cp "$HERE/dmg/background.tiff" "$STAGE/.background/background.tiff"
-cp "$HERE/dmg/dmg-layout.DS_Store" "$STAGE/.DS_Store"
+# Finder window layout (packaging/macos/dmg/README.md): NexusOffices doesn't ship upstream's
+# dmg-layout.DS_Store, which is tied to the volume and app names "GridCraft"; the DMG opens with
+# Finder's default layout until it is regenerated for "Nexus Sheets" on a Mac.
 rm -f "$DMG" "$WORK/raw.dmg"
 # makehybrid + convert builds the image without attaching a device, unlike `create -srcfolder`,
 # which is flaky on CI runners ("Resource busy") and hangs in sandboxed sessions.
 # The volume name has no version: .DS_Store finds the background through an alias that includes it.
-hdiutil makehybrid -hfs -hfs-volume-name "GridCraft" -hfs-openfolder "$STAGE" -o "$WORK/raw.dmg" "$STAGE"
+hdiutil makehybrid -hfs -hfs-volume-name "Nexus Sheets" -hfs-openfolder "$STAGE" -o "$WORK/raw.dmg" "$STAGE"
 hdiutil convert "$WORK/raw.dmg" -format UDZO -imagekey zlib-level=9 -o "$DMG"
 rm -f "$WORK/raw.dmg"
 sign "$DMG"
@@ -153,12 +154,12 @@ fi
 
 # ---- CLI ---------------------------------------------------------------------------------------
 echo "==> building $CLI_ZIP"
-CLI_DIR="$WORK/gridcraft-cli-$VERSION-macos-$ARCH"
+CLI_DIR="$WORK/NexusSheets-cli-$VERSION-macos-$ARCH"
 mkdir -p "$CLI_DIR"
-cp "$WORK/bin/gridcraft-cli" "$CLI_DIR/"
+cp "$WORK/bin/gridcraft-cli" "$CLI_DIR/nexus-sheets-cli"
 copy_docs "$CLI_DIR"
-sign --options runtime "$CLI_DIR/gridcraft-cli"
-codesign --verify --strict --verbose=2 "$CLI_DIR/gridcraft-cli"
+sign --options runtime "$CLI_DIR/nexus-sheets-cli"
+codesign --verify --strict --verbose=2 "$CLI_DIR/nexus-sheets-cli"
 rm -f "$CLI_ZIP"
 ditto -c -k --keepParent "$CLI_DIR" "$CLI_ZIP"
 # A bare Mach-O can't carry a stapled ticket; Gatekeeper looks the notarization up online.

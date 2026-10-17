@@ -35,19 +35,19 @@ use gridcraft_engine::Session;
 use serde_json::{Value, json};
 
 const USAGE: &str = "usage:
-  gridcraft-cli info <file> [--json]                      sheets, used ranges, tables, charts, names
-  gridcraft-cli convert <in> <out> [--sheet NAME]         xlsx/csv/tsv/json/html by extension
-  gridcraft-cli eval <formula> [--in FILE] [--sheet S] [--cell A1] [--json]
-  gridcraft-cli cat <file> [--range A1:D20] [--sheet S] [--formulas] [--csv]
-  gridcraft-cli check <file-or-dir>... [--json] [--tolerance 1e-9] [--max-report N]
-                     cached-value calc oracle + XLSX round-trip fidelity (exit 1 on any difference)
-  gridcraft-cli run [--in FILE | --sample NAME] [--cmd 'id={json}']... [--script FILE.jsonl]
-                     [--out FILE] [--print RANGE] [--quiet]
-  gridcraft-cli commands [--json] [--search X]
-  gridcraft-cli functions [--json] [--search X] [--category C]
-  gridcraft-cli mcp [--connect PORT] [--in FILE | --sample NAME]
-  gridcraft-cli send <port> <method> [json]
-  gridcraft-cli version";
+  nexus-sheets-cli info <file> [--json]                      sheets, used ranges, tables, charts, names
+  nexus-sheets-cli convert <in> <out> [--sheet NAME]         xlsx/csv/tsv/json/html by extension
+  nexus-sheets-cli eval <formula> [--in FILE] [--sheet S] [--cell A1] [--json]
+  nexus-sheets-cli cat <file> [--range A1:D20] [--sheet S] [--formulas] [--csv]
+  nexus-sheets-cli check <file-or-dir>... [--json] [--tolerance 1e-9] [--max-report N]
+                        cached-value calc oracle + XLSX round-trip fidelity (exit 1 on any difference)
+  nexus-sheets-cli run [--in FILE | --sample NAME] [--cmd 'id={json}']... [--script FILE.jsonl]
+                        [--out FILE] [--print RANGE] [--quiet]
+  nexus-sheets-cli commands [--json] [--search X]
+  nexus-sheets-cli functions [--json] [--search X] [--category C]
+  nexus-sheets-cli mcp [--connect PORT] [--in FILE | --sample NAME]
+  nexus-sheets-cli send <port> <method> [json]
+  nexus-sheets-cli version";
 
 /// stdout went away. A reader that stopped early (a closed pipe) ends the program quietly; any
 /// other write error is reported.
@@ -55,7 +55,7 @@ fn stdout_failed(e: std::io::Error) -> ! {
     if e.kind() == std::io::ErrorKind::BrokenPipe {
         std::process::exit(0);
     }
-    eprintln!("gridcraft-cli: can't write to stdout: {e}");
+    eprintln!("nexus-sheets-cli: can't write to stdout: {e}");
     std::process::exit(1);
 }
 
@@ -64,7 +64,7 @@ fn main() -> ExitCode {
     let rest = args.get(1..).unwrap_or_default();
     let r = match args.first().map(String::as_str) {
         Some("--version" | "-V" | "version") => {
-            outln!("gridcraft-cli {}", env!("CARGO_PKG_VERSION"));
+            outln!("nexus-sheets-cli {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         Some("--help" | "-h" | "help") => {
@@ -87,7 +87,7 @@ fn main() -> ExitCode {
     match r {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("gridcraft-cli: {e}");
+            eprintln!("nexus-sheets-cli: {e}");
             ExitCode::FAILURE
         }
     }
@@ -503,7 +503,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
             let addr = control_addr(c);
             Box::new(
                 Remote::connect(&addr)
-                    .map_err(|e| format!("cannot connect to the GridCraft app at {addr}: {e} (start it with `gridcraft --control PORT`)"))?,
+                    .map_err(|e| format!("cannot connect to the Nexus Sheets app at {addr}: {e} (start it with `nexus-sheets --control PORT`)"))?,
             )
         }
         None => {
@@ -519,7 +519,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
             Box::new(Headless::with_session(session))
         }
     };
-    eprintln!("gridcraft-cli: MCP server on stdio ({})", backend.describe());
+    eprintln!("nexus-sheets-cli: MCP server on stdio ({})", backend.describe());
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     Server::new(backend).serve(stdin.lock(), stdout.lock()).map_err(|e| e.to_string())
@@ -539,7 +539,7 @@ fn send(args: &[String]) -> Result<(), String> {
     }
     let addr = control_addr(port);
     let mut r = Remote::connect(&addr)
-        .map_err(|e| format!("cannot connect to the GridCraft app at {addr}: {e} (start it with `gridcraft --control {port}`)"))?;
+        .map_err(|e| format!("cannot connect to the Nexus Sheets app at {addr}: {e} (start it with `nexus-sheets --control {port}`)"))?;
     let v = r.call(method, params)?;
     outln!("{}", pretty(&v));
     Ok(())
