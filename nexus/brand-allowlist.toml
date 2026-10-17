@@ -174,3 +174,13 @@ reason = "Gói FreeBSD/Flatpak: workflow freebsd đã tắt (spec §4.6), Nexus 
 path = "packaging/macos/dmg/generate.py"
 pattern = '^(VOLUME = "GridCraft"|ICONS = \{"GridCraft\.app": .*)$'
 reason = "Công cụ dev sinh layout DMG của upstream; package.sh của Nexus không chép dmg-layout.DS_Store nữa (NỢ: sinh lại cho 'Nexus Sheets' trên macOS, Task 12)"
+
+[[allow]]
+path = "crates/ui-egui/src/i18n/{cs,de,es,fr,pt,ru,sr,zh}.rs"
+pattern = '"About\\nGridCraft" => "[^"\\]*\\nGridCraft"'
+reason = "Khoá + bản dịch catalog (nút About hai dòng); Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets' (test interface_lookups_show_nexus_names_in_every_language chạy mọi ngôn ngữ với khoá này)"
+
+[[allow]]
+path = "crates/ui-egui/src/ribbon.rs"
+pattern = 'big_button\(ui, Icon::Script, "About\\nGridCraft",'
+reason = "Nhãn nút là khoá catalog: big_button() gọi tr() → brand() nên hiển thị 'About\nNexus Sheets' (cùng test trên)"

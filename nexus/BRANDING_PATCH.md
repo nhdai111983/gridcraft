@@ -74,6 +74,7 @@ Cơ chế chính:
 | `packaging/web/README.md` | Được đóng gói thành `HOSTING.md` trong zip web → đổi tên sản phẩm/tên zip | Không (tài liệu đi kèm gói) |
 | `omastore.toml` | Icon, tên tài sản `NexusSheets-*`, exec `bin/nexus-sheets` (bỏ `ai.storyteller`) | Không |
 | `README.md` | README Nexus Sheets ngắn (vi trước, có English): sản phẩm, NexusOffices/Sonnytech, câu ghi công "Nexus Sheets được phát triển dựa trên GridCraft của ArtCraft (MIT/Apache-2.0)" chỉ bằng chữ (không logo/Discord/getartcraft), trỏ LICENSE-MIT/LICENSE-APACHE/NOTICE/ATTRIBUTION; được `copy_docs` và zip portable đóng gói | Không (README của fork) |
+| `Cargo.toml` | `[workspace.package] repository` → `https://github.com/nhdai111983/gridcraft` (brand-check `brand-url`; metadata, không code nào đọc `CARGO_PKG_REPOSITORY`) | Có — metadata của fork |
 | `ATTRIBUTION.md` | 14 dòng cho icon Nexus (`nexus/assets/**`, Sonnytech, CC0-1.0) | Không (bắt buộc theo luật asset) |
 
 ### GUID WiX mới (Nexus Sheets riêng, không dùng chung với GridCraft hay app Nexus khác)
