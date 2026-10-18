@@ -22,6 +22,9 @@ Excel's worksheet functions, category by category, against GridCraft's function 
   MAKEARRAY…), excluding the test-only `ADD2`. Every one is an Excel name.
 - **Not on Microsoft's list:** USDOLLAR, a legacy function Excel still evaluates (like DOLLAR),
   is in our library as a Compatibility function for files that use it. It is not counted above.
+  DOCSO(number, [unit]) is a Vietnamese addition: it spells a whole amount in Vietnamese words
+  ("Năm triệu đồng chẵn") for receipts and payment orders. Excel has no such function and shows
+  `#NAME?` for it (the saved result is kept), and it is not counted above either.
 - **Working** excludes stubs that return an error by design: the 7 CUBE functions (`#N/A`, no
   cube connections) and WEBSERVICE and FILTERXML (`#VALUE!`). Excel for Mac also lacks
   WEBSERVICE and FILTERXML; Excel for Windows has them.
@@ -109,6 +112,7 @@ workbooks; results checked in as data, not Excel files) and fixing what it finds
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-18 | minor | DOCSO(number, [unit]) added (Vietnamese amount in words; not on Microsoft's list, so the counts don't change) |
 | 2026-10-13 | minor | Clear reports changed stored cells sparsely, including those beyond the first million coordinates; dependent formulas and removed spills update, while clearing empty merges still unblocks spills (#1032) |
 | 2026-10-12 | minor | USDOLLAR added as a Compatibility function (not on Microsoft's list, so the counts don't change); MIRR with no positive flow is -1, COUNTIF's bare `"<="` / `">="` skip empty strings, INDIRECT with `a1` = FALSE gives `#REF!` for A1-style text (#738) |
 | 2026-10-11 | minor | TEXT / number formats fixed against Excel-cached results: fraction literals and zero fractions, `0` denominators zero padded, `?` pads the thousands separator, booleans use the text section (226 mismatches → 0 in 352 TEXT cells) |
