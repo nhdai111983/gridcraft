@@ -847,6 +847,7 @@ pub(crate) fn specs() -> Vec<FnSpec> {
         f!("DOLLAR", 1, 2, Text, S, "DOLLAR(number, [decimals])", "Formats a number as currency text.", dollar),
         f!("USDOLLAR", 1, 2, Compatibility, S, "USDOLLAR(number, [decimals])", "Formats a number as currency text, like DOLLAR.", dollar),
         f!("BAHTTEXT", 1, 1, Text, S, "BAHTTEXT(number)", "Spells out a number in Thai words with Baht.", bahttext),
+        f!("DOCSO", 1, 2, Text, S, "DOCSO(number, [unit])", "Đọc số tiền bằng chữ tiếng Việt.", crate::docso::docso),
         f!("T", 1, 1, Text, S, "T(value)", "Returns the value if it is text, otherwise empty text.", t_fn),
         f!(
             "TEXTBEFORE",
