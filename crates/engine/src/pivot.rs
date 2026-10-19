@@ -9,7 +9,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
 use gridcraft_core::date::datetime_from_serial;
-use gridcraft_core::{CellError, CellRef, MAX_COLS, MAX_ROWS, RangeRef, Value};
+use gridcraft_core::{CellError, CellRef, MAX_COLS, MAX_ROWS, RangeRef, TextKey, Value, text_key};
 use gridcraft_model::*;
 
 use crate::pivot_calc::CalcSet;
@@ -195,7 +195,9 @@ struct Item {
     label: String,
     class: u8,
     num: f64,
-    text: String,
+    /// Sort key of the label, built once when [`FieldItems::intern`] adds the item (`None` on the
+    /// throwaway items `make_item` returns for every record).
+    key: Option<TextKey>,
     first: usize,
     /// The value is a number shown with the source format.
     formatted: bool,
@@ -207,21 +209,15 @@ struct FieldItems {
     index: HashMap<String, u32>,
 }
 
+/// Item order: class (numbers and date groups, text, booleans, errors, blank), then number, then
+/// label in the Root text order (`Đà Nẵng` next to `Da`, not after `z`).
 fn cmp_items(a: &Item, b: &Item) -> Ordering {
-    a.class.cmp(&b.class).then(a.num.total_cmp(&b.num)).then_with(|| a.text.cmp(&b.text))
+    a.class.cmp(&b.class).then(a.num.total_cmp(&b.num)).then_with(|| a.key.cmp(&b.key))
 }
 
 /// (identity key, item) for a source value under a field's date grouping.
 fn make_item(wb: &Workbook, v: &Value, group: PivotDateGroup, fmt: &str, first: usize) -> (String, Item) {
-    let it = |value: Value, label: String, class: u8, num: f64, formatted: bool| Item {
-        text: label.to_lowercase(),
-        value,
-        label,
-        class,
-        num,
-        first,
-        formatted,
-    };
+    let it = |value: Value, label: String, class: u8, num: f64, formatted: bool| Item { key: None, value, label, class, num, first, formatted };
     match v {
         Value::Empty => ("b".into(), it(Value::text("(blank)"), "(blank)".into(), 4, 0.0, false)),
         Value::Number(n) => {
@@ -243,7 +239,9 @@ fn make_item(wb: &Workbook, v: &Value, group: PivotDateGroup, fmt: &str, first: 
             let label = crate::display::format(v, fmt, wb).text;
             (format!("n{}", n.to_bits()), it(v.clone(), label, 0, *n, true))
         }
-        Value::Text(t) => (format!("t{}", t.to_lowercase()), it(v.clone(), t.to_string(), 1, 0.0, false)),
+        // Text items are one item per `fold_key`: case and NFC/NFD spellings merge, and the
+        // first spelling met labels the item.
+        Value::Text(t) => (format!("t{}", gridcraft_core::fold_key(t)), it(v.clone(), t.to_string(), 1, 0.0, false)),
         Value::Bool(b) => {
             let l = if *b { "TRUE" } else { "FALSE" };
             (format!("l{l}"), it(Value::Bool(*b), l.into(), 2, *b as u8 as f64, false))
@@ -255,10 +253,11 @@ fn make_item(wb: &Workbook, v: &Value, group: PivotDateGroup, fmt: &str, first: 
 
 impl FieldItems {
     fn intern(&mut self, wb: &Workbook, v: &Value, group: PivotDateGroup, fmt: &str, first: usize) -> u32 {
-        let (key, item) = make_item(wb, v, group, fmt, first);
+        let (key, mut item) = make_item(wb, v, group, fmt, first);
         if let Some(i) = self.index.get(&key) {
             return *i;
         }
+        item.key = Some(text_key(&item.label));
         let i = self.items.len() as u32;
         self.items.push(item);
         self.index.insert(key, i);
@@ -442,7 +441,7 @@ fn build_tree(paths: &[&[u32]], depth: usize, fields: &[&PivotField], items: &[F
 }
 
 fn is_collapsed(field: &PivotField, label: &str) -> bool {
-    field.collapsed_items.iter().any(|c| c.eq_ignore_ascii_case(label))
+    field.collapsed_items.iter().any(|c| gridcraft_core::text_eq(c, label))
 }
 
 fn collect_siblings(nodes: &[Node], prefix: &mut Vec<u32>, out: &mut HashMap<Vec<u32>, Vec<u32>>) {
@@ -890,11 +889,14 @@ pub fn compute(wb: &Workbook, pt: &PivotTable, pivot_sheet: usize) -> Result<Out
     let filter_fmts: Vec<String> = filters.iter().map(|f| fmt_of(f.0)).collect();
     let row_fmts: Vec<String> = rows.iter().map(|(c, _)| fmt_of(*c)).collect();
     let col_fmts: Vec<String> = cols.iter().map(|(c, _)| fmt_of(*c)).collect();
+    // Page-filter selections folded once: one fold per record label, not one per selected item.
+    let filter_sets: Vec<Option<gridcraft_core::TextSet>> =
+        filters.iter().map(|(_, f, ..)| f.selected.as_ref().map(gridcraft_core::TextSet::new)).collect();
     'rec: for (ri, rec) in src.rows.iter().enumerate() {
-        for ((c, f, g, _), fmt) in filters.iter().zip(filter_fmts.iter()) {
-            if let Some(sel) = &f.selected {
+        for (((c, _, g, _), fmt), sel) in filters.iter().zip(filter_fmts.iter()).zip(filter_sets.iter()) {
+            if let Some(sel) = sel {
                 let label = item_label(wb, rec.get(*c).unwrap_or(&Value::Empty), *g, fmt);
-                if !sel.iter().any(|s| s.eq_ignore_ascii_case(&label)) {
+                if !sel.contains(&label) {
                     continue 'rec;
                 }
             }
