@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use gridcraft_core::{CellRef, RangeRef, Value, compare};
+use gridcraft_core::{CellRef, RangeRef, Value, compare, contains_prefolded, ends_with_prefolded, fold_key, starts_with_prefolded};
 use gridcraft_model::*;
 
 /// The conditional look of one cell.
@@ -32,6 +32,8 @@ struct RuleStats {
     avg: f64,
     std: f64,
     counts: HashMap<String, usize>,
+    /// `fold_key` of a text rule's text (contains, begins, ends), folded once per rule.
+    needle: String,
 }
 
 fn numbers_in(sh: &Sheet, ranges: &[RangeRef]) -> (Vec<f64>, HashMap<String, usize>) {
@@ -48,7 +50,8 @@ fn numbers_in(sh: &Sheet, ranges: &[RangeRef]) -> (Vec<f64>, HashMap<String, usi
                 nums.push(n);
             }
             if !v.is_empty() {
-                *counts.entry(v.display().to_lowercase()).or_insert(0) += 1;
+                // Counted by `fold_key`: case and NFC/NFD spellings are duplicates.
+                *counts.entry(fold_key(&v.display())).or_insert(0) += 1;
             }
         }
     }
@@ -119,7 +122,14 @@ impl CfCache {
                     let n = sorted.len().max(1) as f64;
                     let avg = sorted.iter().sum::<f64>() / n;
                     let std = (sorted.iter().map(|x| (x - avg).powi(2)).sum::<f64>() / n).sqrt();
-                    RuleStats { sorted, avg, std, counts }
+                    let needle = match &cf.rule {
+                        CfRule::ContainsText { text, .. }
+                        | CfRule::NotContainsText { text, .. }
+                        | CfRule::BeginsWith { text, .. }
+                        | CfRule::EndsWith { text, .. } => fold_key(text),
+                        _ => String::new(),
+                    };
+                    RuleStats { sorted, avg, std, counts, needle }
                 })
                 .clone();
             let text = v.display();
@@ -147,20 +157,17 @@ impl CfCache {
                 CfRule::Expression { formula, style } => {
                     gridcraft_calc::evaluate(wb, sheet, c, &relative(formula, first, c)).to_bool().unwrap_or(false).then_some(style.as_ref())
                 }
-                CfRule::ContainsText { text: t, style } => text.to_lowercase().contains(&t.to_lowercase()).then_some(style.as_ref()),
-                CfRule::NotContainsText { text: t, style } => (!text.to_lowercase().contains(&t.to_lowercase())).then_some(style.as_ref()),
-                CfRule::BeginsWith { text: t, style } => text.to_lowercase().starts_with(&t.to_lowercase()).then_some(style.as_ref()),
-                CfRule::EndsWith { text: t, style } => text.to_lowercase().ends_with(&t.to_lowercase()).then_some(style.as_ref()),
+                // Case- and encoding-blind, matching whole letters (`e` is not in `Nguyễn`).
+                CfRule::ContainsText { style, .. } => contains_prefolded(&text, &st.needle).then_some(style.as_ref()),
+                CfRule::NotContainsText { style, .. } => (!contains_prefolded(&text, &st.needle)).then_some(style.as_ref()),
+                CfRule::BeginsWith { style, .. } => starts_with_prefolded(&text, &st.needle).then_some(style.as_ref()),
+                CfRule::EndsWith { style, .. } => ends_with_prefolded(&text, &st.needle).then_some(style.as_ref()),
                 CfRule::Blanks { style } => (v.is_empty() || text.trim().is_empty()).then_some(style.as_ref()),
                 CfRule::NoBlanks { style } => (!v.is_empty() && !text.trim().is_empty()).then_some(style.as_ref()),
                 CfRule::Errors { style } => v.is_error().then_some(style.as_ref()),
                 CfRule::NoErrors { style } => (!v.is_error()).then_some(style.as_ref()),
-                CfRule::Duplicate { style } => {
-                    (!v.is_empty() && st.counts.get(&text.to_lowercase()).copied().unwrap_or(0) > 1).then_some(style.as_ref())
-                }
-                CfRule::Unique { style } => {
-                    (!v.is_empty() && st.counts.get(&text.to_lowercase()).copied().unwrap_or(0) == 1).then_some(style.as_ref())
-                }
+                CfRule::Duplicate { style } => (!v.is_empty() && st.counts.get(&fold_key(&text)).copied().unwrap_or(0) > 1).then_some(style.as_ref()),
+                CfRule::Unique { style } => (!v.is_empty() && st.counts.get(&fold_key(&text)).copied().unwrap_or(0) == 1).then_some(style.as_ref()),
                 CfRule::Top10 { bottom, percent, rank, style } => match v.as_f64() {
                     Some(n) if !st.sorted.is_empty() => {
                         let k = if *percent { ((st.sorted.len() as f64) * (*rank as f64) / 100.0).floor().max(1.0) as usize } else { *rank as usize };
