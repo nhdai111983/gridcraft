@@ -5,6 +5,10 @@
 //! Nexus Sheets: upstream keeps these tests in `crates/engine/src/tests_collation.rs` (fix/text-
 //! compare-canonical); the port runs them as an integration test so `crates/engine/src/lib.rs`
 //! stays as it is (patch budget). They use only the crate's public API.
+//! Not ported (strict patch budget), so their upstream tests are left out here: slicer tiles
+//! (`slicer_merges_nfc_nfd`), Advanced Filter and Consolidate labels in `cmd/whatif.rs`
+//! (`advanced_filter_matches_labels_and_texts_in_any_spelling`, `consolidate_merges_labels`)
+//! and AutoFill custom lists in `fill.rs` (`autofill_continues_a_custom_list_typed_in_nfd`).
 
 use gridcraft_core::{CellRef, Value, canonical};
 use serde_json::json;
@@ -168,32 +172,6 @@ fn pivot_filter_and_collapse_match_any_spelling() {
     assert_eq!(sh.value(CellRef::new(r.end.row, r.start.col + 1)), Value::Number(9.0));
 }
 
-#[test]
-fn slicer_merges_nfc_nfd() {
-    let mut s = people(&[]);
-    s.execute("insert.table", json!({"range": "A1:C6", "name": "People"})).unwrap();
-    s.execute("selection.set", json!({"cell": "A2"})).unwrap();
-    let id = s.execute("insert.slicer", json!({})).unwrap()["slicer"].as_u64().unwrap() as u32;
-    let items = {
-        let d = s.doc().unwrap();
-        let sh = d.wb.active().unwrap();
-        gridcraft_engine::cmd::slicer::slicer_items(&d.wb, 0, &sh.slicers[0])
-    };
-    assert_eq!(items, vec![(NFC.to_string(), true), ("Đà Nẵng".to_string(), true)]);
-    // A tile value in another case and encoding is the same tile and keeps both spellings.
-    s.execute("slicer.toggle", json!({"slicer": id, "value": nfd("đà nẵng")})).unwrap();
-    assert_eq!(hidden_rows(&s), vec![1, 2, 3]);
-    // Selecting the other tile too selects everything: the filter clears.
-    s.execute("slicer.toggle", json!({"slicer": id, "value": "NGUYỄN THỊ NGỌC ÁNH", "multi": true})).unwrap();
-    assert!(hidden_rows(&s).is_empty());
-    assert!(s.doc().unwrap().wb.active().unwrap().slicers[0].selected.is_none());
-    // Clicking the sole selected tile in another spelling clears the filter.
-    s.execute("slicer.toggle", json!({"slicer": id, "value": "Đà Nẵng"})).unwrap();
-    assert_eq!(hidden_rows(&s).len(), 3);
-    s.execute("slicer.toggle", json!({"slicer": id, "value": "đà nẵng"})).unwrap();
-    assert!(hidden_rows(&s).is_empty());
-}
-
 fn cf_hit(s: &Session, a: &str) -> bool {
     let wb = &s.doc().unwrap().wb;
     gridcraft_engine::cf::CfCache::new().look(wb, 0, CellRef::parse(a).unwrap()).is_some()
@@ -230,28 +208,6 @@ fn cf_text_rules_match_whole_letters_in_any_spelling() {
     let mut s = people(&[("Teo", 6, "K1")]);
     s.execute("home.conditionalFormat", json!({"range": "A2:A7", "rule": {"type": "notContainsText", "text": "nẵng"}})).unwrap();
     assert_eq!(["A2", "A3", "A4", "A5", "A6", "A7"].map(|a| cf_hit(&s, a)), [true, true, true, false, false, true]);
-}
-
-#[test]
-fn consolidate_merges_labels() {
-    let mut s = Session::new();
-    s.new_workbook();
-    s.execute("home.insertSheet", json!({})).unwrap();
-    s.execute("sheet.rename", json!({"name": "East"})).unwrap();
-    s.execute("range.setValues", json!({"range": "A1", "values": [["", "Số lượng"], [NFC, 10], ["Đà Nẵng", 5]]})).unwrap();
-    s.execute("home.insertSheet", json!({})).unwrap();
-    s.execute("sheet.rename", json!({"name": "West"})).unwrap();
-    s.execute("range.setValues", json!({"range": "A1", "values": [["", nfd("SỐ LƯỢNG")], [nfd(NFC), 1], ["ĐÀ NẴNG", 2]]})).unwrap();
-    s.execute("sheet.activate", json!({"sheet": "Sheet1"})).unwrap();
-    let r = s
-        .execute("data.consolidate", json!({"sources": ["East!A1:B3", "West!A1:B3"], "destination": "A1", "topRow": true, "leftColumn": true}))
-        .unwrap();
-    assert_eq!(r["range"], "A1:B3");
-    assert_eq!(v(&s, "B1"), Value::from("Số lượng"));
-    assert_eq!(v(&s, "A2"), Value::from(NFC));
-    assert_eq!(v(&s, "B2"), Value::Number(11.0));
-    assert_eq!(v(&s, "A3"), Value::from("Đà Nẵng"));
-    assert_eq!(v(&s, "B3"), Value::Number(7.0));
 }
 
 #[test]
@@ -314,34 +270,6 @@ fn data_sort_custom_list_matches_any_spelling() {
         .unwrap();
     let col: Vec<Value> = (1..=4).map(|r| v(&s, &format!("A{r}"))).collect();
     assert_eq!(col, vec![Value::from(nfd("hà nội").as_str()), Value::from("ĐÀ NẴNG"), Value::from("Huế"), Value::from("Zebra")]);
-}
-
-#[test]
-fn advanced_filter_matches_labels_and_texts_in_any_spelling() {
-    let mut s = people(&[]);
-    // The criteria header is the list header typed in NFD; "<>" excludes every Đà Nẵng spelling.
-    s.execute("range.setValues", json!({"range": "E1", "values": [[nfd("TÊN")], [format!("<>{}", nfd("đà nẵng"))]]})).unwrap();
-    s.execute("data.advancedFilter", json!({"range": "A1:C6", "criteria": "E1:E2"})).unwrap();
-    assert_eq!(hidden_rows(&s), vec![4, 5]);
-    // Unique records: the NFC, NFD and uppercase spellings of one row count once.
-    s.execute("range.setValues", json!({"range": "G1", "values": [["Tên"], [NFC], [nfd(NFC)], ["NGUYỄN THỊ NGỌC ÁNH"], ["x"]]})).unwrap();
-    s.execute("range.setValues", json!({"range": "I1", "values": [["Tên"]]})).unwrap();
-    let r = s.execute("data.advancedFilter", json!({"range": "G1:G5", "criteria": "I1:I1", "unique": true, "copyTo": "K1"})).unwrap();
-    assert_eq!(v(&s, "K2"), Value::from(NFC));
-    assert_eq!(v(&s, "K3"), Value::from("x"));
-    assert_eq!(v(&s, "K4"), Value::Empty, "{r}");
-}
-
-#[test]
-fn autofill_continues_a_custom_list_typed_in_nfd() {
-    let mut s = Session::new();
-    s.new_workbook();
-    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().wb).custom_lists = vec![vec!["Thứ Hai".into(), "Thứ Ba".into(), "Thứ Tư".into()]];
-    s.execute("range.setValues", json!({"range": "A1", "values": [[nfd("thứ hai")]]})).unwrap();
-    s.execute("edit.autoFill", json!({"source": "A1", "target": "A1:A3"})).unwrap();
-    // The list's own spelling continues the series (a capitalised entry keeps its capital).
-    assert_eq!(v(&s, "A2"), Value::from("Thứ Ba"));
-    assert_eq!(v(&s, "A3"), Value::from("Thứ Tư"));
 }
 
 fn sheet_marks(s: &Session) -> usize {
