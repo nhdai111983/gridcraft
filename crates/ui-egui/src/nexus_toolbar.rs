@@ -236,13 +236,19 @@ fn item(app: &mut SheetApp, ui: &mut Ui, id: &str) {
     let label = app.ui.language.tr(c.label).to_string();
     // An empty shortcut would leave a trailing space in the item's accessible name.
     let button = match c.shortcut {
-        Some(sc) if !sc.is_empty() => egui::Button::new(label).shortcut_text(sc),
+        Some(sc) if !sc.is_empty() => egui::Button::new(label).shortcut_text(shortcut_text(sc)),
         _ => egui::Button::new(label),
     };
     if ui.add_enabled(on, button).clicked() {
         run_menu_command(app, ui.ctx(), id);
         ui.close();
     }
+}
+
+/// A registry shortcut as the menus show it: the registry's `Cmd` is the platform's command key,
+/// Ctrl outside macOS.
+pub fn shortcut_text(sc: &str) -> String {
+    if cfg!(target_os = "macos") { sc.to_string() } else { sc.replace("Cmd+", "Ctrl+") }
 }
 
 /// Runs a command picked from a menu: Cut, Copy and Paste go through the system clipboard, as the
@@ -727,6 +733,13 @@ mod tests {
         }
     }
 
+    #[test]
+    fn shortcuts_name_the_platform_key() {
+        let want = if cfg!(target_os = "macos") { "Cmd+Shift+X" } else { "Ctrl+Shift+X" };
+        assert_eq!(shortcut_text("Cmd+Shift+X"), want);
+        assert_eq!(shortcut_text("F4"), "F4");
+    }
+
     /// The menus are built from any registry slice, so an empty one gives no menu (no panic).
     #[test]
     fn no_commands_no_menus() {
@@ -770,9 +783,9 @@ mod tests {
         h.run_steps(6);
         h.get_by_label("Font ⏵").hover();
         h.run_steps(6);
-        // Menu items carry their shortcut: "Bold" plus "Cmd+B".
-        h.get_by_label_contains("Cmd+I");
-        h.get_by_label_contains("Cmd+B").click();
+        // Menu items carry their shortcut: "Bold" plus "Ctrl+B" ("Cmd+B" on macOS).
+        h.get_by_label_contains(&shortcut_text("Cmd+I"));
+        h.get_by_label_contains(&shortcut_text("Cmd+B")).click();
         h.run_steps(6);
         assert!(!bold(&mut h), "the menu's Bold ran home.bold again");
         // Data › Sort & Filter lists Sort A to Z.

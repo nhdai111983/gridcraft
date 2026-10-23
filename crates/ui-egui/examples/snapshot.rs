@@ -5,6 +5,8 @@
 //!  [--dialog 'name={json}'] [--hf-edit header|footer] [--toolbar] [--accent '#RRGGBB'] out.png`
 //!
 //! `--toolbar`: the NexusOffice layout (menu bar and one tool row); `--accent`: a user accent colour.
+//! `--ui-cmd 'id={json}'` runs an app command (`ui.backstage`…) before drawing; `--click LABEL` and
+//! `--hover LABEL` act on the widget so named (in order) before the shot, to show an open menu.
 
 use gridcraft_engine::Session;
 use gridcraft_ui_egui::SheetApp;
@@ -26,6 +28,8 @@ fn main() {
     let mut hf_edit: Option<String> = None;
     let mut toolbar = false;
     let mut accent: Option<String> = None;
+    let mut ui_cmds: Vec<String> = vec![];
+    let mut pointer: Vec<(bool, String)> = vec![];
     let mut out = "snapshot.png".to_string();
     let mut i = 0;
     while i < args.len() {
@@ -60,6 +64,19 @@ fn main() {
             }
             "--dark" => dark = true,
             "--toolbar" => toolbar = true,
+            "--ui-cmd" => {
+                i += 1;
+                if let Some(c) = args.get(i) {
+                    ui_cmds.push(c.clone());
+                }
+            }
+            "--click" | "--hover" => {
+                let click = args[i] == "--click";
+                i += 1;
+                if let Some(c) = args.get(i) {
+                    pointer.push((click, c.clone()));
+                }
+            }
             "--accent" => {
                 i += 1;
                 accent = args.get(i).cloned();
@@ -114,6 +131,15 @@ fn main() {
                 app.ui.dark = dark;
                 app.toolbar = toolbar;
                 app.ui.accent = accent;
+                for c in &ui_cmds {
+                    let (id, p) = c
+                        .split_once('=')
+                        .map(|(a, b)| (a.to_string(), serde_json::from_str(b).unwrap_or(json!({}))))
+                        .unwrap_or((c.clone(), json!({})));
+                    if let Err(e) = app.run(&id, p) {
+                        eprintln!("{id}: {e}");
+                    }
+                }
                 if let Some(code) = &language
                     && let Some(l) = gridcraft_ui_egui::i18n::Language::parse(code)
                 {
@@ -139,6 +165,15 @@ fn main() {
             },
         );
     harness.run_steps(8);
+    for (click, label) in &pointer {
+        use egui_kittest::kittest::Queryable;
+        match harness.query_by_label(label) {
+            Some(n) if *click => n.click(),
+            Some(n) => n.hover(),
+            None => eprintln!("no widget named {label:?}"),
+        }
+        harness.run_steps(4);
+    }
     let img = harness.render().expect("render");
     img.save(&out).expect("save png");
     eprintln!("wrote {out} ({}x{})", img.width(), img.height());
