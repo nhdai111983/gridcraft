@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=Nexus Sheets
-Name[vi]=Nexus Sheets
+Name=Nexus Sheet
+Name[vi]=Nexus Sheet
 GenericName=Spreadsheet
 GenericName[vi]=Bảng tính
 Comment=Calculate, analyse and chart data in workbooks
 Comment[vi]=Tính toán, phân tích và vẽ biểu đồ dữ liệu trong bảng tính
-Exec=nexus-sheets %F
-TryExec=nexus-sheets
+Exec=nexus-sheet %F
+TryExec=nexus-sheet
 Icon=vn.sonnytech.nexus.sheets
 Terminal=false
 StartupNotify=true

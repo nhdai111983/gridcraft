@@ -9,7 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 
-// NexusOffices: product names shown in the interface (`tr` brands what it returns).
+// NexusOffice: product names shown in the interface (`tr` brands what it returns).
 mod brand;
 pub use brand::{brand, nexus_text};
 mod cs;
@@ -120,7 +120,7 @@ impl Language {
     /// A label that needs two translations (Home's text "Orientation" vs Page Layout's print
     /// "Orientation") is keyed `context|label`: English shows only the part after the `|`.
     ///
-    /// Invariant (NexusOffices): never pass workbook or other user text (sheet names, cell
+    /// Invariant (NexusOffice): never pass workbook or other user text (sheet names, cell
     /// values, file names, data-validation titles) to `tr`: what it returns goes through
     /// [`brand`], which renames the product in interface labels only.
     pub fn tr(self, text: &str) -> &str {
@@ -137,7 +137,7 @@ impl Language {
             Self::Fr => fr::translate(text),
             Self::Sr => sr::translate(text),
         };
-        // NexusOffices: the product names shown are Nexus Sheets / NexusOffices (`brand`).
+        // NexusOffice: the product names shown are Nexus Sheet / NexusOffice (`brand`).
         brand::branded(translated.unwrap_or_else(|| text.rsplit_once('|').map_or(text, |(_, label)| label)))
     }
 }

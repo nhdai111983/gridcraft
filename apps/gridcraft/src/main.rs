@@ -74,15 +74,25 @@ impl eframe::App for App {
 }
 
 fn config_dir() -> Option<std::path::PathBuf> {
+    config_dir_named(gridcraft_ui_egui::nexus::SETTINGS_DIR, gridcraft_ui_egui::nexus::SETTINGS_DIR_XDG)
+}
+
+/// The settings folder before the rename to "Nexus Sheet" (`Nexus Sheets`); only read from, as a
+/// fallback while the new folder does not exist, so testers keep their preferences.
+fn legacy_config_dir() -> Option<std::path::PathBuf> {
+    config_dir_named(gridcraft_ui_egui::nexus::LEGACY_SETTINGS_DIR, gridcraft_ui_egui::nexus::LEGACY_SETTINGS_DIR_XDG)
+}
+
+fn config_dir_named(dir: &str, xdg_dir: &str) -> Option<std::path::PathBuf> {
     if cfg!(target_os = "macos") {
-        std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library/Application Support").join(gridcraft_ui_egui::nexus::SETTINGS_DIR))
+        std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library/Application Support").join(dir))
     } else if cfg!(windows) {
-        std::env::var_os("APPDATA").map(|a| std::path::PathBuf::from(a).join(gridcraft_ui_egui::nexus::SETTINGS_DIR))
+        std::env::var_os("APPDATA").map(|a| std::path::PathBuf::from(a).join(dir))
     } else {
         std::env::var_os("XDG_CONFIG_HOME")
             .map(std::path::PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
-            .map(|c| c.join(gridcraft_ui_egui::nexus::SETTINGS_DIR_XDG))
+            .map(|c| c.join(xdg_dir))
     }
 }
 
@@ -106,6 +116,8 @@ fn load_prefs(app: &mut SheetApp) {
     // ...and its light or dark appearance (#239), until a theme is chosen and saved in ui.json.
     app.ui.system_theme = true;
     let Some(dir) = config_dir() else { return };
+    // No settings folder under the new name yet: read the old one (writes always go to the new).
+    let dir = if dir.exists() { dir } else { legacy_config_dir().filter(|d| d.is_dir()).unwrap_or(dir) };
     if let Ok(b) = std::fs::read(dir.join("ui.json"))
         && let Ok(ui) = serde_json::from_slice::<gridcraft_ui_egui::UiState>(&b)
     {
@@ -222,9 +234,9 @@ fn open_with_system(target: &str) {
 
 fn icon() -> Option<egui::IconData> {
     #[cfg(target_os = "macos")]
-    let bytes = include_bytes!("../../../nexus/assets/nexus-sheets-macos-512.png");
+    let bytes = include_bytes!("../../../nexus/assets/nexus-sheet-macos-512.png");
     #[cfg(not(target_os = "macos"))]
-    let bytes = include_bytes!("../../../nexus/assets/nexus-sheets-256.png");
+    let bytes = include_bytes!("../../../nexus/assets/nexus-sheet-256.png");
     let img = image::load_from_memory(bytes).ok()?.to_rgba8();
     Some(egui::IconData { width: img.width(), height: img.height(), rgba: img.into_raw() })
 }
@@ -247,7 +259,7 @@ fn main() -> eframe::Result<()> {
             log::error!("{report}");
         } else {
             // `eprintln!` panics on a broken stderr pipe, and a panic inside the panic hook aborts.
-            let _ = std::io::Write::write_fmt(&mut std::io::stderr(), format_args!("nexus-sheets: {report}\n"));
+            let _ = std::io::Write::write_fmt(&mut std::io::stderr(), format_args!("nexus-sheet: {report}\n"));
         }
     }));
     let args: Vec<String> = std::env::args().skip(1).collect();

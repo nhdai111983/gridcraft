@@ -802,7 +802,7 @@ impl SheetApp {
         let vba: Vec<&str> = msgs.iter().copied().filter(|m| m.to_lowercase().contains("macro") || m.contains("VBA")).collect();
         if !vba.is_empty() {
             self.notice = Some(Notice {
-                text: "This workbook contains VBA macros. Nexus Sheets keeps them intact when you save, but does not run them.".into(),
+                text: "This workbook contains VBA macros. Nexus Sheet keeps them intact when you save, but does not run them.".into(),
                 kind: NoticeKind::Warning,
                 action: Some(("What this means".into(), "macros".into())),
             });

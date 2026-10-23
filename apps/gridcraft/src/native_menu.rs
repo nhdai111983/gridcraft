@@ -174,7 +174,7 @@ fn tree() -> Vec<(&'static str, Vec<Entry>)> {
             vec![
                 ("Agent Control (MCP)…", "dialog:agents", None),
                 ("Contributors…", "dialog:about:Contributors", None),
-                // NexusOffices: no links to ArtCraft's site or Discord; the About box has the source link.
+                // NexusOffice: no links to ArtCraft's site or Discord; the About box has the source link.
             ],
         ),
     ]

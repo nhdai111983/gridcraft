@@ -1063,9 +1063,9 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                 "solverResults" => solver_results(app, ui, &mut d, &mut open),
                 "spelling" => spelling(app, ui, &mut d, &mut open),
                 "agents" => {
-                    ui.label("Nexus Sheets is fully drivable by agents. Every menu item, button and gesture is a command:");
+                    ui.label("Nexus Sheet is fully drivable by agents. Every menu item, button and gesture is a command:");
                     ui.add_space(4.0);
-                    ui.monospace("nexus-sheets --control 7979           # JSON-lines control channel\nnexus-sheets-cli mcp --connect 7979   # MCP bridged to this window\nnexus-sheets-cli mcp                  # headless MCP server");
+                    ui.monospace("nexus-sheet --control 7979           # JSON-lines control channel\nnexus-sheet-cli mcp --connect 7979   # MCP bridged to this window\nnexus-sheet-cli mcp                  # headless MCP server");
                     ui.add_space(4.0);
                     ui.label(format!("{} engine commands are available. See docs/mcp.md and docs/control-protocol.md.", gridcraft_engine::command_specs().len()));
                 }
@@ -1482,7 +1482,7 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog) {
     match d.tab.as_str() {
         "Contributors" => crate::credits::contributors_ui(ui),
         "Models" => crate::credits::models_ui(ui),
-        // NexusOffices: About is the fork's own (no ArtCraft logo or links; attribution in text).
+        // NexusOffice: About is the fork's own (no ArtCraft logo or links; attribution in text).
         _ => crate::nexus::about_ui(ui, crate::i18n::current(ui.ctx())),
     }
 }
@@ -1491,7 +1491,7 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog) {
 /// preserved VBA project. Mirrors Excel's Developer ▸ Macros list, but is honest that VBA is
 /// preserved and not executed.
 fn macros(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.label("Automation in this workbook. Nexus Sheets runs its own scripts; a file's VBA project is preserved but not executed.");
+    ui.label("Automation in this workbook. Nexus Sheet runs its own scripts; a file's VBA project is preserved but not executed.");
     ui.add_space(6.0);
     let items: Vec<Json> = d.result.as_ref().and_then(Json::as_array).cloned().unwrap_or_default();
     if items.is_empty() {

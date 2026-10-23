@@ -2,7 +2,7 @@
 .SYNOPSIS
   Exercise the actual MSI's desktop-shortcut choices on a disposable GitHub Windows runner.
 .DESCRIPTION
-  Compiles original no-op GUI/CLI fixtures instead of Rust, uses Nexus Sheets' icon,
+  Compiles original no-op GUI/CLI fixtures instead of Rust, uses Nexus Sheet's icon,
   and builds adjacent MSI versions. Installs the real package (including its registrations),
   checks default/explicit choices, repair and major upgrades, then uninstalls in finally.
   Run through the Packaging lint workflow, never on a developer's Windows installation.
@@ -16,16 +16,16 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows' -or $env:RUN
 }
 if (-not $WorkDir) { $WorkDir = Join-Path $env:RUNNER_TEMP 'gridcraft-shortcut-smoke' }
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$InstallDir = Join-Path $env:ProgramFiles 'Nexus Sheets'
-$DesktopLink = Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'Nexus Sheets.lnk'
-$StartLink = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Nexus Sheets.lnk'
+$InstallDir = Join-Path $env:ProgramFiles 'Nexus Sheet'
+$DesktopLink = Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'Nexus Sheet.lnk'
+$StartLink = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Nexus Sheet.lnk'
 $ChoiceKey = 'HKLM:\Software\Sonnytech\Nexus Sheets\Installer'
 $ComponentKey = 'HKLM:\Software\Sonnytech\Nexus Sheets\Installer'
 $UninstallRoot = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
-$Icon = Join-Path $Root 'nexus\assets\nexus-sheets.ico'
+$Icon = Join-Path $Root 'nexus\assets\nexus-sheet.ico'
 if ((Test-Path $InstallDir) -or (Test-Path $DesktopLink) -or (Test-Path $StartLink) -or
     (Test-Path 'HKLM:\Software\Sonnytech\Nexus Sheets') -or (Test-Path 'HKCU:\Software\Sonnytech\Nexus Sheets')) {
-  throw 'Refusing to run against an existing Nexus Sheets installation or its settings.'
+  throw 'Refusing to run against an existing Nexus Sheet installation or its settings.'
 }
 New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
 $Bin = Join-Path $WorkDir 'bin'
@@ -94,7 +94,7 @@ function Assert-Package($Package) {
   $key = Join-Path $UninstallRoot $Package.Code
   $registered = Get-ItemProperty -Path $key -ErrorAction Stop
   Assert-That ($registered.DisplayVersion -eq $Package.Version) "Wrong installed product version: $($Package.Version)"
-  foreach ($exe in 'nexus-sheets.exe', 'nexus-sheets-cli.exe') {
+  foreach ($exe in 'nexus-sheet.exe', 'nexus-sheet-cli.exe') {
     Assert-That (Test-Path (Join-Path $InstallDir $exe)) "$exe missing after installation"
   }
   foreach ($file in $InstalledNotices) {
@@ -115,12 +115,12 @@ function Assert-Desktop([bool] $Enabled) {
   $shortcut = $null
   try {
     $shortcut = $shell.CreateShortcut($DesktopLink)
-    Assert-That ($shortcut.TargetPath -ieq (Join-Path $InstallDir 'nexus-sheets.exe')) 'Desktop shortcut targets the wrong executable'
+    Assert-That ($shortcut.TargetPath -ieq (Join-Path $InstallDir 'nexus-sheet.exe')) 'Desktop shortcut targets the wrong executable'
     Assert-That ($shortcut.WorkingDirectory.TrimEnd('\') -ieq $InstallDir.TrimEnd('\')) 'Desktop shortcut has the wrong working directory'
     Assert-That ($shortcut.IconLocation -match '^(.*),\s*0$') 'Desktop shortcut must use icon index zero'
     $iconPath = [Environment]::ExpandEnvironmentVariables($Matches[1].Trim('"'))
     Assert-That (Test-Path $iconPath) 'Desktop shortcut icon is missing'
-    Assert-That ((Get-FileHash $iconPath).Hash -eq (Get-FileHash $Icon).Hash) 'Desktop shortcut does not use the packaged Nexus Sheets icon'
+    Assert-That ((Get-FileHash $iconPath).Hash -eq (Get-FileHash $Icon).Hash) 'Desktop shortcut does not use the packaged Nexus Sheet icon'
   } finally {
     foreach ($item in $shortcut, $shell) {
       if ($item) { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($item) | Out-Null }
@@ -130,8 +130,8 @@ function Assert-Desktop([bool] $Enabled) {
 
 function Assert-Removed($Package) {
   Assert-That (-not (Test-Path (Join-Path $UninstallRoot $Package.Code))) 'MSI still registered after removal'
-  Assert-That (-not (Test-Path (Join-Path $InstallDir 'nexus-sheets.exe'))) 'App executable remains after uninstall'
-  Assert-That (-not (Test-Path (Join-Path $InstallDir 'nexus-sheets-cli.exe'))) 'CLI executable remains after uninstall'
+  Assert-That (-not (Test-Path (Join-Path $InstallDir 'nexus-sheet.exe'))) 'App executable remains after uninstall'
+  Assert-That (-not (Test-Path (Join-Path $InstallDir 'nexus-sheet-cli.exe'))) 'CLI executable remains after uninstall'
   foreach ($file in $InstalledNotices) {
     Assert-That (-not (Test-Path (Join-Path $InstallDir $file))) "$file remains after uninstall"
   }
@@ -144,7 +144,7 @@ function Assert-Removed($Package) {
 function Uninstall-AsSystem($Package) {
   # Exercise removal under a different account without creating a user or credentials.
   # This function is covered by the disposable hosted-runner guard at the top of the script.
-  $taskName = 'NexusSheets-shortcut-' + [Guid]::NewGuid().ToString('N')
+  $taskName = 'NexusSheet-shortcut-' + [Guid]::NewGuid().ToString('N')
   $log = Join-Path $WorkDir 'uninstall-as-system.log'
   $action = New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR 'System32\msiexec.exe') `
     -Argument "/x $($Package.Code) /qn /norestart /l*v `"$log`""

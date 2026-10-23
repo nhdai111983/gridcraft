@@ -7,18 +7,18 @@
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=../../nexus/assets/nexus-sheets.ico");
+    println!("cargo:rerun-if-changed=../../nexus/assets/nexus-sheet.ico");
     println!("cargo:rerun-if-env-changed=GRIDCRAFT_REQUIRE_WINRES");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;
     }
     let mut res = winresource::WindowsResource::new();
-    res.set_icon("../../nexus/assets/nexus-sheets.ico")
-        .set("ProductName", "Nexus Sheets")
-        .set("FileDescription", "Nexus Sheets spreadsheet")
-        .set("CompanyName", "Sonnytech")
-        .set("LegalCopyright", "Nexus Sheets (c) 2026 Sonnytech; based on GridCraft by the ArtCraft team. MIT OR Apache-2.0.")
-        .set("OriginalFilename", "nexus-sheets.exe")
+    res.set_icon("../../nexus/assets/nexus-sheet.ico")
+        .set("ProductName", "Nexus Sheet")
+        .set("FileDescription", "Nexus Sheet spreadsheet")
+        .set("CompanyName", "SonnyTech")
+        .set("LegalCopyright", "Nexus Sheet (c) 2026 SonnyTech; based on GridCraft by the ArtCraft team. MIT OR Apache-2.0.")
+        .set("OriginalFilename", "nexus-sheet.exe")
         .set("InternalName", "gridcraft");
     if let Err(e) = res.compile() {
         if std::env::var_os("GRIDCRAFT_REQUIRE_WINRES").is_some() {
