@@ -310,6 +310,8 @@ fn main() -> eframe::Result<()> {
         session.new_workbook();
     }
     let mut app = SheetApp::new(session, services());
+    // NexusOffice layout: a menu bar and one tool row instead of the ribbon.
+    app.toolbar = true;
     app.watch_desktop_theme();
     app.after_engine(); // Show warnings from the sample.
     let control_port = control_port;

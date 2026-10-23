@@ -91,6 +91,20 @@ Cơ chế chính:
 | `README.md` | README Nexus Sheet ngắn (vi trước, có English): sản phẩm, NexusOffice/SonnyTech, câu ghi công "Nexus Sheet được phát triển dựa trên GridCraft của ArtCraft (MIT/Apache-2.0)" chỉ bằng chữ (không logo/Discord/getartcraft), trỏ LICENSE-MIT/LICENSE-APACHE/NOTICE/ATTRIBUTION; được `copy_docs` và zip portable đóng gói | Không (README của fork) |
 | `Cargo.toml` | `[workspace.package] repository` → `https://github.com/sonnytech-vn/gridcraft` (brand-check `brand-url`; metadata, không code nào đọc `CARGO_PKG_REPOSITORY`) | Có — metadata của fork |
 | `ATTRIBUTION.md` | 14 dòng cho icon Nexus (`nexus/assets/**`, SonnyTech, CC0-1.0) | Không (bắt buộc theo luật asset) |
+| `crates/ui-egui/src/nexus_toolbar.rs` | File mới (NX-UI, ROADMAP F2.2): bố cục NexusOffice kiểu WPS — thanh menu sinh từ registry lệnh (mỗi tab ribbon một menu, mỗi nhóm một menu con, vị trí cấp 3 thành menu con lồng; `Edit`/`Window`/`Table`/`Format`/PivotTable gộp vào Home/View/Table Design/Chart Design/PivotTable để không mất lệnh nào) + một hàng công cụ (clipboard, phông/cỡ, B/I/U, viền, màu nền/chữ, căn lề, xuống dòng, gộp ô, định dạng số, sắp xếp/lọc, chèn/xoá hàng-cột, AutoSum, tìm); cửa sổ hẹp thì cụm cuối dồn vào menu "More tools"; đường gradient SonnyTech dưới thanh menu; test (đủ lệnh, registry rỗng, kittest bấm menu/Bold, cửa sổ hẹp, `ui.accent`, prefs) | — (file mới) |
+| `crates/ui-egui/src/lib.rs` (thêm) | `pub mod nexus_toolbar;`, trường `SheetApp::toolbar` (mặc định tắt = ribbon upstream), `ui()` vẽ `nexus_toolbar::show` thay `ribbon::show` khi bật; `UiState::accent` (`#RRGGBB`, đọc lỏng: giá trị rác = không có, không ghi khoá khi `None`); lệnh `ui.accent` (`{"value": "#RRGGBB"}` đặt, `""`/`null` về màu app, không có `value` thì đọc); `logic()` áp màu qua `theme::set_accent` | Có — cờ giao diện + màu chủ đạo qua prefs |
+| `crates/ui-egui/src/theme.rs` | Bảng màu Nexus Sheet: Emerald `#10B981` (ink `#047857` cho chữ/nền có chữ trắng, 5.5:1), nền slate sáng `#F8FAFC`/`#F1F5F9`/`#E9EDF2`, viền `#E2E8F0`; tối `#0F172A`/`#1E293B`/`#020617`/`#334155`; token mới `on_accent`; màu chủ đạo người dùng chọn lưu trong bộ nhớ context egui (`set_accent`/`accent`, `with_accent` đẩy sáng/tối tới khi chữ đạt WCAG 4.5:1, viền vùng chọn 3:1), `ACCENT_PRESETS`, `parse_hex`/`to_hex`, `contrast_ratio`; `apply` tách `install_visuals`; bỏ xanh lá kiểu Excel `#107C41` | Có — bảng màu qua biến build |
+| `crates/ui-egui/src/backstage.rs` (thêm) | File › Options › General: hàng "Accent colour/Màu chủ đạo" (Màu ứng dụng, 6 màu gợi sẵn, chọn màu tuỳ ý → `ui.accent`); thanh điều hướng File dùng `on_accent` thay trắng cố định | Có — giao diện NexusOffice |
+| `crates/ui-egui/src/ribbon.rs` (thêm) | Chỉ đổi phạm vi: `contextual_tabs`, `active_style`, `theme_colors`, `act`, `menu_items`, `font_combo`, `size_combo` thành `pub(crate)` để hàng công cụ dùng lại | Có — nếu upstream mở các hàm này |
+| `crates/ui-egui/src/control.rs` | `engine.commands` liệt kê `ui.accent` (tham số, kết quả) | Có |
+| `crates/ui-egui/src/dialogs.rs` (thêm) | Nút OK/Solve: chữ `on_accent` thay trắng cố định (chế độ tối và màu chủ đạo sáng vẫn đọc được) | Nên PR upstream (trắng trên accent sáng chỉ ~2:1) |
+| `crates/ui-egui/src/chartview.rs` | Ô giá trị slicer đang chọn: chữ `on_accent` thay trắng cố định | Nên PR upstream |
+| `crates/ui-egui/src/icons.rs` | `GREEN` của icon = ink Emerald `#047857` thay `#107C41` (xanh kiểu Excel) | Có — bảng màu qua biến build |
+| `crates/ui-egui/src/grid.rs` (thêm) | Ô checkbox trong ô: màu đánh dấu `theme::APP_INK` thay `#107C41` | Có — bảng màu |
+| `crates/ui-egui/src/panes.rs` | Nhãn "Resolved" của bình luận: `theme::APP_INK` thay `#107C41` | Có — bảng màu |
+| `crates/ui-egui/examples/snapshot.rs` | Cờ `--toolbar` (bố cục NexusOffice) và `--accent '#RRGGBB'` để chụp màn hình | Có |
+| `apps/gridcraft/src/main.rs` (thêm) | Bật `app.toolbar` (bố cục NexusOffice) | Có — cờ giao diện |
+| `apps/gridcraft-web/src/web.rs` (thêm) | Bật `app.toolbar` cho bản web | Có — cờ giao diện |
 
 ### GUID WiX mới (Nexus Sheet riêng, không dùng chung với GridCraft hay app Nexus khác)
 
