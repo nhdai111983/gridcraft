@@ -54,7 +54,7 @@ copy_docs() {
   copy_notices "$dest" || return 1
 }
 
-# NexusOffices: the licences, NOTICE (Apache-2.0 §4(d)) and ATTRIBUTION.md (the bundled fonts and
+# NexusOffice: the licences, NOTICE (Apache-2.0 §4(d)) and ATTRIBUTION.md (the bundled fonts and
 # assets with their licences) go in every package; the branded README links to NOTICE and
 # ATTRIBUTION.md. So do the OFL texts of the repo's own embedded fonts (assets/fonts/OFL-*.txt).
 # Run after copy_font_licences: a name that clashes with a craft-fonts OFL-<family>.txt on a
@@ -84,7 +84,7 @@ copy_font_licences() {
       n=$((n + 1))
     done
   fi
-  # NexusOffices: a release build (CRAFT_FONTS_REQUIRED=1) embeds craft-fonts, so its licences must ship.
+  # NexusOffice: a release build (CRAFT_FONTS_REQUIRED=1) embeds craft-fonts, so its licences must ship.
   if [ "${CRAFT_FONTS_REQUIRED:-}" = 1 ] && [ "$n" -eq 0 ]; then
     echo "error: CRAFT_FONTS_REQUIRED=1 but no fonts/*/OFL.txt in CRAFT_FONTS_DIR (${CRAFT_FONTS_DIR:-unset})" >&2
     return 1

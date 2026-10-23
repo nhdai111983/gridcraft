@@ -2,7 +2,7 @@
 //! does: a letter typed precomposed (NFC) equals the same letter typed as base + marks (NFD),
 //! case is ignored, and the user's text itself is never rewritten.
 //!
-//! Nexus Sheets: upstream keeps these tests in `crates/engine/src/tests_collation.rs` (fix/text-
+//! Nexus Sheet: upstream keeps these tests in `crates/engine/src/tests_collation.rs` (fix/text-
 //! compare-canonical); the port runs them as an integration test so `crates/engine/src/lib.rs`
 //! stays as it is (patch budget). They use only the crate's public API.
 //! Not ported (strict patch budget), so their upstream tests are left out here: slicer tiles

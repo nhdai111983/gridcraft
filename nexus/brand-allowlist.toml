@@ -29,7 +29,7 @@ reason = "Chú thích XML/HTML/plist (từ <!-- tới hết dòng), không hiệ
 
 [[allow]]
 path = "packaging/windows/gridcraft.wxs"
-pattern = '^  (Nexus Sheets MSI \(NexusOffices, by Sonnytech; based on GridCraft\)|GridCraft or a sibling app:|Nexus Sheets. own too, so it installs and uninstalls next to GridCraft).*'
+pattern = '^  (Nexus Sheet MSI \(NexusOffice, by SonnyTech; based on GridCraft\)|GridCraft or a sibling app:|Nexus Sheet.s own too, so it installs and uninstalls next to GridCraft).*'
 reason = "Các dòng tiếp của chú thích XML đầu file wxs (ghi chú cho người bảo trì về UpgradeCode riêng), không vào MSI"
 
 [[allow]]
@@ -45,7 +45,7 @@ reason = "Mô tả crate trong Cargo.toml: metadata nội bộ, crate không pub
 [[allow]]
 path = "{AGENTS.md,CLAUDE.md,ROADMAP.md,assets/app-icon/README.md,packaging/macos/dmg/README.md}"
 pattern = '.*'
-reason = "Tài liệu dev của upstream, không đóng gói (copy_docs chỉ chép README.md/LICENSE*/NOTICE/ATTRIBUTION.md — brand-check bỏ qua LICENSE*/NOTICE*/ATTRIBUTION*; README.md đã viết lại cho Nexus Sheets và vẫn được quét)"
+reason = "Tài liệu dev của upstream, không đóng gói (copy_docs chỉ chép README.md/LICENSE*/NOTICE/ATTRIBUTION.md — brand-check bỏ qua LICENSE*/NOTICE*/ATTRIBUTION*; README.md đã viết lại cho Nexus Sheet và vẫn được quét)"
 
 [[allow]]
 path = "xtask/src/parity.rs"
@@ -65,7 +65,7 @@ reason = "Workflow upstream đã tắt trên fork (spec §4.6); bản phát hàn
 [[allow]]
 path = ".github/workflows/{nexus-ci.yml,nexus-sync.yml}"
 pattern = 'github\.com/storytold/\$UPSTREAM_REPO'
-reason = "Workflow NexusOffices (template trong NexusOffices/templates/workflows) phải lấy upstream để đếm patch và đồng bộ; không phát hành, người dùng không thấy"
+reason = "Workflow NexusOffice (template trong NexusOffices/templates/workflows) phải lấy upstream để đếm patch và đồng bộ; không phát hành, người dùng không thấy"
 
 # ---------------------------------------------------------------------------------------------
 # 2. Chuỗi giao diện đi qua Language::tr(), được brand() đổi thành Nexus Sheets/NexusOffices lúc chạy
@@ -75,22 +75,22 @@ reason = "Workflow NexusOffices (template trong NexusOffices/templates/workflows
 [[allow]]
 path = "crates/ui-egui/src/i18n/brand.rs"
 pattern = '.*'
-reason = "Chính bảng thay thế GridCraft→Nexus Sheets, ArtCraft→NexusOffices và test của nó"
+reason = "Chính bảng thay thế GridCraft→Nexus Sheet, ArtCraft→NexusOffice và test của nó"
 
 [[allow]]
 path = "crates/ui-egui/src/i18n.rs"
 pattern = '\("About\\nGridCraft", "GridCraft について"\)'
-reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets'"
+reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheet'"
 
 [[allow]]
 path = "crates/ui-egui/src/i18n/ko.rs"
 pattern = '"About\\nGridCraft" => "GridCraft\\n정보"'
-reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets'"
+reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheet'"
 
 [[allow]]
 path = "crates/ui-egui/src/i18n/{cs,pt}.rs"
 pattern = '"(About GridCraft|How agents drive GridCraft \(MCP / control channel\))" => "[^"]*"'
-reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets'"
+reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheet'"
 
 [[allow]]
 path = "crates/ui-egui/src/i18n/pt.rs"
@@ -100,12 +100,12 @@ reason = "Khoá catalog không còn được dùng (trang About đã viết lạ
 [[allow]]
 path = "crates/ui-egui/src/dialogs.rs"
 pattern = 'Dialog::custom\("(about", "About GridCraft|start", "GridCraft)"'
-reason = "Tiêu đề hộp thoại: dialogs.rs vẽ qua app.ui.language.tr(&d.title) nên hiển thị 'About Nexus Sheets'/'Nexus Sheets'"
+reason = "Tiêu đề hộp thoại: dialogs.rs vẽ qua app.ui.language.tr(&d.title) nên hiển thị 'About Nexus Sheet'/'Nexus Sheet'"
 
 [[allow]]
 path = "crates/ui-egui/src/ribbon.rs"
 pattern = '"How agents drive GridCraft \(MCP / control channel\)"'
-reason = "Tooltip nút Agent Control: widgets::big_button tra qua tr() nên hiển thị 'Nexus Sheets'"
+reason = "Tooltip nút Agent Control: widgets::big_button tra qua tr() nên hiển thị 'Nexus Sheet'"
 
 # ---------------------------------------------------------------------------------------------
 # 3. Ghi công upstream (bắt buộc theo giấy phép MIT/Apache và LICENSE-brand: chỉ chữ, không logo)
@@ -113,7 +113,7 @@ reason = "Tooltip nút Agent Control: widgets::big_button tra qua tr() nên hi�
 
 [[allow]]
 path = "crates/ui-egui/src/nexus.rs"
-pattern = '"NexusOffices (is developed from|được phát triển dựa trên) [^"]*"'
+pattern = '"NexusOffice (is developed from|được phát triển dựa trên) [^"]*"'
 reason = "Câu ghi công ArtCraft/GridCraft trong About (en/vi), chỉ bằng chữ"
 
 [[allow]]
@@ -128,17 +128,17 @@ reason = "Test trong module #[cfg(test)] kiểm câu ghi công và thư mục c�
 
 [[allow]]
 path = "README.md"
-pattern = '^Nexus Sheets (được phát triển dựa trên GridCraft của ArtCraft|is developed from GridCraft by ArtCraft) \(MIT/Apache-2\.0\)\.$'
+pattern = '^Nexus Sheet (được phát triển dựa trên GridCraft của ArtCraft|is developed from GridCraft by ArtCraft) \(MIT/Apache-2\.0\)\.$'
 reason = "Câu ghi công trong README (vi/en), chỉ bằng chữ, không logo/link ArtCraft"
 
 [[allow]]
 path = "apps/gridcraft/build.rs"
-pattern = '"Nexus Sheets \(c\) 2026 Sonnytech; based on GridCraft by the ArtCraft team\. MIT OR Apache-2\.0\."'
+pattern = '"Nexus Sheet \(c\) 2026 SonnyTech; based on GridCraft by the ArtCraft team\. MIT OR Apache-2\.0\."'
 reason = "LegalCopyright của exe Windows: ghi công upstream bằng chữ"
 
 [[allow]]
 path = "packaging/macos/Info.plist.in"
-pattern = '<string>Nexus Sheets © 2026 Sonnytech\. Based on GridCraft by the ArtCraft team\. MIT OR Apache-2\.0\.</string>'
+pattern = '<string>Nexus Sheet © 2026 SonnyTech\. Based on GridCraft by the ArtCraft team\. MIT OR Apache-2\.0\.</string>'
 reason = "NSHumanReadableCopyright của bundle macOS: ghi công upstream bằng chữ"
 
 [[allow]]
@@ -148,7 +148,7 @@ reason = "Mô tả gói deb/rpm: dòng tiếp của câu ghi công 'based on the
 
 [[allow]]
 path = "packaging/linux/vn.sonnytech.nexus.sheets.metainfo.xml.in"
-pattern = '^\s+Nexus Sheets is developed from the open-source GridCraft by the ArtCraft team$'
+pattern = '^\s+Nexus Sheet is developed from the open-source GridCraft by the ArtCraft team$'
 reason = "Mô tả AppStream: câu ghi công upstream bằng chữ"
 
 # ---------------------------------------------------------------------------------------------
@@ -178,14 +178,14 @@ reason = "Gói FreeBSD/Flatpak: workflow freebsd đã tắt (spec §4.6), Nexus 
 [[allow]]
 path = "packaging/macos/dmg/generate.py"
 pattern = '^(VOLUME = "GridCraft"|ICONS = \{"GridCraft\.app": .*)$'
-reason = "Công cụ dev sinh layout DMG của upstream; package.sh của Nexus không chép dmg-layout.DS_Store nữa (NỢ: sinh lại cho 'Nexus Sheets' trên macOS, Task 12)"
+reason = "Công cụ dev sinh layout DMG của upstream; package.sh của Nexus không chép dmg-layout.DS_Store nữa (NỢ: sinh lại cho 'Nexus Sheet' trên macOS, Task 12)"
 
 [[allow]]
 path = "crates/ui-egui/src/i18n/{cs,de,es,fr,pt,ru,sr,zh}.rs"
 pattern = '"About\\nGridCraft" => "[^"\\]*\\nGridCraft"'
-reason = "Khoá + bản dịch catalog (nút About hai dòng); Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets' (test interface_lookups_show_nexus_names_in_every_language chạy mọi ngôn ngữ với khoá này)"
+reason = "Khoá + bản dịch catalog (nút About hai dòng); Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheet' (test interface_lookups_show_nexus_names_in_every_language chạy mọi ngôn ngữ với khoá này)"
 
 [[allow]]
 path = "crates/ui-egui/src/ribbon.rs"
 pattern = 'big_button\(ui, Icon::Script, "About\\nGridCraft",'
-reason = "Nhãn nút là khoá catalog: big_button() gọi tr() → brand() nên hiển thị 'About\nNexus Sheets' (cùng test trên)"
+reason = "Nhãn nút là khoá catalog: big_button() gọi tr() → brand() nên hiển thị 'About\nNexus Sheet' (cùng test trên)"
