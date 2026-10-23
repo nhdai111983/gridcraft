@@ -23,6 +23,7 @@ pub mod icons;
 pub mod keymap;
 pub mod keytips;
 pub mod nexus;
+pub mod nexus_toolbar;
 pub mod outline;
 pub mod panes;
 pub mod paper_view;
@@ -77,6 +78,15 @@ pub struct UiState {
     /// [`INTERFACE_SCALE_MIN`]..=[`INTERFACE_SCALE_MAX`]; a malformed saved value reads as 100.
     #[serde(deserialize_with = "lenient_interface_scale")]
     pub interface_scale: u16,
+    /// NexusOffice: the accent colour the user picked (`#RRGGBB`, File › Options); `None` is the
+    /// app's own Emerald. A value that isn't a colour reads as `None`.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient_accent")]
+    pub accent: Option<String>,
+}
+
+fn lenient_accent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    let v = Json::deserialize(d)?;
+    Ok(v.as_str().and_then(theme::parse_hex).map(theme::to_hex))
 }
 
 pub const INTERFACE_SCALE_MIN: u16 = 75;
@@ -108,6 +118,7 @@ impl Default for UiState {
             keytip_invoke: None,
             language: i18n::Language::En,
             interface_scale: 100,
+            accent: None,
         }
     }
 }
@@ -264,6 +275,9 @@ pub struct SheetApp {
     /// holding other text. Once the cut has been pasted, Paste leaves this text alone.
     cut_text: Option<String>,
     pub started: f64,
+    /// NexusOffice layout: a menu bar and one tool row instead of the ribbon ([`nexus_toolbar`]).
+    /// The Nexus apps turn it on; off (the default) keeps upstream's ribbon.
+    pub toolbar: bool,
 }
 
 impl SheetApp {
@@ -307,6 +321,7 @@ impl SheetApp {
             clipboard_text_at_copy: None,
             cut_text: None,
             started: now_ms(),
+            toolbar: false,
         }
     }
 
@@ -658,6 +673,24 @@ impl SheetApp {
                     None => self.open_backstage(backstage::Page::Home),
                 }
                 Ok(json!({"page": self.backstage.as_ref().map(|b| b.page.id())}))
+            }
+            "ui.accent" => {
+                // NexusOffice: `{"value": "#RRGGBB"}` sets the accent colour, `""` or `null` goes
+                // back to the app's own; no value reads it. Applied on the next frame (`logic`).
+                if let Some(v) = p.get("value") {
+                    match v.as_str().map(str::trim).filter(|h| !h.is_empty()) {
+                        None if v.is_null() || v.as_str().is_some() => self.ui.accent = None,
+                        None => return Some(Err("the accent colour is a string: \"#RRGGBB\", or \"\" for the app's own".into())),
+                        Some(hex) => match theme::parse_hex(hex) {
+                            Some(c) => self.ui.accent = Some(theme::to_hex(c)),
+                            None => {
+                                let shown: String = hex.chars().take(24).collect();
+                                return Some(Err(format!("unknown colour {shown:?}; use \"#RRGGBB\"")));
+                            }
+                        },
+                    }
+                }
+                Ok(json!({"accent": self.ui.accent}))
             }
             "ui.dialog" => {
                 let name = p.get("name").and_then(Json::as_str).unwrap_or("");
@@ -1045,6 +1078,8 @@ impl SheetApp {
             ctx.set_theme(preference);
             ctx.request_repaint();
         }
+        // NexusOffice: the user's accent colour (File › Options, `ui.accent`).
+        theme::set_accent(ctx, self.ui.accent.as_deref().and_then(theme::parse_hex));
         self.effective_dark = ctx.theme() == egui::Theme::Dark;
         // Interface size: the preference owns the zoom factor, so egui's own Ctrl/Cmd +/-/0 zoom
         // keys stay off (they would also swallow GridCraft's shortcuts).
@@ -1112,7 +1147,11 @@ impl SheetApp {
             // File tab: the Backstage view replaces everything below the title bar.
             backstage::show(self, ui);
         } else {
-            ribbon::show(self, ui);
+            if self.toolbar {
+                nexus_toolbar::show(self, ui);
+            } else {
+                ribbon::show(self, ui);
+            }
             widgets::notice_bar(self, ui);
             if self.session.prefs.formula_bar {
                 formula_bar::show(self, ui);

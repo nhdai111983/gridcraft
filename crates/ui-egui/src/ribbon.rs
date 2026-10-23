@@ -277,7 +277,7 @@ fn theme_choices(app: &mut SheetApp, ui: &mut Ui) {
     }
 }
 
-fn contextual_tabs(app: &SheetApp) -> Vec<&'static str> {
+pub(crate) fn contextual_tabs(app: &SheetApp) -> Vec<&'static str> {
     let mut v = Vec::new();
     if let Some(d) = app.session.active()
         && let Some(sh) = d.wb.active()
@@ -301,7 +301,7 @@ fn sep(ui: &mut Ui) {
     ui.painter().line_segment([pos2(r.center().x, r.top() + 6.0), pos2(r.center().x, r.bottom() - 6.0)], Stroke::new(1.0, t.separator));
 }
 
-fn active_style(app: &SheetApp) -> Style {
+pub(crate) fn active_style(app: &SheetApp) -> Style {
     app.session
         .active()
         .and_then(|d| {
@@ -311,12 +311,12 @@ fn active_style(app: &SheetApp) -> Style {
         .unwrap_or_default()
 }
 
-fn theme_colors(app: &SheetApp) -> [u32; 12] {
+pub(crate) fn theme_colors(app: &SheetApp) -> [u32; 12] {
     app.session.active().map(|d| d.wb.theme.colors).unwrap_or(gridcraft_engine::model::Theme::default().colors)
 }
 
 /// Runs a command from a ribbon click (menu-style: no params may open a dialog).
-fn act(app: &mut SheetApp, id: &str, params: serde_json::Value) {
+pub(crate) fn act(app: &mut SheetApp, id: &str, params: serde_json::Value) {
     app.run_or_alert(id, params);
 }
 
@@ -478,7 +478,7 @@ pub(crate) fn editable_combo(
     result
 }
 
-fn menu_items(app: &mut SheetApp, ui: &mut Ui, items: &[(&str, &str, serde_json::Value)]) {
+pub(crate) fn menu_items(app: &mut SheetApp, ui: &mut Ui, items: &[(&str, &str, serde_json::Value)]) {
     for (label, id, p) in items {
         if *label == "-" {
             ui.separator();
@@ -1061,7 +1061,7 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
     });
 }
 
-fn font_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
+pub(crate) fn font_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     let name = st.font.name.clone();
     let resp = ui.add_sized([150.0, 24.0], egui::Button::new(egui::RichText::new(&name).font(theme::ui_font(12.5))));
     control_keytip(app, ui, &resp, "home.fontName");
@@ -1092,7 +1092,7 @@ pub const FONTS: &[&str] = &[
     "Verdana",
 ];
 
-fn size_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
+pub(crate) fn size_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     let size = st.font.size;
     let label = if size.fract() == 0.0 { format!("{}", size as i32) } else { format!("{size}") };
     let resp = ui.add_sized([52.0, 24.0], egui::Button::new(egui::RichText::new(&label).font(theme::ui_font(12.5))));

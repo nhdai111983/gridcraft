@@ -185,7 +185,8 @@ impl G<'_> {
 }
 
 /// Accent palette for icons (our own).
-pub const GREEN: Color32 = Color32::from_rgb(0x10, 0x7C, 0x41);
+/// Nexus Sheet: the Emerald ink shade (`theme::APP_INK`), not upstream's Excel-like green.
+pub const GREEN: Color32 = Color32::from_rgb(0x04, 0x78, 0x57);
 pub const BLUE: Color32 = Color32::from_rgb(0x2B, 0x7C, 0xD3);
 pub const RED: Color32 = Color32::from_rgb(0xD1, 0x3B, 0x2F);
 pub const YELLOW: Color32 = Color32::from_rgb(0xF2, 0xC3, 0x2E);

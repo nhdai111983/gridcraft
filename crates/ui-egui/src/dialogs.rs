@@ -1370,7 +1370,7 @@ fn ok_cancel(ui: &mut egui::Ui, confirm: &mut bool, open: &mut bool) {
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         let lang = crate::i18n::current(ui.ctx());
         let ok = ui.add(
-            egui::Button::new(egui::RichText::new(format!("   {}   ", lang.tr("OK"))).color(Color32::WHITE))
+            egui::Button::new(egui::RichText::new(format!("   {}   ", lang.tr("OK"))).color(crate::theme::Tokens::get(ui.ctx()).on_accent))
                 .fill(crate::theme::Tokens::get(ui.ctx()).accent),
         );
         if ok.clicked() || ui.input(|i| i.key_pressed(Key::Enter)) {
@@ -2544,8 +2544,10 @@ fn solver(ui: &mut egui::Ui, d: &mut Dialog, confirm: &mut bool, open: &mut bool
     );
     ui.add_space(8.0);
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        let solve =
-            ui.add(egui::Button::new(egui::RichText::new("  Solve  ").color(Color32::WHITE)).fill(crate::theme::Tokens::get(ui.ctx()).accent));
+        let solve = ui.add(
+            egui::Button::new(egui::RichText::new("  Solve  ").color(crate::theme::Tokens::get(ui.ctx()).on_accent))
+                .fill(crate::theme::Tokens::get(ui.ctx()).accent),
+        );
         if solve.clicked() && !text(d, "objective").trim().is_empty() {
             *confirm = true;
         }
