@@ -102,7 +102,7 @@ Cơ chế chính:
 | `crates/ui-egui/src/icons.rs` | `GREEN` của icon = ink Emerald `#047857` thay `#107C41` (xanh kiểu Excel) | Có — bảng màu qua biến build |
 | `crates/ui-egui/src/grid.rs` (thêm) | Ô checkbox trong ô: màu đánh dấu `theme::APP_INK` thay `#107C41` | Có — bảng màu |
 | `crates/ui-egui/src/panes.rs` | Nhãn "Resolved" của bình luận: `theme::APP_INK` thay `#107C41` | Có — bảng màu |
-| `crates/ui-egui/examples/snapshot.rs` | Cờ `--toolbar` (bố cục NexusOffice) và `--accent '#RRGGBB'` để chụp màn hình | Có |
+| `crates/ui-egui/examples/snapshot.rs` | Cờ `--toolbar` (bố cục NexusOffice), `--accent '#RRGGBB'`, `--ui-cmd`, `--click`/`--hover` (mở menu trước khi chụp) để chụp màn hình | Có |
 | `apps/gridcraft/src/main.rs` (thêm) | Bật `app.toolbar` (bố cục NexusOffice) | Có — cờ giao diện |
 | `apps/gridcraft-web/src/web.rs` (thêm) | Bật `app.toolbar` cho bản web | Có — cờ giao diện |
 
