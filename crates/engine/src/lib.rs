@@ -264,6 +264,10 @@ pub struct Session {
     /// NexusOffice: what new sheets are called before their number, in the interface's language
     /// ("Trang tính" → Trang tính1); empty is upstream's "Sheet". Set by the interface, not saved.
     pub sheet_name_prefix: String,
+    /// NexusOffice: the interface's regional format, which every open workbook is shown in and
+    /// CSV files are read in ([`Session::set_locale`]). en-US by default; set by the interface,
+    /// not saved. Command parameters stay en-US unless a command takes a `locale`.
+    pub locale: gridcraft_core::Locale,
 }
 
 impl Session {
@@ -293,7 +297,16 @@ impl Session {
     pub fn doc_mut(&mut self) -> Result<&mut DocState> {
         self.active_mut().ok_or(EngineError::NoDocument)
     }
-    pub fn add_document(&mut self, d: DocState) -> usize {
+    pub fn add_document(&mut self, mut d: DocState) -> usize {
+        // A new or opened workbook takes the session's regional format at once, without
+        // recalculating (its cached results are the file's) and without becoming unsaved.
+        if d.wb.locale != self.locale {
+            let clean = !d.is_dirty();
+            Arc::make_mut(&mut d.wb).locale = self.locale;
+            if clean {
+                d.saved = d.wb.clone();
+            }
+        }
         self.docs.push(d);
         self.active = self.docs.len() - 1;
         self.active
@@ -306,6 +319,28 @@ impl Session {
             }
         }
     }
+    /// Shows every open workbook in `locale` and recalculates the ones whose regional format
+    /// changes (`TEXT`, `VALUE` and `NUMBERVALUE` follow it), unless they calculate manually. A
+    /// workbook with no unsaved changes stays saved: the locale is not part of the file.
+    pub fn set_locale(&mut self, locale: gridcraft_core::Locale) {
+        self.locale = locale;
+        for d in &mut self.docs {
+            if d.wb.locale == locale {
+                continue;
+            }
+            let clean = !d.is_dirty();
+            let mut wb = (*d.wb).clone();
+            wb.locale = locale;
+            if wb.calc.mode != gridcraft_model::CalcMode::Manual {
+                d.calc.recalc_all(&mut wb);
+            }
+            d.wb = Arc::new(wb);
+            if clean {
+                d.saved = d.wb.clone();
+            }
+        }
+    }
+
     /// A new blank workbook titled `BookN`.
     pub fn new_workbook(&mut self) -> usize {
         let n = (1..).find(|n| !self.docs.iter().any(|d| d.title == format!("Book{n}") && d.path.is_none())).unwrap_or(1);

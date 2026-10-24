@@ -1,11 +1,13 @@
 //! How cells look as text: number formats applied, for the grid, clipboard, CSV and agents.
+//! Shown in the workbook's regional format ([`Workbook::locale`], en-US unless the interface set
+//! another).
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use gridcraft_core::{CellRef, RangeRef, Value};
 use gridcraft_model::{Sheet, Workbook};
-use gridcraft_numfmt::{Formatted, NumberFormat, format_value};
+use gridcraft_numfmt::{Formatted, NumberFormat, format_value_in};
 
 /// Parsed number formats are cached by code.
 fn parsed(code: &str) -> NumberFormat {
@@ -28,9 +30,9 @@ pub fn number_format(code: &str) -> NumberFormat {
     parsed(code)
 }
 
-/// Formats a value with a format code.
+/// Formats a value with a format code, in the workbook's regional format.
 pub fn format(v: &Value, code: &str, wb: &Workbook) -> Formatted {
-    format_value(v, &parsed(code), wb.date_system)
+    format_value_in(v, &parsed(code), wb.date_system, wb.locale)
 }
 
 /// What the cell editor and the formula bar start from. Same as `Cell::input_text`, except that a
@@ -38,15 +40,22 @@ pub fn format(v: &Value, code: &str, wb: &Workbook) -> Formatted {
 /// serial. When the formatted text would not read back as the same date (for example
 /// `dddd, mmmm d`), an ISO `yyyy-mm-dd` (with `hh:mm:ss` for a time of day; just `hh:mm:ss`
 /// for a time alone) is used instead, and if even that would not read back, the serial.
+///
+/// In a regional format other than en-US a constant number is spelled the locale's way (`1234,5`),
+/// as typing it back reads it (`cell.set`'s `locale`).
 pub fn edit_text(wb: &Workbook, sheet: &Sheet, c: CellRef) -> String {
     let raw = sheet.input_text(c);
     let Some(cell) = sheet.cell(c) else { return raw };
     let Value::Number(n) = &cell.value else { return raw };
     let code = wb.styles.get(cell.style).num_fmt.as_str();
-    if cell.formula.is_some() || !parsed(code).is_date() {
+    if cell.formula.is_some() {
         return raw;
     }
-    let reads_back = |s: &str| matches!(gridcraft_core::parse::parse_input(s, wb.date_system).value, Value::Number(m) if (m - n).abs() < 1e-9);
+    if !parsed(code).is_date() {
+        return wb.locale.localize_number(&raw);
+    }
+    let reads_back =
+        |s: &str| matches!(gridcraft_core::parse::parse_input_in(s, wb.date_system, wb.locale).value, Value::Number(m) if (m - n).abs() < 1e-9);
     let shown = format(&cell.value, code, wb).text;
     if reads_back(&shown) {
         return shown;
@@ -61,7 +70,7 @@ pub fn edit_text(wb: &Workbook, sheet: &Sheet, c: CellRef) -> String {
     } else {
         format!("{date} {time}")
     };
-    if reads_back(&iso) { iso } else { raw }
+    if reads_back(&iso) { iso } else { wb.locale.localize_number(&raw) }
 }
 
 /// Whether `c` has a formula that must not be shown: its cell is formatted Hidden on a

@@ -120,6 +120,12 @@ pub struct Workbook {
     /// `preserved` are relative to. Saving into another folder rewrites them from there. Not in JSON.
     #[serde(skip)]
     pub source_dir: Option<std::path::PathBuf>,
+    /// NexusOffice: the regional format the interface shows this workbook in (separators, date
+    /// and day names) and that `TEXT`, `VALUE` and `NUMBERVALUE` follow, as Excel's follow the
+    /// system's. Set by the interface ([`gridcraft_core::Locale::EnUs`] for the API), never
+    /// saved: files stay en-US.
+    #[serde(skip)]
+    pub locale: gridcraft_core::Locale,
 }
 
 impl Default for Workbook {
@@ -148,6 +154,7 @@ impl Workbook {
             csv_delimiter: None,
             preserved: None,
             source_dir: None,
+            locale: gridcraft_core::Locale::EnUs,
         }
     }
     pub fn sheet(&self, i: usize) -> Option<&Sheet> {

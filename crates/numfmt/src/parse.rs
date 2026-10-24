@@ -638,9 +638,88 @@ pub(crate) fn parse_sections(code: &str) -> Vec<Section> {
     split_sections(code).iter().map(|s| analyze(tokenize(s))).collect()
 }
 
+/// Respells a format code written in a regional format (`#.##0,00` in Vietnamese, where `,` is
+/// the decimal separator and `.` groups digits) as the en-US code files store (`#,##0.00`).
+/// Quoted text, `\` escapes, `_`/`*` and `[...]` tags are kept. In date and time sections `.` and
+/// `,` are literal characters, so only the decimal separator before fractional seconds (`ss,00`)
+/// changes. en-US codes are returned unchanged.
+pub fn delocalize_code(code: &str, loc: gridcraft_core::Locale) -> String {
+    let (dec, group) = (loc.decimal_separator(), loc.group_separator());
+    if dec == '.' {
+        return code.to_string();
+    }
+    let sections = split_sections(code);
+    let mut out = String::with_capacity(code.len());
+    for (k, sec) in sections.iter().enumerate() {
+        if k > 0 {
+            out.push(';');
+        }
+        let date = analyze(tokenize(sec)).kind == SecKind::Date;
+        let cs: Vec<char> = sec.chars().collect();
+        let mut quoted = false;
+        let mut i = 0usize;
+        while let Some(&c) = cs.get(i) {
+            i += 1;
+            match c {
+                '"' => {
+                    quoted = !quoted;
+                    out.push(c);
+                }
+                '\\' | '_' | '*' if !quoted => {
+                    out.push(c);
+                    if let Some(&d) = cs.get(i) {
+                        out.push(d);
+                        i += 1;
+                    }
+                }
+                '[' if !quoted && cs.get(i..).is_some_and(|r| r.contains(&']')) => {
+                    out.push(c);
+                    while let Some(&d) = cs.get(i) {
+                        i += 1;
+                        out.push(d);
+                        if d == ']' {
+                            break;
+                        }
+                    }
+                }
+                _ if quoted => out.push(c),
+                _ if date => {
+                    let after_s = i >= 2 && cs.get(i - 2).is_some_and(|p| p.eq_ignore_ascii_case(&'s'));
+                    if c == dec && after_s && cs.get(i) == Some(&'0') { out.push('.') } else { out.push(c) }
+                }
+                _ if c == dec => out.push('.'),
+                _ if c == group => out.push(','),
+                _ => out.push(c),
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vietnamese_codes_read_as_en_us() {
+        use gridcraft_core::Locale::{EnUs, ViVn};
+        for (vi, en) in [
+            ("#.##0,00", "#,##0.00"),
+            ("0,0%", "0.0%"),
+            ("#.##0 [$₫-42A];-#.##0 [$₫-42A]", "#,##0 [$₫-42A];-#,##0 [$₫-42A]"),
+            ("\"1.000,5\" 0,0", "\"1.000,5\" 0.0"),
+            ("\\. 0,00", "\\. 0.00"),
+            ("dd.mm.yyyy", "dd.mm.yyyy"),
+            ("dd/mm/yyyy hh:mm:ss,00", "dd/mm/yyyy hh:mm:ss.00"),
+            ("0,00E+00", "0.00E+00"),
+            ("[<1000]0,0;#.##0", "[<1000]0.0;#,##0"),
+            ("[", "["),
+            ("", ""),
+        ] {
+            assert_eq!(delocalize_code(vi, ViVn), en, "{vi}");
+        }
+        assert_eq!(delocalize_code("#.##0,00", EnUs), "#.##0,00");
+    }
 
     #[test]
     fn sections_split() {

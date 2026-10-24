@@ -48,6 +48,12 @@ pub(crate) fn has_mimetype(bytes: &[u8]) -> bool {
 /// imported as constants, so editing their inputs does not recalculate the original formula.
 /// Always inspect the returned warnings. Saving to ODS is not supported.
 pub fn read_ods(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
+    read_ods_named(bytes, "Sheet")
+}
+
+/// [`read_ods`] naming a sheet that has no usable name `{prefix}N` (NexusOffice: the interface's
+/// word for a sheet, "Trang tính" in Vietnamese; a blank prefix is "Sheet").
+pub fn read_ods_named(bytes: &[u8], prefix: &str) -> Result<(Workbook, ReadReport), IoError> {
     let mut package = Package::open(bytes)?;
     if !has_mimetype(bytes) {
         return Err(IoError::Format("missing or invalid ODS mimetype".into()));
@@ -57,6 +63,7 @@ pub fn read_ods(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
     }
     let content = package.read("content.xml")?.ok_or_else(|| IoError::Format("ODS content.xml is missing".into()))?;
     let mut import = Import::new();
+    import.sheet_prefix = if prefix.trim().is_empty() { "Sheet".into() } else { prefix.to_string() };
     import.parse(&content)?;
     if import.wb.sheets.is_empty() {
         return Err(IoError::Format("ODS contains no worksheets".into()));
@@ -233,6 +240,7 @@ struct Import {
     text: u64,
     formats: Vec<(&'static str, StyleId)>,
     spreadsheet_seen: bool,
+    sheet_prefix: String,
 }
 
 impl Import {
@@ -241,7 +249,7 @@ impl Import {
         wb.sheets.clear();
         let mut report = ReadReport::default();
         report.warn("ODS data-only import: formulas become their saved results and will not recalculate. Source formatting, charts, images and other features are not imported. Save a new .xlsx file; ODS saving is not supported.");
-        Self { wb, report, stack: vec![], sheet: None, row: None, cell: None, cells: 0, merges: 0, text: 0, formats: vec![], spreadsheet_seen: false }
+        Self { wb, report, stack: vec![], sheet: None, row: None, cell: None, cells: 0, merges: 0, text: 0, formats: vec![], spreadsheet_seen: false, sheet_prefix: "Sheet".into() }
     }
 
     fn parse(&mut self, bytes: &[u8]) -> Result<(), IoError> {
@@ -317,9 +325,9 @@ impl Import {
                     return Err(IoError::TooLarge("ODS contains more than 1024 sheets".into()));
                 }
                 let original = attr(reader, e, TABLE, b"name")?.unwrap_or_default();
-                let mut name = crate::read::unique_name(&self.wb, original.trim_matches('\''), self.wb.sheets.len());
+                let mut name = crate::read::unique_name_with(&self.wb, original.trim_matches('\''), self.wb.sheets.len(), &self.sheet_prefix);
                 if self.wb.check_sheet_name(&name, None).is_err() {
-                    name = self.wb.next_sheet_name();
+                    name = self.wb.next_sheet_name_with(&self.sheet_prefix);
                 }
                 if name != original {
                     self.report.warn("Some ODS sheet names were shortened or renamed to valid, unique XLSX sheet names.");
