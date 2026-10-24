@@ -171,3 +171,25 @@ fn a_cancelled_dialog_changes_nothing() {
     assert!(h.state().session.active().unwrap().is_dirty());
     assert!(h.state().message.is_none());
 }
+
+/// Another editor in the host window (Nexus Docs) installs its own fonts, without this app's
+/// families: the embedded app installs them again, keeping the other editor's, instead of
+/// panicking on a family egui no longer has. Re-styling on demand works the same way.
+#[test]
+fn another_editors_fonts_are_kept_and_ours_come_back() {
+    let mut h = harness(Services::default());
+    let has = |h: &H, name: &str| h.ctx.fonts(|f| f.definitions().families.contains_key(&egui::FontFamily::Name(name.into())));
+    assert!(has(&h, "ui"));
+    // What the other editor installs: egui's fonts plus its own family.
+    let mut other = egui::FontDefinitions::default();
+    let chain = other.families.get(&egui::FontFamily::Proportional).cloned().unwrap_or_default();
+    other.families.insert(egui::FontFamily::Name("semibold".into()), chain);
+    h.ctx.set_fonts(other);
+    h.run_steps(4);
+    assert!(has(&h, "ui"), "this app's families are back");
+    assert!(has(&h, "semibold"), "the other editor's family stays");
+    h.state_mut().restyle();
+    h.run_steps(4);
+    assert!(has(&h, "ui") && has(&h, "semibold"));
+    assert!(h.query_by_label("Tệp").is_some() || h.query_by_label("File").is_some(), "the app draws again");
+}

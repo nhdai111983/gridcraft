@@ -367,6 +367,38 @@ impl SheetApp {
         theme::apply(ctx, dark);
     }
 
+    /// NexusOffice: install the fonts and the look again on the next frame (painting nothing on
+    /// this one). A host window with other editors calls it when this app's tab comes forward,
+    /// since another editor may have replaced the window's fonts and visuals meanwhile.
+    pub fn restyle(&mut self) {
+        self.fonts_ready = false;
+        self.fonts_set = false;
+    }
+
+    /// Whether the window's fonts have this app's interface family (another editor in a host
+    /// window may have replaced them).
+    fn fonts_installed(&self, ctx: &egui::Context) -> bool {
+        let ui = egui::FontFamily::Name(theme::UI.into());
+        ctx.fonts(|f| f.definitions().families.contains_key(&ui))
+    }
+
+    /// Installs `defs`. Embedded, the window's other families (another editor's, the host's own
+    /// proportional and monospace faces) are kept and this app's named families added, so the
+    /// editors in a host window's tabs don't take each other's fonts away.
+    fn set_fonts(&self, ctx: &egui::Context, defs: egui::FontDefinitions) {
+        if !self.embedded {
+            return ctx.set_fonts(defs);
+        }
+        let mut merged = ctx.fonts(|f| f.definitions().clone());
+        merged.font_data.extend(defs.font_data);
+        for (family, chain) in defs.families {
+            if matches!(family, egui::FontFamily::Name(_)) {
+                merged.families.insert(family, chain);
+            }
+        }
+        ctx.set_fonts(merged);
+    }
+
     /// The font names the active workbook uses: every style's font plus the theme's heading/body
     /// fonts. These are the families [`fonts`] binds an installed file for.
     pub fn used_fonts(&self) -> Vec<String> {
@@ -1090,12 +1122,18 @@ impl SheetApp {
             self.fonts_ready = false;
             self.fonts_set = false;
         }
+        // NexusOffice: another editor in the host window (Nexus Docs) installed its own fonts,
+        // without this app's families: install them again (and skip the frame, as at startup).
+        if self.embedded && self.fonts_ready && !self.fonts_rebind && !self.fonts_installed(ctx) {
+            self.restyle();
+        }
         if !self.fonts_ready {
             // New fonts apply from the next frame on: paint nothing until then.
             if self.fonts_set {
                 self.fonts_ready = true;
             } else {
-                SheetApp::setup_context_for_language(ctx, self.ui.dark, self.ui.language);
+                self.set_fonts(ctx, theme::font_definitions_for_language(self.ui.language));
+                theme::apply(ctx, self.ui.dark);
                 self.fonts_set = true;
                 // The rebuilt set has no workbook fonts yet: bind them again once it is active.
                 self.fonts_bound.clear();
@@ -1115,7 +1153,7 @@ impl SheetApp {
                 let used = self.used_fonts();
                 self.fonts_seen = seen;
                 if used != self.fonts_bound {
-                    ctx.set_fonts(theme::font_definitions_with(self.ui.language, &used));
+                    self.set_fonts(ctx, theme::font_definitions_with(self.ui.language, &used));
                     self.fonts_bound = used;
                     self.fonts_rebind = true;
                     ctx.request_repaint();
