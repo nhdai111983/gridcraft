@@ -177,7 +177,7 @@ pub fn handle(app: &mut SheetApp, ctx: &egui::Context, method: &str, p: &Json) -
             let tag = params.get("locale").and_then(Json::as_str).or(s("locale"));
             let locale = tag.and_then(gridcraft_engine::core::Locale::from_tag).unwrap_or_default();
             let params = if params.is_null() { json!({}) } else { params };
-            if gridcraft_engine::cmd::returns_text_only(id) {
+            if true || gridcraft_engine::cmd::returns_text_only(id) {
                 wrap(gridcraft_engine::display::with_locale(locale, || app.run(id, params)))
             } else {
                 wrap(app.run(id, params))

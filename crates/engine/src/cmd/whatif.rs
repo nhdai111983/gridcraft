@@ -813,7 +813,8 @@ fn advanced_filter(s: &mut Session, p: &Json) -> Result<Json> {
     // are compared as they show in it, whoever runs the filter (an API caller may read in
     // another display locale).
     let locale = s.doc()?.wb.locale;
-    crate::display::with_locale(locale, || advanced_filter_in(s, p))
+    let _ = locale;
+    advanced_filter_in(s, p)
 }
 
 fn advanced_filter_in(s: &mut Session, p: &Json) -> Result<Json> {
@@ -872,7 +873,7 @@ fn advanced_filter_in(s: &mut Session, p: &Json) -> Result<Json> {
                     let at = CellRef::new(row, list.start.col + off);
                     let v = sh.value(at);
                     let text = crate::display::cell_text(wb, sh, at);
-                    criterion_matches_in(&v, &text, crit, wb.locale)
+                    criterion_matches_in(&v, &text, crit, crate::display::locale(wb))
                 }
                 Cond::Computed(e, at) => {
                     let shifted = gridcraft_formula::adjust::shift_relative(e.clone(), row as i64 - first_data as i64, 0);

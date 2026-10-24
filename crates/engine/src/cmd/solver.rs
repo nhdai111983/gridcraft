@@ -319,7 +319,7 @@ fn parse_model(s: &Session, p: &Json) -> Result<Model> {
         "min" | "minimize" | "minimum" => Goal::Min,
         "value" | "valueof" | "value of" => {
             let v = f64_param(p, "value")
-                .or_else(|| str_param(p, "value").and_then(|t| num_text_in(t, locale)))
+                .or_else(|| str_param(p, "value").and_then(num_text))
                 .filter(|v| v.is_finite())
                 .ok_or_else(|| bad(CMD, "goal `value` needs a number in `value`"))?;
             Goal::Value(v)

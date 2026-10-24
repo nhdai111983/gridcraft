@@ -88,32 +88,20 @@ pub fn sniff_delimiter(text: &str, quote: char) -> u8 {
 }
 
 /// [`sniff_delimiter`] for a file written in a regional format. Where the list separator is `;`
-/// (vi-VN, whose decimal separator is `,`), Excel reads CSV with `;`. Looking at the first lines
-/// (outside quotes), in this order:
-/// 1. a tab on every line: tab;
-/// 2. a `;` on every line: `;`, even when the decimal commas outnumber it;
-/// 3. at most one comma per line, each between two digits (a column of `1,5`, maybe with a
-///    header or whole numbers): decimal commas, `;` (one column unless `;` appears);
-/// 4. a comma on every line (an en-US export, `1,2,3`): `,`;
-/// 5. no consistent separator: `;` if one appears anywhere (a title line above a `;` table),
-///    else what [`sniff_delimiter`] says.
+/// (vi-VN, whose decimal separator is `,`), Excel reads CSV with `;`: a `;` on every line (outside
+/// quotes) makes it the delimiter even when the decimal commas outnumber it, and a file whose lines
+/// hold exactly one comma, between two digits (a column of `1,5`), is one column of numbers.
+/// Otherwise the file decides as everywhere else: a consistent `,` (an en-US export, `1,2,3`) or
+/// tab still separates fields.
 pub fn sniff_delimiter_in(text: &str, quote: char, locale: gridcraft_core::Locale) -> u8 {
     let sniffed = sniff_delimiter(text, quote);
-    if locale.list_separator() != ';' {
+    if locale.list_separator() != ';' || sniffed == b'\t' {
         return sniffed;
     }
-    // Per non-blank line (the first 20, as `sniff_delimiter` reads): tabs, `;`, `,`, and whether
-    // every `,` sits between two digits.
-    #[derive(Clone, Copy)]
-    struct Line {
-        tabs: usize,
-        semis: usize,
-        commas: usize,
-        digit_commas: bool,
-    }
-    let fresh = Line { tabs: 0, semis: 0, commas: 0, digit_commas: true };
-    let mut lines: Vec<Line> = Vec::new();
-    let mut cur = fresh;
+    // Per non-blank line (the first 20, as `sniff_delimiter` reads): `;` count, `,` count, and
+    // whether every `,` sits between two digits.
+    let mut lines: Vec<(usize, usize, bool)> = Vec::new();
+    let mut cur = (0usize, 0usize, true);
     let mut blank = true;
     let mut in_q = false;
     let mut prev: Option<char> = None;
@@ -123,7 +111,7 @@ pub fn sniff_delimiter_in(text: &str, quote: char, locale: gridcraft_core::Local
             if !blank {
                 lines.push(cur);
             }
-            cur = fresh;
+            cur = (0, 0, true);
             blank = true;
             prev = None;
             if lines.len() >= 20 {
@@ -136,41 +124,26 @@ pub fn sniff_delimiter_in(text: &str, quote: char, locale: gridcraft_core::Local
         }
         if ch == quote {
             in_q = !in_q;
-        } else if !in_q {
-            match ch {
-                '\t' => cur.tabs += 1,
-                ';' => cur.semis += 1,
-                ',' => {
-                    cur.commas += 1;
-                    if !(prev.is_some_and(|c| c.is_ascii_digit()) && chars.peek().is_some_and(char::is_ascii_digit)) {
-                        cur.digit_commas = false;
-                    }
-                }
-                _ => {}
+        } else if !in_q && ch == ';' {
+            cur.0 += 1;
+        } else if !in_q && ch == ',' {
+            cur.1 += 1;
+            if !(prev.is_some_and(|c| c.is_ascii_digit()) && chars.peek().is_some_and(char::is_ascii_digit)) {
+                cur.2 = false;
             }
         }
         prev = Some(ch);
     }
-    if !blank && lines.len() < 20 {
+    if !blank {
         lines.push(cur);
     }
     if lines.is_empty() {
         return sniffed;
     }
-    let every = |f: fn(&Line) -> bool| lines.iter().all(f);
-    if every(|l| l.tabs > 0) {
-        return b'\t';
-    }
-    if every(|l| l.semis > 0) {
+    if lines.iter().all(|l| l.0 > 0) {
         return b';';
     }
-    if lines.iter().any(|l| l.commas > 0) && every(|l| l.commas <= 1 && l.digit_commas) {
-        return b';';
-    }
-    if every(|l| l.commas > 0) {
-        return b',';
-    }
-    if lines.iter().any(|l| l.semis > 0) {
+    if sniffed == b',' && lines.iter().all(|l| l.1 == 1 && l.2) {
         return b';';
     }
     sniffed

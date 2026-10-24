@@ -118,10 +118,10 @@ fn save(s: &mut Session, p: &Json) -> Result<Json> {
     let wb = rebased.as_ref().unwrap_or(&d.wb);
     // The user's file is written in the workbook's regional format (a vi-VN CSV stays `1,5;…`),
     // whatever display locale an API caller reads in.
-    let bytes = crate::display::with_locale(wb.locale, || match kind {
+    let bytes = (|| match kind {
         Some(kind) => crate::io::save_bytes_as(wb, &path, kind),
         None => crate::io::save_bytes(wb, &path),
-    })?;
+    })()?;
     crate::io::write_file(&path, &bytes)?;
     // Only a full-fidelity format clears the dirty flag and becomes the document's file.
     if matches!(kind, Some(crate::io::FileKind::Xlsx | crate::io::FileKind::Json)) {
