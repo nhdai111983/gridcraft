@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use gridcraft_core::parse::parse_input;
+use gridcraft_core::parse::parse_input_in;
 use gridcraft_core::{CellRef, MAX_COLS, MAX_ROWS, Value};
 use gridcraft_model::{Cell, NumFmt, Sheet, StyleId, Workbook};
 
@@ -87,6 +87,95 @@ pub fn sniff_delimiter(text: &str, quote: char) -> u8 {
     best.0
 }
 
+/// [`sniff_delimiter`] for a file written in a regional format. Where the list separator is `;`
+/// (vi-VN, whose decimal separator is `,`), Excel reads CSV with `;`. Looking at the first lines
+/// (outside quotes), in this order:
+/// 1. a tab on every line: tab;
+/// 2. a `;` on every line: `;`, even when the decimal commas outnumber it;
+/// 3. at most one comma per line, each between two digits (a column of `1,5`, maybe with a
+///    header or whole numbers): decimal commas, `;` (one column unless `;` appears);
+/// 4. a comma on every line (an en-US export, `1,2,3`): `,`;
+/// 5. no consistent separator: `;` if one appears anywhere (a title line above a `;` table),
+///    else what [`sniff_delimiter`] says.
+pub fn sniff_delimiter_in(text: &str, quote: char, locale: gridcraft_core::Locale) -> u8 {
+    let sniffed = sniff_delimiter(text, quote);
+    if locale.list_separator() != ';' {
+        return sniffed;
+    }
+    // Per non-blank line (the first 20, as `sniff_delimiter` reads): tabs, `;`, `,`, and whether
+    // every `,` sits between two digits.
+    #[derive(Clone, Copy)]
+    struct Line {
+        tabs: usize,
+        semis: usize,
+        commas: usize,
+        digit_commas: bool,
+    }
+    let fresh = Line { tabs: 0, semis: 0, commas: 0, digit_commas: true };
+    let mut lines: Vec<Line> = Vec::new();
+    let mut cur = fresh;
+    let mut blank = true;
+    let mut in_q = false;
+    let mut prev: Option<char> = None;
+    let mut chars = text.chars().take(64 * 1024).peekable();
+    while let Some(ch) = chars.next() {
+        if !in_q && ch == '\n' {
+            if !blank {
+                lines.push(cur);
+            }
+            cur = fresh;
+            blank = true;
+            prev = None;
+            if lines.len() >= 20 {
+                break;
+            }
+            continue;
+        }
+        if ch != '\r' {
+            blank = false;
+        }
+        if ch == quote {
+            in_q = !in_q;
+        } else if !in_q {
+            match ch {
+                '\t' => cur.tabs += 1,
+                ';' => cur.semis += 1,
+                ',' => {
+                    cur.commas += 1;
+                    if !(prev.is_some_and(|c| c.is_ascii_digit()) && chars.peek().is_some_and(char::is_ascii_digit)) {
+                        cur.digit_commas = false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        prev = Some(ch);
+    }
+    if !blank && lines.len() < 20 {
+        lines.push(cur);
+    }
+    if lines.is_empty() {
+        return sniffed;
+    }
+    let every = |f: fn(&Line) -> bool| lines.iter().all(f);
+    if every(|l| l.tabs > 0) {
+        return b'\t';
+    }
+    if every(|l| l.semis > 0) {
+        return b';';
+    }
+    if lines.iter().any(|l| l.commas > 0) && every(|l| l.commas <= 1 && l.digit_commas) {
+        return b';';
+    }
+    if every(|l| l.commas > 0) {
+        return b',';
+    }
+    if lines.iter().any(|l| l.semis > 0) {
+        return b';';
+    }
+    sniffed
+}
+
 /// Splits CSV text into records of fields.
 fn parse_records(text: &str, delim: char, quote: char, mut on_record: impl FnMut(Vec<String>) -> bool) {
     let mut field = String::new();
@@ -136,7 +225,7 @@ fn parse_records(text: &str, delim: char, quote: char, mut on_record: impl FnMut
 pub fn read_csv(bytes: &[u8], opts: &CsvOptions) -> Result<Workbook, IoError> {
     let text = decode_text(bytes);
     let quote = if opts.quote == 0 { '"' } else { opts.quote as char };
-    let delim = if opts.delimiter == 0 { sniff_delimiter(&text, quote) } else { opts.delimiter } as char;
+    let delim = if opts.delimiter == 0 { sniff_delimiter_in(&text, quote, opts.locale) } else { opts.delimiter } as char;
     if delim == quote {
         return Err(IoError::Format("the delimiter and quote character must differ".into()));
     }
@@ -161,7 +250,7 @@ pub fn read_csv(bytes: &[u8], opts: &CsvOptions) -> Result<Workbook, IoError> {
             }
             let pos = CellRef::new(row, col as u32);
             let cell = if opts.parse_values {
-                let p = parse_input(&f, opts.date_system);
+                let p = parse_input_in(&f, opts.date_system, opts.locale);
                 let style = match p.format {
                     Some(code) => match fmt_cache.iter().find(|(c, _)| *c == code) {
                         Some((_, id)) => *id,

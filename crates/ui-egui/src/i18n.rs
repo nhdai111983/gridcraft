@@ -120,7 +120,19 @@ impl Language {
     }
 
     pub fn formula_locale(self) -> gridcraft_engine::formula::FormulaLocale {
-        if self == Self::Es { gridcraft_engine::formula::FormulaLocale::Es } else { gridcraft_engine::formula::FormulaLocale::En }
+        match self {
+            Self::Es => gridcraft_engine::formula::FormulaLocale::Es,
+            Self::Vi => gridcraft_engine::formula::FormulaLocale::Vi,
+            _ => gridcraft_engine::formula::FormulaLocale::En,
+        }
+    }
+
+    /// NexusOffice: the regional format (number, date and currency display and entry) that goes
+    /// with the interface language. Vietnamese is vi-VN; every other language keeps en-US until
+    /// it has a regional format of its own. The app has no separate regional setting: the
+    /// language decides it.
+    pub fn regional_format(self) -> gridcraft_engine::core::Locale {
+        regional_format_of(self.formula_locale())
     }
 
     /// Translates an interface label; untranslated labels fall back to English.
@@ -148,6 +160,15 @@ impl Language {
         };
         // NexusOffice: the product names shown are Nexus Sheet / NexusOffice (`brand`).
         brand::branded(translated.unwrap_or_else(|| text.rsplit_once('|').map_or(text, |(_, label)| label)))
+    }
+}
+
+/// The regional format an edit's formula syntax goes with (captured when the edit starts, so a
+/// language switch mid-edit doesn't reread the typed value).
+pub fn regional_format_of(locale: gridcraft_engine::formula::FormulaLocale) -> gridcraft_engine::core::Locale {
+    match locale {
+        gridcraft_engine::formula::FormulaLocale::Vi => gridcraft_engine::core::Locale::ViVn,
+        _ => gridcraft_engine::core::Locale::EnUs,
     }
 }
 

@@ -235,11 +235,23 @@ pub struct Perf {
     last: f64,
 }
 
+/// A run of Tab presses: where it started and the cell it reached (see `move_after_enter`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TabReturn {
+    doc: u64,
+    sheet: usize,
+    start_col: u32,
+    reached: gridcraft_engine::core::CellRef,
+}
+
 pub struct SheetApp {
     pub session: Session,
     pub ui: UiState,
     pub views: HashMap<(u64, usize), SheetView>,
     pub editor: Option<editor::EditState>,
+    /// Where a run of Tab presses started, so Enter at its end goes to the next row at that
+    /// column (Excel's AutoReturn); `None` once anything else moves the selection.
+    pub(crate) tab_return: Option<TabReturn>,
     pub text_box_editor: Option<text_box::EditState>,
     pub dialog: Option<dialogs::Dialog>,
     /// The File tab's Backstage view, when open (UI-only; replaces the ribbon, grid and tabs).
@@ -311,6 +323,7 @@ impl SheetApp {
             ui: UiState::default(),
             views: HashMap::new(),
             editor: None,
+            tab_return: None,
             text_box_editor: None,
             dialog: None,
             backstage: None,
@@ -542,9 +555,12 @@ impl SheetApp {
             self.cut_text = None;
         }
         let html = self.services.paste_html.as_mut().and_then(|read| read());
+        // Text from another app is read in the interface's regional format (1.234,5 in vi-VN),
+        // as typing it would be.
+        let locale = self.ui.language.regional_format().tag();
         let params = match html {
-            Some(html) => json!({"text": text, "html": html}),
-            None => json!({"text": text}),
+            Some(html) => json!({"text": text, "html": html, "locale": locale}),
+            None => json!({"text": text, "locale": locale}),
         };
         self.run_or_alert("edit.paste", params);
     }
@@ -1073,7 +1089,8 @@ impl SheetApp {
         };
         // Data validation.
         if let Some(d) = self.session.active()
-            && let Some((dv, msg)) = gridcraft_engine::cmd::data::check_validation(&d.wb, ed.sheet, ed.cell, &text)
+            && let Some((dv, msg)) =
+                gridcraft_engine::cmd::data::check_validation_in(&d.wb, ed.sheet, ed.cell, &text, i18n::regional_format_of(ed.locale))
         {
             if dv.error_style == gridcraft_engine::model::ErrorStyle::Stop {
                 let title = if dv.error_title.is_empty() { nexus::APP_NAME.to_string() } else { dv.error_title.clone() };
@@ -1084,10 +1101,13 @@ impl SheetApp {
             }
             self.toast = Some((msg, now_ms()));
         }
+        // A value typed in a regional format (1.234,5, 24/10/2026) is read in it; formulas were
+        // made canonical above.
+        let locale = i18n::regional_format_of(ed.locale);
         let r = if fill_selection {
-            self.session.run("range.fill", json!({"input": text}))
+            self.session.run("range.fill", json!({"input": text, "locale": locale.tag()}))
         } else {
-            self.session.run("cell.set", json!({"cell": ed.cell.a1(), "input": text, "array": array}))
+            self.session.run("cell.set", json!({"cell": ed.cell.a1(), "input": text, "array": array, "locale": locale.tag()}))
         };
         match r {
             Ok(_) => {
@@ -1111,14 +1131,52 @@ impl SheetApp {
         self.session.mode = gridcraft_engine::Mode::Ready;
     }
 
+    /// The grid and the cell editor own Tab, the arrows and Escape, but egui learns that only from
+    /// a widget that held the focus in the previous frame (`set_focus_lock_filter`). In the frame
+    /// right after one of them took the focus (a character typed starts the editor; committing
+    /// gives the keyboard back to the grid) egui reads those keys as "move the focus": Tab right
+    /// after a character, or right after Enter/Tab committed an entry, sent egui's focus to
+    /// another widget and the keys typed next never reached the grid. Cancel that move before
+    /// any widget is drawn: the key is ours.
+    fn keep_keyboard(&self, ctx: &egui::Context) {
+        let ours = [Some(egui::Id::new("gridcraft.cell_editor")), Some(egui::Id::new("gridcraft.formula_bar")), self.grid.focus_id];
+        if self.dialog.is_none() && self.message.is_none() && ctx.memory(|m| m.focused()).is_some_and(|f| ours.contains(&Some(f))) {
+            ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+        }
+    }
+
     /// Enter/Tab move inside a multi-cell selection, otherwise to the next cell.
+    ///
+    /// Excel: "If you press Tab to enter data in several cells in a row and then press Enter at
+    /// the end of that row, the selection moves to the beginning of the next row." A Tab
+    /// remembers the column its run started in; Enter (one row down) from the cell that run
+    /// reached goes to the next row at that column. Anything else ends the run.
     pub fn move_after_enter(&mut self, dr: i64, dc: i64) {
         let multi = self.session.active().is_some_and(|d| !d.selection.is_single_cell());
+        let run = self.tab_return.take();
         if multi {
             let fwd = dr > 0 || dc > 0;
             let _ = self.session.run("selection.next", json!({"forward": fwd, "byRow": dc != 0}));
         } else {
-            let _ = self.session.run("selection.move", json!({"dr": dr, "dc": dc}));
+            let here = self.session.active().map(|d| (d.uid, d.wb.active_sheet, d.selection.active));
+            let run = run.filter(|r| here == Some((r.doc, r.sheet, r.reached)));
+            match (dr, dc, here) {
+                (1, 0, Some((_, _, at))) if run.is_some() => {
+                    let col = run.map_or(at.col, |r| r.start_col);
+                    let next = gridcraft_engine::core::CellRef::new(at.row.saturating_add(1).min(gridcraft_engine::core::MAX_ROWS - 1), col);
+                    let _ = self.session.run("selection.set", json!({"cell": next.a1()}));
+                }
+                (0, _, Some((doc, sheet, at))) if dc != 0 => {
+                    let start_col = run.map_or(at.col, |r| r.start_col);
+                    let _ = self.session.run("selection.move", json!({"dr": dr, "dc": dc}));
+                    let reached = self.session.active().map(|d| d.selection.active);
+                    // Shift+Tab back past the start (or a Tab that couldn't move) ends the run.
+                    self.tab_return = reached.filter(|r| *r != at && r.col >= start_col).map(|reached| TabReturn { doc, sheet, start_col, reached });
+                }
+                _ => {
+                    let _ = self.session.run("selection.move", json!({"dr": dr, "dc": dc}));
+                }
+            }
         }
         self.grid.ensure_visible = true;
     }
@@ -1210,6 +1268,10 @@ impl SheetApp {
         if self.session.sheet_name_prefix != prefix {
             self.session.sheet_name_prefix = prefix.to_string();
         }
+        // NexusOffice: workbooks show in the interface language's regional format (vi-VN:
+        // 1.234,5, dd/mm/yyyy); cheap when nothing changed, and an undone step that comes back with
+        // another locale gets this one again.
+        self.session.set_locale(self.ui.language.regional_format());
         // NexusOffice: the user's accent colour (File › Options, `ui.accent`).
         theme::set_accent(ctx, self.ui.accent.as_deref().and_then(theme::parse_hex));
         self.effective_dark = ctx.theme() == egui::Theme::Dark;
@@ -1262,6 +1324,7 @@ impl SheetApp {
     /// Lays out the whole window.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        self.keep_keyboard(&ctx);
         self.poll_printing(&ctx);
         if !self.fonts_ready || self.fonts_rebind {
             ctx.request_repaint();

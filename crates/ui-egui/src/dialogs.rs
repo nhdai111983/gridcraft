@@ -495,6 +495,9 @@ impl Dialog {
                 if let Some(v) = values.as_object_mut() {
                     v.insert("newOp".into(), json!("<="));
                 }
+                // The saved model's numbers are en-US; the dialog shows and sends them the way
+                // the interface types them (`locale` goes with the command).
+                localize_solver_numbers(&mut values, app.ui.language.regional_format());
                 let mut d = Dialog::custom("solver", "Solver Parameters", values);
                 d.command = Some("data.solver");
                 d
@@ -938,6 +941,43 @@ fn data_validation_form(ui: &mut egui::Ui, d: &mut Dialog, confirm: &mut bool, o
     ok_cancel(ui, confirm, open);
 }
 
+/// Commands whose typed values a dialog sends in the interface's regional format (`locale`).
+const LOCALE_COMMANDS: &[&str] = &[
+    "data.textToColumns",
+    "data.forecastSheet",
+    "data.solver",
+    "data.scenarioAdd",
+    "data.getData",
+    "data.fromTextCsv",
+    "data.filterBy",
+    "cell.set",
+    "range.fill",
+];
+
+/// The solver dialog's saved numbers (Value Of, constraint right sides) in `locale`'s spelling.
+fn localize_solver_numbers(values: &mut Json, locale: gridcraft_engine::core::Locale) {
+    if locale == gridcraft_engine::core::Locale::EnUs {
+        return;
+    }
+    if let Some(v) = values.get_mut("value")
+        && let Some(t) = v.as_str().map(str::trim).filter(|t| t.parse::<f64>().is_ok()).map(str::to_string)
+    {
+        *v = json!(locale.localize_number(&t));
+    }
+    if let Some(Json::Array(list)) = values.get_mut("constraints") {
+        for c in list.iter_mut() {
+            let shown = c
+                .as_str()
+                .and_then(|t| t.rsplit_once(' '))
+                .filter(|(_, tail)| tail.parse::<f64>().is_ok())
+                .map(|(head, tail)| format!("{head} {}", locale.localize_number(tail)));
+            if let Some(shown) = shown {
+                *c = json!(shown);
+            }
+        }
+    }
+}
+
 /// Builds the command params from form values for dialogs that need translation.
 fn build_params(d: &Dialog) -> Json {
     let mut v = Json::Object(d.values.clone());
@@ -1274,7 +1314,13 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
         confirm = false;
     }
     if confirm && let Some(cmd) = d.command {
-        let params = build_params(&d);
+        let mut params = build_params(&d);
+        // Numbers and dates typed in these dialogs are in the interface's regional format.
+        if LOCALE_COMMANDS.contains(&cmd)
+            && let Some(m) = params.as_object_mut()
+        {
+            m.insert("locale".into(), json!(app.ui.language.regional_format().tag()));
+        }
         match app.run(cmd, params) {
             Ok(r) => {
                 open = false;
@@ -2308,7 +2354,13 @@ fn goal_seek(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: &mu
     let mut open = true;
     ok_cancel(ui, confirm, &mut open);
     if *confirm {
-        match app.run("data.goalSeek", json!({"set": set, "to": to.parse::<f64>().unwrap_or(0.0), "changing": changing})) {
+        // The target is typed in the interface's regional format (`1,5` in vi-VN).
+        let target = gridcraft_engine::core::parse::parse_number_text_locale(
+            &to,
+            gridcraft_engine::core::DateSystem::D1900,
+            app.ui.language.regional_format(),
+        );
+        match app.run("data.goalSeek", json!({"set": set, "to": target.unwrap_or(0.0), "changing": changing})) {
             Ok(r) => app.toast = Some((format!("Goal Seeking found a solution: {}", r["value"]), crate::now_ms())),
             Err(e) => app.message = Some(("Goal Seek".into(), crate::clean_error(&e))),
         }

@@ -1,7 +1,7 @@
 use gridcraft_core::{CellRef, DateSystem, Value};
 use gridcraft_model::{Sheet, Workbook};
 
-use crate::csv::{decode_text, sniff_delimiter};
+use crate::csv::{decode_text, sniff_delimiter, sniff_delimiter_in};
 use crate::{CsvOptions, Format, IoError, read_csv, sniff, write_csv, write_csv_limited};
 
 fn v(wb: &Workbook, r: u32, c: u32) -> Value {
@@ -189,4 +189,52 @@ fn the_cap_counts_the_bytes_the_cells_hold_and_accepted_exports_keep_every_posit
     // A tab is one byte, like a comma.
     let tabs = write_csv_limited(&s, b'\t', 14, text_of(&s)).unwrap();
     assert_eq!(tabs.len(), 14);
+}
+
+/// NexusOffice: a CSV read in vi-VN takes its values the vi-VN way, and `;` (the list separator
+/// there) as the delimiter whenever it appears; commas that only sit between digits are decimal
+/// commas, not field separators. en-US reading is unchanged.
+#[test]
+fn csv_in_vietnamese() {
+    use gridcraft_core::Locale::{EnUs, ViVn};
+    let vi = CsvOptions { delimiter: 0, locale: ViVn, ..Default::default() };
+    let wb = read_csv("1.234,5;24/10/2026;1.234 ₫;Hà Nội\r\n".as_bytes(), &vi).unwrap();
+    let sh = &wb.sheets[0];
+    assert_eq!(sh.value(CellRef::new(0, 0)), Value::Number(1234.5));
+    assert_eq!(sh.value(CellRef::new(0, 1)), Value::Number(46319.0));
+    assert_eq!(sh.value(CellRef::new(0, 2)), Value::Number(1234.0));
+    assert_eq!(sh.value(CellRef::new(0, 3)), Value::Text("Hà Nội".into()));
+    assert_eq!(wb.csv_delimiter, Some(b';'));
+    // One column of decimal-comma numbers is not split at the commas.
+    let wb = read_csv(b"1,5\n2,25\n", &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 0)), Value::Number(2.25));
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 1)), Value::Empty);
+    // Commas between words still separate fields (an en-US export).
+    let wb = read_csv("Tên,Số\nAn,5\n".as_bytes(), &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 1)), Value::Number(5.0));
+    assert_eq!(sniff_delimiter_in("1,5\n", '"', EnUs), b',');
+    assert_eq!(sniff_delimiter_in("\"a;b\",1\n", '"', ViVn), b',');
+    // A `;` on one line only doesn't outvote a consistent comma (or tab) layout.
+    assert_eq!(sniff_delimiter_in("a,b,c\nx;y,1,2\nd,e,f\n", '"', ViVn), b',');
+    assert_eq!(sniff_delimiter_in("a\tb\nc;d\te\n", '"', ViVn), b'\t');
+    // `;` on every line wins over more decimal commas.
+    assert_eq!(sniff_delimiter_in("1,5;2,5;3,5\n4,5;5,5;6,5\n", '"', ViVn), b';');
+    // A title line without `;` above a `;` table; a header and whole numbers in a decimal-comma column.
+    let wb = read_csv("Báo cáo\nTên;Giá\nAn;1,5\n".as_bytes(), &vi).unwrap();
+    assert_eq!(wb.csv_delimiter, Some(b';'));
+    assert_eq!(wb.sheets[0].value(CellRef::new(2, 1)), Value::Number(1.5));
+    let wb = read_csv("Giá\n1,5\n2\n".as_bytes(), &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 0)), Value::Number(1.5));
+    assert_eq!(wb.sheets[0].value(CellRef::new(2, 0)), Value::Number(2.0));
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 1)), Value::Empty);
+    // Quoted fields, a single row, an empty file.
+    assert_eq!(sniff_delimiter_in("\"a,b\";\"c\"\n", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("a;b", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("", '"', ViVn), sniff_delimiter("", '"'));
+    // Several commas per line, all between digits: an en-US numeric export, split at the commas.
+    let wb = read_csv(b"1,2,3\n4,5,6\n", &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 2)), Value::Number(6.0));
+    assert_eq!(wb.csv_delimiter, Some(b','), "saving it keeps the commas");
+    let en = CsvOptions { delimiter: 0, ..Default::default() };
+    assert_eq!(read_csv(b"1.5,2\n", &en).unwrap().sheets[0].value(CellRef::new(0, 0)), Value::Number(1.5));
 }
