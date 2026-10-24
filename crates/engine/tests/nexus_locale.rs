@@ -166,7 +166,8 @@ fn display_follows_the_session_locale_and_the_file_stays_en_us() {
     assert!(!sheet.contains("1234567,891"));
     let mut styles = String::new();
     std::io::Read::read_to_string(&mut zip.by_name("xl/styles.xml").unwrap(), &mut styles).unwrap();
-    assert!(styles.contains("formatCode=\"#,##0.00\""), "{styles}");
+    // `#,##0.00` is built-in 4; đồng's code is written en-US.
+    assert!(styles.contains("numFmtId=\"4\"") && styles.contains("formatCode=\"#,##0 [$₫-42A]\""), "{styles}");
     let (back, _) = gridcraft_engine::io::open_bytes("book.xlsx", &bytes).unwrap();
     assert_eq!(back.locale, Locale::EnUs);
     assert_eq!(back.sheet(0).unwrap().value(at("A1")), Value::Number(1234567.891));
