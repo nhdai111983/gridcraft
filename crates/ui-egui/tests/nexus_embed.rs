@@ -286,3 +286,27 @@ fn vietnamese_names_sheets_and_formats_dong() {
     let shown = gridcraft_engine::numfmt::format_value(&sh.value(at), &gridcraft_engine::numfmt::NumberFormat::parse(&code), d.wb.date_system).text;
     assert!(shown.contains("1,250,000") && shown.contains('₫'), "{shown:?}");
 }
+
+/// An edit opened with F2 and left as it was is not a change: no unsaved edit, and committing
+/// drafts records nothing (the workbook stays clean). Typed text is a change and is entered.
+#[test]
+fn an_unchanged_edit_is_not_a_change() {
+    let mut h = harness(Services::default());
+    h.state_mut().run("cell.set", json!({"cell": "A1", "input": "Huế"})).unwrap();
+    let saved_path = std::env::temp_dir().join(format!("nexus-sheet-f2-{}.xlsx", std::process::id()));
+    h.state_mut().run("file.save", json!({"path": saved_path.to_string_lossy()})).unwrap();
+    assert!(!h.state().session.active().unwrap().is_dirty());
+    h.state_mut().begin_edit(None, false);
+    h.run_steps(2);
+    assert!(h.state().editor.is_some());
+    assert!(!h.state().has_unsaved_edit(), "F2 alone changes nothing");
+    assert!(h.state_mut().commit_drafts());
+    assert!(h.state().editor.is_none());
+    assert!(!h.state().session.active().unwrap().is_dirty(), "nothing was entered");
+    h.state_mut().begin_edit(Some("Hội An".into()), false);
+    h.run_steps(2);
+    assert!(h.state().has_unsaved_edit(), "typed text is a change");
+    assert!(h.state_mut().commit_drafts());
+    assert!(h.state().session.active().unwrap().is_dirty(), "and it was entered");
+    let _ = std::fs::remove_file(&saved_path);
+}
