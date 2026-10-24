@@ -193,3 +193,38 @@ fn another_editors_fonts_are_kept_and_ours_come_back() {
     assert!(has(&h, "ui") && has(&h, "semibold"));
     assert!(h.query_by_label("Tệp").is_some() || h.query_by_label("File").is_some(), "the app draws again");
 }
+
+/// Typing a row with Tab between cells and Enter at its end, as people fill a table: every value
+/// lands in its cell and the keyboard stays with the grid (Tab never moves egui's focus to a
+/// button that Enter would then press).
+#[test]
+fn tab_and_enter_fill_a_row_and_keep_the_keyboard() {
+    for wps in [false, true] {
+        tab_and_enter(wps);
+    }
+}
+
+fn tab_and_enter(wps: bool) {
+    let mut h = harness(Services::default());
+    h.state_mut().wps = wps;
+    h.run_steps(4);
+    for row in [["Khoản chi", "Số tiền"], ["Tiền điện", "1250000"]] {
+        for (i, cell) in row.iter().enumerate() {
+            // (A frame for the cell editor to take the keyboard, as upstream's typing tests do.)
+            h.event(egui::Event::Text((*cell).into()));
+            h.run_steps(2);
+            h.key_press(if i == 0 { egui::Key::Tab } else { egui::Key::Enter });
+            h.run_steps(2);
+        }
+    }
+    h.run_steps(2);
+    let value = |a1: &str| {
+        let at = gridcraft_engine::core::CellRef::parse(a1).unwrap();
+        h.state().session.active().and_then(|d| d.wb.active()).map(|sh| sh.value(at).display()).unwrap_or_default()
+    };
+    let focus = h.ctx.memory(|m| m.focused());
+    // (Enter after Tab moves down from the last cell here; Excel goes back to the row's first
+    // column. Upstream's behaviour, kept.)
+    assert_eq!([value("A1"), value("B1"), value("B2"), value("C2")], ["Khoản chi", "Số tiền", "Tiền điện", "1250000"], "wps {wps}, focus {focus:?}");
+    assert!(h.state().backstage.is_none() && h.state().dialog.is_none(), "no button was pressed");
+}
