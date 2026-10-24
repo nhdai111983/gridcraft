@@ -95,7 +95,7 @@ impl Locale {
     pub fn month_abbr(self, month: u32) -> &'static str {
         let i = (month as usize).wrapping_sub(1);
         match self {
-            Locale::EnUs => MONTHS.get(i).and_then(|m| m.get(..3)).unwrap_or(""),
+            Locale::EnUs => MONTHS.get(i).copied().and_then(|m| m.get(..3)).unwrap_or(""),
             Locale::ViVn => VI_MONTHS_ABBR.get(i).copied().unwrap_or(""),
         }
     }
@@ -104,7 +104,7 @@ impl Locale {
     pub fn month_narrow(self, month: u32) -> &'static str {
         let i = (month as usize).wrapping_sub(1);
         match self {
-            Locale::EnUs => MONTHS.get(i).and_then(|m| m.get(..1)).unwrap_or(""),
+            Locale::EnUs => MONTHS.get(i).copied().and_then(|m| m.get(..1)).unwrap_or(""),
             Locale::ViVn => VI_MONTHS_NARROW.get(i).copied().unwrap_or(""),
         }
     }
@@ -122,7 +122,7 @@ impl Locale {
     pub fn day_abbr(self, weekday: u32) -> &'static str {
         let i = weekday as usize;
         match self {
-            Locale::EnUs => WEEKDAYS.get(i).and_then(|d| d.get(..3)).unwrap_or(""),
+            Locale::EnUs => WEEKDAYS.get(i).copied().and_then(|d| d.get(..3)).unwrap_or(""),
             Locale::ViVn => VI_WEEKDAYS_ABBR.get(i).copied().unwrap_or(""),
         }
     }

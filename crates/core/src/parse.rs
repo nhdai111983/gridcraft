@@ -398,16 +398,19 @@ fn parse_date_dmy(t: &str, sys: DateSystem) -> Option<(f64, &'static str)> {
     if t.contains('.') {
         return None;
     }
-    let num = |s: &str| {
+    fn num(s: &str) -> Option<i64> {
         let s = s.trim();
         if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) { s.parse::<i64>().ok() } else { None }
-    };
+    }
+    /// Two-digit years: 00–29 are 2000s, 30–99 the 1900s (as the en-US forms).
+    fn expand(w: &str, y: i64) -> i64 {
+        if w.trim().len() <= 2 { if y < 30 { 2000 + y } else { 1900 + y } } else { y }
+    }
     let parts: Vec<&str> = t.split(['/', '-']).collect();
     if !parts.iter().all(|p| num(p).is_some()) {
         // Month names (`24-Oct-2026`, `Oct 24, 2026`) read as en-US reads them.
         return parse_date(t, sys);
     }
-    let expand = |w: &str, y: i64| if w.trim().len() <= 2 { if y < 30 { 2000 + y } else { 1900 + y } } else { y };
     match parts.as_slice() {
         [a, b, c] => {
             let (x, y, z) = (num(a)?, num(b)?, num(c)?);
