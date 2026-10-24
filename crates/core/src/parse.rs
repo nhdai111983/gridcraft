@@ -91,9 +91,6 @@ fn parse_numeric_in(t: &str, sys: DateSystem, locale: Locale) -> Option<(f64, Op
     if let Some(inner) = t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
         // One pair only: `((1))` is text, as in Excel, and nesting can't grow the stack.
         let inner = inner.trim();
-        if inner.starts_with('(') {
-            return None;
-        }
         return parse_numeric_in(inner, sys, locale).map(|(n, f)| (-n, f));
     }
     // The đồng, after the amount as vi-VN writes it (`1.234 ₫`, `1.234đ`, `1.234 VNĐ`) or before it.
@@ -161,9 +158,6 @@ fn parse_numeric(t: &str, sys: DateSystem) -> Option<(f64, Option<&'static str>)
     if let Some(inner) = t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
         // One pair only: `((1))` is text, as in Excel, and nesting can't grow the stack.
         let inner = inner.trim();
-        if inner.starts_with('(') {
-            return None;
-        }
         return parse_numeric(inner, sys).map(|(n, f)| (-n, f));
     }
     if let Some(r) = parse_plain(t) {
