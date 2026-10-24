@@ -113,7 +113,7 @@ fn values_typed_in_vietnamese() {
     set(&mut s, "B1", VI_NFC, Some("vi"));
     set(&mut s, "B2", &decomposed, Some("vi"));
     assert_eq!(value(&s, "B1"), Value::text(VI_NFC));
-    assert_eq!(value(&s, "B2"), Value::text(&decomposed));
+    assert_eq!(value(&s, "B2"), Value::text(decomposed.as_str()));
     // Formulas are en-US whatever the locale (the interface translates its syntax first).
     set(&mut s, "C1", "=SUM(1.5,2)", Some("vi-VN"));
     assert_eq!(value(&s, "C1"), Value::Number(3.5));
