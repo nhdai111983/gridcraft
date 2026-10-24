@@ -371,7 +371,12 @@ impl Session {
         }
         let before = self.active().map(|d| (d.uid, d.wb.clone(), d.selection.clone()));
         let params = if params.is_null() { Json::Object(Default::default()) } else { params };
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (spec.run)(self, &params)));
+        // NexusOffice: sheets the command adds (Insert Sheet, PivotTable, Forecast, an import)
+        // are named in the interface's language.
+        let prefix = self.sheet_name_prefix.clone();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            gridcraft_model::workbook::with_sheet_prefix(&prefix, || (spec.run)(self, &params))
+        }));
         let result = match result {
             Ok(r) => r,
             Err(p) => {
