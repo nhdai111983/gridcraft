@@ -219,6 +219,18 @@ fn csv_in_vietnamese() {
     assert_eq!(sniff_delimiter_in("a\tb\nc;d\te\n", '"', ViVn), b'\t');
     // `;` on every line wins over more decimal commas.
     assert_eq!(sniff_delimiter_in("1,5;2,5;3,5\n4,5;5,5;6,5\n", '"', ViVn), b';');
+    // A title line without `;` above a `;` table; a header and whole numbers in a decimal-comma column.
+    let wb = read_csv("Báo cáo\nTên;Giá\nAn;1,5\n".as_bytes(), &vi).unwrap();
+    assert_eq!(wb.csv_delimiter, Some(b';'));
+    assert_eq!(wb.sheets[0].value(CellRef::new(2, 1)), Value::Number(1.5));
+    let wb = read_csv("Giá\n1,5\n2\n".as_bytes(), &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 0)), Value::Number(1.5));
+    assert_eq!(wb.sheets[0].value(CellRef::new(2, 0)), Value::Number(2.0));
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 1)), Value::Empty);
+    // Quoted fields, a single row, an empty file.
+    assert_eq!(sniff_delimiter_in("\"a,b\";\"c\"\n", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("a;b", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("", '"', ViVn), sniff_delimiter("", '"'));
     // Several commas per line, all between digits: an en-US numeric export, split at the commas.
     let wb = read_csv(b"1,2,3\n4,5,6\n", &vi).unwrap();
     assert_eq!(wb.sheets[0].value(CellRef::new(1, 2)), Value::Number(6.0));

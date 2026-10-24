@@ -84,9 +84,11 @@ GridCraft accepts the existing `file.print` sheet/pagination params on `ui.print
 ## Regional format (NexusOffice)
 
 The window shows workbooks in the interface language's regional format (vi-VN: `1.234,5`,
-`24/10/2026`), but the control channel stays locale-neutral: `engine.execute` reads and shows
-en-US (`cell.get`'s `text`, copied text, CSV from `file.saveBytes`) unless the call names a
-regional format, either in the command's params (`{"command":"cell.set","params":{"cell":"A1",
+`24/10/2026`), but what the control channel returns stays locale-neutral: queries (`cell.get`'s
+`text`, `sheet.read`, `document.inspect`, `selection.stats`, CSV from `file.saveBytes`) and copied
+text are en-US unless the call names a regional format; commands that change the workbook and
+files written for the user (`file.save` of a vi-VN CSV stays `1,5;24/10/2026`) keep the workbook's
+own format. The format is named either in the command's params (`{"command":"cell.set","params":{"cell":"A1",
 "input":"1.234,5","locale":"vi-VN"}}`) or on the request (`{"method":"engine.execute",
 "locale":"vi-VN",…}`). Commands that read typed values take `locale` (`cell.set`, `range.fill`,
 `edit.paste`, `data.filterBy`, `data.scenarioAdd`, `data.solver`, `data.forecastSheet`,

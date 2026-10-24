@@ -274,9 +274,11 @@ pub struct Session {
 /// (`TEXT`, `VALUE`, `NUMBERVALUE`, and the names that contain them), so a locale change needs a
 /// recalculation. A cheap scan of the formula texts instead of a recalculation of every workbook.
 fn locale_sensitive(wb: &Workbook) -> bool {
+    // Stored formulas are canonical: function names are upper case, so no case folding (and no
+    // allocation) per formula.
     let calls = |text: &str| text.contains("TEXT(") || text.contains("VALUE(");
-    wb.names.iter().any(|n| calls(&n.formula.to_ascii_uppercase()))
-        || wb.sheets.iter().any(|sh| sh.cells.iter().any(|(_, c)| c.formula.as_ref().is_some_and(|f| calls(&f.text.to_ascii_uppercase()))))
+    wb.names.iter().any(|n| calls(&n.formula))
+        || wb.sheets.iter().any(|sh| sh.cells.iter().any(|(_, c)| c.formula.as_ref().is_some_and(|f| calls(&f.text))))
 }
 
 impl Session {

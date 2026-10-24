@@ -495,6 +495,9 @@ impl Dialog {
                 if let Some(v) = values.as_object_mut() {
                     v.insert("newOp".into(), json!("<="));
                 }
+                // The saved model's numbers are en-US; the dialog shows and sends them the way
+                // the interface types them (`locale` goes with the command).
+                localize_solver_numbers(&mut values, app.ui.language.regional_format());
                 let mut d = Dialog::custom("solver", "Solver Parameters", values);
                 d.command = Some("data.solver");
                 d
@@ -938,7 +941,6 @@ fn data_validation_form(ui: &mut egui::Ui, d: &mut Dialog, confirm: &mut bool, o
     ok_cancel(ui, confirm, open);
 }
 
-/// Builds the command params from form values for dialogs that need translation.
 /// Commands whose typed values a dialog sends in the interface's regional format (`locale`).
 const LOCALE_COMMANDS: &[&str] = &[
     "data.textToColumns",
@@ -952,6 +954,31 @@ const LOCALE_COMMANDS: &[&str] = &[
     "range.fill",
 ];
 
+/// The solver dialog's saved numbers (Value Of, constraint right sides) in `locale`'s spelling.
+fn localize_solver_numbers(values: &mut Json, locale: gridcraft_engine::core::Locale) {
+    if locale == gridcraft_engine::core::Locale::EnUs {
+        return;
+    }
+    if let Some(v) = values.get_mut("value")
+        && let Some(t) = v.as_str().map(str::trim).filter(|t| t.parse::<f64>().is_ok()).map(str::to_string)
+    {
+        *v = json!(locale.localize_number(&t));
+    }
+    if let Some(Json::Array(list)) = values.get_mut("constraints") {
+        for c in list.iter_mut() {
+            let shown = c
+                .as_str()
+                .and_then(|t| t.rsplit_once(' '))
+                .filter(|(_, tail)| tail.parse::<f64>().is_ok())
+                .map(|(head, tail)| format!("{head} {}", locale.localize_number(tail)));
+            if let Some(shown) = shown {
+                *c = json!(shown);
+            }
+        }
+    }
+}
+
+/// Builds the command params from form values for dialogs that need translation.
 fn build_params(d: &Dialog) -> Json {
     let mut v = Json::Object(d.values.clone());
     match d.name.as_str() {

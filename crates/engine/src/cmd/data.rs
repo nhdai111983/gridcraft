@@ -611,6 +611,12 @@ fn custom_ok(v: &Value, text: &str, op: &str, crit: &str, folded: &str) -> bool 
 
 /// Hides rows of the autofilter range that fail any criterion.
 pub(crate) fn apply_filter(wb: &mut Workbook, sheet: usize) {
+    // Rows are compared as they show in the workbook's regional format, whoever filters.
+    let locale = wb.locale;
+    crate::display::with_locale(locale, || apply_filter_in(wb, sheet));
+}
+
+fn apply_filter_in(wb: &mut Workbook, sheet: usize) {
     let Some(sh) = wb.sheet(sheet) else { return };
     let Some(af) = sh.autofilter.clone() else { return };
     let r = af.range;

@@ -293,3 +293,92 @@ fn display_locale_can_be_overridden_for_the_api() {
     assert_eq!(csv.unwrap(), b"1234.5\r\n");
     assert_eq!(text(&s, "A1"), "1234,5", "the override ends with the call");
 }
+
+/// An API caller reading in en-US (the control channel's default) never changes what is written
+/// to the user's file: saving a vi-VN CSV keeps `1,5;24/10/2026`. Only the bytes returned to the
+/// caller (`file.saveBytes`) are in the caller's locale.
+#[test]
+fn saving_the_users_csv_keeps_the_workbooks_locale() {
+    let dir = std::env::temp_dir().join(format!("nexus-vi-csv-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("a.csv");
+    std::fs::write(&path, "1,5;24/10/2026\r\n").unwrap();
+    let mut s = Session::new();
+    s.set_locale(Locale::ViVn);
+    s.execute("file.open", json!({"path": path.to_str().unwrap()})).unwrap();
+    assert_eq!(value(&s, "A1"), Value::Number(1.5));
+    let returned = gridcraft_engine::display::with_locale(Locale::EnUs, || {
+        s.execute("file.save", json!({"path": path.to_str().unwrap()})).unwrap();
+        s.execute("file.saveBytes", json!({"format": "csv"})).unwrap()
+    });
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "1,5;24/10/2026\r\n", "the user's file stays vi-VN");
+    let bytes = gridcraft_engine::io::base64_decode(returned["base64"].as_str().unwrap()).unwrap();
+    assert_eq!(String::from_utf8(bytes).unwrap(), "1.5;10/24/2026\r\n", "the caller reads en-US");
+    // Reopened in vi-VN, both cells are still numbers.
+    let mut again = Session::new();
+    again.set_locale(Locale::ViVn);
+    again.execute("file.open", json!({"path": path.to_str().unwrap()})).unwrap();
+    assert_eq!(value(&again, "A1"), Value::Number(1.5));
+    assert_eq!(value(&again, "B1"), Value::Number(46319.0));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Filters evaluate in the workbook's regional format, whoever runs them: the same `>1,5`
+/// criteria cell selects the same rows through the API (en-US display) as in the window.
+#[test]
+fn advanced_filter_evaluates_in_the_workbooks_locale() {
+    let mut s = session();
+    s.execute("range.setValues", json!({"range": "A1", "values": [["Giá"], [1.2], [1.6], [2.5]]})).unwrap();
+    s.execute("range.setValues", json!({"range": "H1", "values": [["Giá"], [">1,5"]]})).unwrap();
+    s.set_locale(Locale::ViVn);
+    let ui = s.execute("data.advancedFilter", json!({"range": "A1:A4", "criteria": "H1:H2"})).unwrap();
+    let api = gridcraft_engine::display::with_locale(Locale::EnUs, || {
+        s.execute("data.advancedFilter", json!({"range": "A1:A4", "criteria": "H1:H2"})).unwrap()
+    });
+    assert_eq!(ui["matched"], 2);
+    assert_eq!(api["matched"], ui["matched"]);
+}
+
+/// Solver's "Value Of" target typed in vi-VN.
+#[test]
+fn solver_value_of_reads_the_regional_format() {
+    let mut s = session();
+    set(&mut s, "A1", "1", None);
+    set(&mut s, "B1", "=A1*2", None);
+    let r = s
+        .execute("data.solver", json!({"objective": "B1", "goal": "value", "value": "2,5", "variables": "A1", "method": "grg", "locale": "vi-VN"}))
+        .unwrap();
+    assert!((value(&s, "B1").as_f64().unwrap() - 2.5).abs() < 1e-6, "{r}");
+    assert!(
+        s.execute("data.solver", json!({"objective": "B1", "goal": "value", "value": "2,5", "variables": "A1"})).is_err(),
+        "en-US reads `2,5` as no number"
+    );
+}
+
+/// Forecast Sheet dates, Text to Columns parts and From Text/CSV values in vi-VN.
+#[test]
+fn more_entry_points_read_the_regional_format() {
+    let mut s = session();
+    let mut rows = vec![json!(["Ngày", "Doanh thu"])];
+    for t in 0..16 {
+        rows.push(json!([46300 + t, 10 + 2 * t]));
+    }
+    s.execute("range.setValues", json!({"range": "A1", "values": rows})).unwrap();
+    s.execute("selection.set", json!({"range": "A1:B17"})).unwrap();
+    // The last date is 46315 (2026-10-20): end 24/10/2026 is 4 periods on.
+    let r = s.execute("data.forecastSheet", json!({"end": "24/10/2026", "locale": "vi-VN"})).unwrap();
+    assert_eq!(r["periods"], 4, "{r}");
+
+    let mut s = session();
+    s.execute("range.setValues", json!({"range": "A1", "values": [["1,5;2.500;24/10/2026"]]})).unwrap();
+    s.execute("data.textToColumns", json!({"range": "A1", "delimiters": [";"], "locale": "vi-VN"})).unwrap();
+    assert_eq!([value(&s, "A1"), value(&s, "B1"), value(&s, "C1")], [Value::Number(1.5), Value::Number(2500.0), Value::Number(46319.0)]);
+
+    let mut s = session();
+    s.execute("data.fromTextCsv", json!({"text": "Số;Ngày\n1,5;24/10/2026\n", "locale": "vi-VN"})).unwrap();
+    let sh = s.active().unwrap().wb.active().unwrap().clone();
+    assert_eq!(sh.value(CellRef::parse("A2").unwrap()), Value::Number(1.5));
+    assert_eq!(sh.value(CellRef::parse("B2").unwrap()), Value::Number(46319.0));
+    let e = s.execute("data.fromTextCsv", json!({"text": "[1,", "locale": "vi-VN"})).unwrap_err().to_string();
+    assert!(e.contains("data.fromTextCsv"), "{e}");
+}

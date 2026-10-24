@@ -116,23 +116,19 @@ fn parse_numeric_in(t: &str, sys: DateSystem, locale: Locale) -> Option<(f64, Op
     parse_datetime_dmy(t, sys)
 }
 
-/// The amount of `₫1.234`, `1.234 ₫`, `1.234đ`, `1.234 VNĐ` or `VND 1.234` (case-insensitive).
+/// The amount of `1.234 ₫`, `1.234đ`, `1.234 VNĐ`, `1.234 VND` (case-insensitive) or `₫1.234`.
+/// Only the sign `₫` may lead: `Đ101` or `VND1` are codes, not amounts.
 fn strip_dong(t: &str) -> Option<&str> {
-    const SIGNS: [&str; 4] = ["₫", "vnđ", "vnd", "đ"];
+    const TRAILING: [&str; 4] = ["₫", "vnđ", "vnd", "đ"];
+    if let Some(rest) = t.strip_prefix(DONG) {
+        return Some(rest);
+    }
     let lower = t.to_lowercase();
     // Lower-casing these letters keeps their byte lengths, so the slices line up.
     if lower.len() != t.len() {
         return None;
     }
-    for sign in SIGNS {
-        if lower.ends_with(sign) {
-            return t.get(..t.len() - sign.len());
-        }
-        if lower.starts_with(sign) {
-            return t.get(sign.len()..);
-        }
-    }
-    None
+    TRAILING.iter().find(|sign| lower.ends_with(**sign)).and_then(|sign| t.get(..t.len() - sign.len()))
 }
 
 /// `0.125` or `090.312.345` in a locale that groups with `.`: a first group starting with 0 isn't
@@ -609,11 +605,11 @@ mod tests {
         }
         assert_eq!(vi("0,125").value, Value::Number(0.125));
         // The đồng in the ways people write it.
-        for s in ["1.234đ", "1.234 Đ", "1.234 VNĐ", "1.234 vnd", "VND 1.234", "₫1.234"] {
+        for s in ["1.234đ", "1.234 Đ", "1.234 VNĐ", "1.234 vnd", "₫1.234"] {
             assert_eq!(vi(s).value, Value::Number(1234.0), "{s}");
             assert_eq!(vi(s).format, Some(VND_FORMAT), "{s}");
         }
-        for s in ["đ", "VNĐ", "đồng", "1.234 đđ"] {
+        for s in ["đ", "VNĐ", "đồng", "1.234 đđ", "Đ101", "VND 1.234", "đ1.234"] {
             assert_eq!(vi(s).value, Value::text(s), "{s}");
         }
         assert_eq!(vi("TRUE").value, Value::Bool(true));

@@ -210,3 +210,29 @@ fn control_channel_is_locale_neutral_and_paste_follows_the_window() {
     assert_eq!(value(&h, "B1"), Value::Number(2500.0));
     assert_eq!(value(&h, "C1"), Value::Number(0.75));
 }
+
+/// The control channel's direct reads are en-US too, and an agent's `file.save` writes the user's
+/// file in the workbook's own regional format (only what is returned to the agent is en-US).
+#[test]
+fn control_reads_are_en_us_but_saves_keep_the_users_format() {
+    let mut h = harness(Language::Vi, false);
+    enter(&mut h, "A1", "1,5");
+    enter(&mut h, "B1", "24/10/2026");
+    let call = |h: &mut H, method: &str, params: serde_json::Value| {
+        let ctx = h.ctx.clone();
+        match gridcraft_ui_egui::control::handle(h.state_mut(), &ctx, method, &params) {
+            gridcraft_ui_egui::control::Outcome::Done(reply) => reply.to_string(),
+            gridcraft_ui_egui::control::Outcome::Screenshot { .. } => String::new(),
+        }
+    };
+    let en = call(&mut h, "cell.get", json!({"cell": "B1"}));
+    assert!(en.contains("10/24/2026"), "{en}");
+    let vi = call(&mut h, "cell.get", json!({"cell": "B1", "locale": "vi-VN"}));
+    assert!(vi.contains("24/10/2026"), "{vi}");
+    let dir = std::env::temp_dir().join(format!("nexus-vi-control-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("a.csv");
+    call(&mut h, "engine.execute", json!({"command": "file.save", "params": {"path": path.to_str().unwrap()}}));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "1,5;24/10/2026\r\n");
+    let _ = std::fs::remove_dir_all(&dir);
+}

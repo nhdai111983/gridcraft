@@ -158,18 +158,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "From Text/CSV",
             ["Data", "Get & Transform Data"],
             None,
-            "{path | text, delimiter?: \",\", sheet?: new sheet name} → imports into a new sheet as a table",
+            "{path | text, delimiter?: \",\", sheet?: new sheet name, locale?: \"vi-VN\" (values and, with no delimiter, the separator)} → imports into a new sheet as a table",
             has_doc,
-            from_csv
+            from_text_csv
         ),
         cmd!(
             "data.getData",
             "Get Data",
             ["Data", "Get & Transform Data"],
             None,
-            "{path | text} (CSV/TSV/JSON array of objects) → new sheet table",
+            "{path | text, locale?} (CSV/TSV/JSON array of objects) → new sheet table",
             has_doc,
-            from_csv
+            get_data
         ),
         cmd!(
             "data.fromTableRange",
@@ -854,7 +854,19 @@ fn table_resize(s: &mut Session, p: &Json) -> Result<Json> {
     })
 }
 
+fn from_text_csv(s: &mut Session, p: &Json) -> Result<Json> {
+    from_csv_as(s, p, "data.fromTextCsv")
+}
+
+fn get_data(s: &mut Session, p: &Json) -> Result<Json> {
+    from_csv_as(s, p, "data.getData")
+}
+
 fn from_csv(s: &mut Session, p: &Json) -> Result<Json> {
+    from_csv_as(s, p, "data.fromTableRange")
+}
+
+fn from_csv_as(s: &mut Session, p: &Json, cmd: &str) -> Result<Json> {
     let bytes = if let Some(t) = str_param(p, "text") {
         t.as_bytes().to_vec()
     } else if let Some(path) = str_param(p, "path") {
@@ -866,7 +878,7 @@ fn from_csv(s: &mut Session, p: &Json) -> Result<Json> {
     let text = String::from_utf8_lossy(&bytes);
     // JSON array of objects → rows.
     let rows: Vec<Vec<Json>> = if text.trim_start().starts_with('[') {
-        let arr: Vec<Json> = serde_json::from_str(&text).map_err(|e| bad("data.getData", e.to_string()))?;
+        let arr: Vec<Json> = serde_json::from_str(&text).map_err(|e| bad(cmd, e.to_string()))?;
         let mut keys: Vec<String> = Vec::new();
         for o in &arr {
             if let Some(m) = o.as_object() {
@@ -884,7 +896,7 @@ fn from_csv(s: &mut Session, p: &Json) -> Result<Json> {
         out
     } else {
         // Values (and, with no `delimiter`, the separator) in the interface's regional format.
-        let locale = super::edit::locale_param("data.getData", p)?;
+        let locale = super::edit::locale_param(cmd, p)?;
         let delim = match str_param(p, "delimiter").and_then(|d| d.chars().next()) {
             Some(d) => u8::try_from(d).unwrap_or(b','),
             None if locale != gridcraft_core::Locale::EnUs => 0,

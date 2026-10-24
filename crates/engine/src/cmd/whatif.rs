@@ -809,6 +809,14 @@ pub(crate) fn criterion_matches_in(v: &Value, text: &str, crit: &Value, locale: 
 }
 
 fn advanced_filter(s: &mut Session, p: &Json) -> Result<Json> {
+    // Criteria cells hold what people typed in the workbook's regional format, and the rows
+    // are compared as they show in it, whoever runs the filter (an API caller may read in
+    // another display locale).
+    let locale = s.doc()?.wb.locale;
+    crate::display::with_locale(locale, || advanced_filter_in(s, p))
+}
+
+fn advanced_filter_in(s: &mut Session, p: &Json) -> Result<Json> {
     const CMD: &str = "data.advancedFilter";
     let d = s.doc()?;
     let (si, list) = match str_param(p, "range") {
@@ -864,7 +872,7 @@ fn advanced_filter(s: &mut Session, p: &Json) -> Result<Json> {
                     let at = CellRef::new(row, list.start.col + off);
                     let v = sh.value(at);
                     let text = crate::display::cell_text(wb, sh, at);
-                    criterion_matches_in(&v, &text, crit, crate::display::locale(wb))
+                    criterion_matches_in(&v, &text, crit, wb.locale)
                 }
                 Cond::Computed(e, at) => {
                     let shifted = gridcraft_formula::adjust::shift_relative(e.clone(), row as i64 - first_data as i64, 0);

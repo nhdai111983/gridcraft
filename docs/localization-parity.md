@@ -81,7 +81,8 @@ type. Files, stored formulas, number-format codes and the command API stay en-US
 - **Currency:** đồng after the amount with a space, no decimals: `#,##0 [$₫-42A]` → `1.234.567 ₫`.
   The Number Format list's Currency and the accounting button apply đồng's formats in Vietnamese.
 - **Entry** (`core::parse::parse_input_in`, `cell.set`/`range.fill` `locale: "vi-VN"`): `1.234,5`,
-  `1234,5`, `12,5%`, `1.234 ₫`/`₫1.234`/`1.234đ`/`1.234 VNĐ`/`VND 1.234` (currency format),
+  `1234,5`, `12,5%`, `1.234 ₫`/`1.234đ`/`1.234 VNĐ`/`1.234 VND`/`₫1.234` (currency format; only `₫` may lead, so
+  `Đ101` or `VND1` stay text),
   `24/10/2026`, `24-10-26`, `24/10`, ISO dates, `14:30`, `2:30 CH`/`10:00 SA`, date-times. A first
   group starting with 0 (`0.125`, `090.312.345`) is text, not grouping; `((1))` is text. `.` is not a date separator and en-US spellings such as
   `1,234.5` or `1.5` stay text, as in Excel with vi-VN settings. The API without `locale` is en-US.
@@ -104,18 +105,25 @@ type. Files, stored formulas, number-format codes and the command API stay en-US
   sides, Forecast Sheet dates, Data › From Text/CSV, Goal Seek's target and Advanced Filter
   criteria cells read the regional format; what they store stays en-US.
 - **API (control channel, MCP, CLI):** locale-neutral by default — en-US input and output — and
-  every command that reads typed values takes an explicit `locale`. The control channel shows
-  en-US text even while the window shows vi-VN (`display::with_locale`); see
+  every command that reads typed values takes an explicit `locale`. What the control channel
+  returns (queries such as `cell.get`, `sheet.read`, `document.inspect`, `selection.stats`,
+  `file.saveBytes`, and copies) is en-US even while the window shows vi-VN, unless the call names
+  a `locale` (`display::with_locale`). The override changes only that returned text: commands that
+  change the workbook, filters (AutoFilter, Advanced Filter) and the files written for the user
+  (`file.save`, exports, PDF) evaluate and write in the workbook's own regional format. See
   `docs/control-protocol.md`.
 - **CSV (decision):** Excel reads and writes CSV with the system's list separator and number
   format. In vi-VN, Save As CSV writes `;` between fields and the displayed values (`1.234,50;24/10/2026`;
   General numbers in full precision with a decimal comma); a file read from CSV keeps its own
   separator. Opening a CSV in vi-VN reads values the vi-VN way and takes `;` as the separator when
   it appears; a file whose commas only sit between digits is one column of decimal-comma numbers;
-  other comma files (en-US exports) still split at commas. In vi-VN `;` is the delimiter only
-  when every line has one (outside quotes); a file whose lines hold exactly one comma, between
-  digits, is one column of decimal-comma numbers; otherwise a consistent `,` or tab decides, as in
-  en-US. A CSV that was opened is saved back with its own delimiter. Round trip in the same locale is
+  other comma files (en-US exports) still split at commas. Rules, on the first 20 lines outside
+  quotes: a tab on every line → tab; a `;` on every line → `;`; at most one comma per line, each
+  between digits (a decimal-comma column, possibly with a header or whole numbers) → `;`; a comma
+  on every line → `,` (`1,2,3` splits in three); otherwise `;` if one appears anywhere (a title
+  line above a `;` table). **An en-US `1,5\n2,7` file opened in vi-VN therefore reads as one column
+  of 1.5 and 2.7, as Excel with vi-VN settings reads it.** A CSV that was opened is saved back with
+  its own delimiter, in the workbook's regional format — also when an API caller saves it. Round trip in the same locale is
   lossless (tested); en-US behaviour is unchanged. Opening a vi-VN CSV in en-US reads `1.234,50`
   as text, as Excel does across locales.
 - **Not yet:** a regional setting independent of the language; localized format codes in the

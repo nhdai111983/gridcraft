@@ -176,7 +176,9 @@ impl Default for EvoOptions {
 
 fn evo_options(p: &Json) -> EvoOptions {
     let d = EvoOptions::default();
-    let num = |k: &str| p.get(k).and_then(Json::as_f64).or_else(|| str_param(p, k).and_then(num_text)).filter(|v| v.is_finite());
+    // Typed in the Options dialog in the interface's regional format (`0,075`).
+    let locale = super::edit::locale_param(CMD, p).unwrap_or_default();
+    let num = |k: &str| p.get(k).and_then(Json::as_f64).or_else(|| str_param(p, k).and_then(|t| num_text_in(t, locale))).filter(|v| v.is_finite());
     EvoOptions {
         population: num("populationSize").map_or(d.population, |v| v.clamp(MIN_POPULATION as f64, MAX_POPULATION as f64) as usize),
         mutation: num("mutationRate").map_or(d.mutation, |v| v.clamp(0.0, 1.0)),
@@ -223,6 +225,11 @@ fn cells_of(wb: &Workbook, t: &str, default_sheet: usize, cap: usize) -> Result<
         return Err(bad(CMD, format!("not a reference: `{t}`")));
     }
     Ok((sheet.unwrap_or(default_sheet), out))
+}
+
+/// [`num_text`] for a number typed in a regional format (`1,5` in vi-VN; `locale` parameter).
+fn num_text_in(t: &str, locale: gridcraft_core::Locale) -> Option<f64> {
+    gridcraft_core::parse::parse_number_text_locale(t.trim(), gridcraft_core::DateSystem::D1900, locale).filter(|v| v.is_finite())
 }
 
 fn num_text(t: &str) -> Option<f64> {
@@ -312,7 +319,7 @@ fn parse_model(s: &Session, p: &Json) -> Result<Model> {
         "min" | "minimize" | "minimum" => Goal::Min,
         "value" | "valueof" | "value of" => {
             let v = f64_param(p, "value")
-                .or_else(|| str_param(p, "value").and_then(num_text))
+                .or_else(|| str_param(p, "value").and_then(|t| num_text_in(t, locale)))
                 .filter(|v| v.is_finite())
                 .ok_or_else(|| bad(CMD, "goal `value` needs a number in `value`"))?;
             Goal::Value(v)
