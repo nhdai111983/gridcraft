@@ -2,9 +2,11 @@
 //!
 //! `cargo run --release -p gridcraft-ui-egui --example snapshot -- [--sample sales] [--in file.xlsx]
 //!  [--size 1440x900] [--scale 2] [--cmd 'id={json}']... [--tab Insert] [--dark] [--language en|zh|ja|ko|ru|pt|cs]
-//!  [--dialog 'name={json}'] [--hf-edit header|footer] [--toolbar] [--accent '#RRGGBB'] out.png`
+//!  [--dialog 'name={json}'] [--hf-edit header|footer] [--toolbar] [--wps] [--embedded] [--accent '#RRGGBB'] out.png`
 //!
-//! `--toolbar`: the NexusOffice layout (menu bar and one tool row); `--accent`: a user accent colour.
+//! `--toolbar`: the NexusOffice layout (menu bar and one tool row); `--wps`: the NexusOffice layout in
+//! the style of WPS Office (no title bar, one row of tabs, a flat command strip); `--embedded`: as
+//! hosted in the NexusOffice window; `--accent`: a user accent colour.
 //! `--ui-cmd 'id={json}'` runs an app command (`ui.backstage`…) before drawing; `--click LABEL` and
 //! `--hover LABEL` act on the widget so named (in order) before the shot, to show an open menu.
 
@@ -27,6 +29,8 @@ fn main() {
     let mut language: Option<String> = None;
     let mut hf_edit: Option<String> = None;
     let mut toolbar = false;
+    let mut wps = false;
+    let mut embedded = false;
     let mut accent: Option<String> = None;
     let mut ui_cmds: Vec<String> = vec![];
     let mut pointer: Vec<(bool, String)> = vec![];
@@ -64,6 +68,8 @@ fn main() {
             }
             "--dark" => dark = true,
             "--toolbar" => toolbar = true,
+            "--wps" => wps = true,
+            "--embedded" => embedded = true,
             "--ui-cmd" => {
                 i += 1;
                 if let Some(c) = args.get(i) {
@@ -120,7 +126,7 @@ fn main() {
         }
     }
     let mut harness =
-        egui_kittest::Harness::builder().with_size(egui::vec2(size.0, size.1)).with_pixels_per_point(scale).with_max_steps(12).wgpu().build_ui_state(
+        egui_kittest::Harness::builder().with_size(egui::vec2(size.0, size.1)).with_pixels_per_point(scale).with_max_steps(32).wgpu().build_ui_state(
             move |ui, app: &mut SheetApp| {
                 let ctx = ui.ctx().clone();
                 app.logic(&ctx);
@@ -130,6 +136,8 @@ fn main() {
                 let mut app = SheetApp::new(session, Default::default());
                 app.ui.dark = dark;
                 app.toolbar = toolbar;
+                app.wps = wps;
+                app.embedded = embedded;
                 app.ui.accent = accent;
                 for c in &ui_cmds {
                     let (id, p) = c
@@ -164,7 +172,8 @@ fn main() {
                 app
             },
         );
-    harness.run_steps(8);
+    // The WPS strip settles its stacks' rows and folds its groups over a few frames.
+    harness.run_steps(if wps { 24 } else { 8 });
     for (click, label) in &pointer {
         use egui_kittest::kittest::Queryable;
         match harness.query_by_label(label) {
@@ -172,7 +181,7 @@ fn main() {
             Some(n) => n.hover(),
             None => eprintln!("no widget named {label:?}"),
         }
-        harness.run_steps(4);
+        harness.run_steps(if wps { 12 } else { 4 });
     }
     let img = harness.render().expect("render");
     img.save(&out).expect("save png");

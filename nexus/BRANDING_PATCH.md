@@ -104,7 +104,21 @@ Cơ chế chính:
 | `crates/ui-egui/src/panes.rs` | Nhãn "Resolved" của bình luận: `theme::APP_INK` thay `#107C41` | Có — bảng màu |
 | `crates/ui-egui/examples/snapshot.rs` | Cờ `--toolbar` (bố cục NexusOffice), `--accent '#RRGGBB'`, `--ui-cmd`, `--click`/`--hover` (mở menu trước khi chụp) để chụp màn hình | Có |
 | `apps/gridcraft/src/main.rs` (thêm) | Bật `app.toolbar` (bố cục NexusOffice) | Có — cờ giao diện |
-| `apps/gridcraft-web/src/web.rs` (thêm) | Bật `app.toolbar` cho bản web | Có — cờ giao diện |
+| `apps/gridcraft-web/src/web.rs` (thêm) | Bật `app.toolbar` cho bản web; NX-UI.6: bật `app.wps` thay `app.toolbar` | Có — cờ giao diện |
+| `crates/ui-egui/src/nexus_wps.rs` | File mới (NX-UI.5, ROADMAP F1.2): bố cục NexusOffice kiểu WPS giống Nexus Docs — không thanh tiêu đề; hàng trên 36 pt (Tệp mở Backstage, Quick Access, thẻ ribbon căn trái có » cho thẻ thừa, trạng thái lưu có Tự động lưu/Lưu/Lưu thành, ô Tìm lệnh, Nhận xét, Chia sẻ, "⋯" giao diện/Tùy chọn/Giới thiệu); dải lệnh 56 pt hai hàng nút nhỏ, nút lớn = icon 20 px trên một dòng nhãn, nhóm không vừa gập vào bảng "…"; `compact_stack`, cổng nhóm (`group`), `fit_groups`/`fit_tabs`; test kittest | — (file mới) |
+| `crates/ui-egui/src/file_dialogs.rs` | File mới (NX-UI.5): `FileDialogRequest`/`FileDialogAnswer`, hộp thoại Mở/Lưu thành/xuất mà host trả lời sau qua channel (không chặn luồng giao diện), `AfterPick` (mở, lưu rồi có thể đóng, xuất PDF, lưu bản sao), `save_types` | — (file mới) |
+| `crates/ui-egui/src/i18n/vi.rs` | File mới (NX-UI.4): catalogue tiếng Việt 960 nhãn (mọi nhãn các ngôn ngữ khác dịch + nhãn bố cục NexusOffice) | — (file mới) |
+| `crates/ui-egui/src/i18n.rs` (thêm) | NX-UI.4: `Language::Vi` ("vi", `vi-VN`), `mod vi`, test catalogue đòi tiếng Việt cho mọi nhãn | Nên PR upstream (ngôn ngữ mới) |
+| `crates/ui-egui/src/lib.rs` (thêm NX-UI.5) | `pub mod nexus_wps; pub mod file_dialogs;`, `SheetApp::wps` (thắng `toolbar`) và `SheetApp::embedded` (không đặt tiêu đề cửa sổ), `ui()` vẽ `nexus_wps::show` thay thanh tiêu đề + ribbon; `Services::new_document` (File › Mới/Ctrl+N/mẫu → host mở thẻ mới), `Services::open_document` (sổ được chọn → host, trừ khi cửa sổ chỉ có sổ trống chưa đụng), `Services::file_dialog` (hộp thoại không chặn); `open_dialog("open"/"saveAs")`, xuất PDF hỏi host trước picker chặn; `logic()` nhận câu trả lời | Có — hook host (nên PR upstream dạng trung lập) |
+| `crates/ui-egui/src/ribbon.rs` (thêm NX-UI.5) | Mỗi nhóm giữa hai `sep` của các thẻ đi qua `group()` (ribbon upstream vẽ tại chỗ, dải WPS lọc/gập), cột nút nhỏ qua `stack()`; `tab_groups`/`shown_tabs` tách khỏi `show`; Quick Access tách thành `quick_access()` (nhãn trợ năng cho Lưu/Hoàn tác/Làm lại, menu dịch); thanh tiêu đề không kéo cửa sổ khi `embedded`; `keytip`, `theme_choices` thành `pub(crate)` | Một phần — `group`/`stack` không đổi hình ribbon upstream |
+| `crates/ui-egui/src/widgets.rs` (thêm) | `CONTENT_H`/`COMPACT_H`/`content_h`; nút lớn trên dải WPS: icon 20 px trên một dòng nhãn, cao 50; nút lớn có nhãn trợ năng | Có |
+| `crates/ui-egui/src/paper_view.rs` | Vạch ngăn thẻ Header & Footer cao theo `content_h` (dải WPS) | Có |
+| `crates/ui-egui/src/icons.rs` (thêm) | Icon vẽ bằng code `Hamburger` (nút Tệp) và `ChevronDoubleRight` (»), cho bố cục WPS | Có |
+| `crates/ui-egui/src/dialogs.rs` (thêm NX-UI.5) | "Lưu thay đổi?" dịch được; Lưu trên sổ chưa có tệp chờ Lưu thành của host rồi đóng; Lưu bản sao hỏi hộp thoại host | Có |
+| `crates/ui-egui/src/backstage.rs` (thêm NX-UI.5) | Xuất (PDF/CSV/HTML) hỏi hộp thoại host trước picker chặn | Có |
+| `crates/ui-egui/tests/nexus_embed.rs` | File mới (NX-UI.5): test hook host (mới, mở, lưu không chặn, lưu rồi đóng, huỷ) | — (file mới) |
+| `crates/ui-egui/examples/snapshot.rs` (thêm NX-UI.6) | Cờ `--wps`, `--embedded` | Có |
+| `apps/gridcraft/src/main.rs` (thêm NX-UI.6) | Bật `app.wps` thay `app.toolbar` (bố cục menu vẫn sau cờ) | Có — cờ giao diện |
 
 ### GUID WiX mới (Nexus Sheet riêng, không dùng chung với GridCraft hay app Nexus khác)
 
