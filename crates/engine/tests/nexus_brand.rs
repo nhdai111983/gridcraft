@@ -102,3 +102,27 @@ fn sheets_take_the_interface_languages_name() {
     s.sheet_name_prefix = "  ".into();
     assert_eq!(s.active().unwrap().wb.next_sheet_name_with(&s.sheet_name_prefix), "Sheet1", "a blank prefix is Sheet");
 }
+
+/// Every command that adds a sheet without a name the user gave (Forecast Sheet here; PivotTable,
+/// Analysis ToolPak, ODS import go through the same `next_sheet_name`) names it in the
+/// interface's language, and the prefix doesn't outlive the command.
+#[test]
+fn sheets_commands_add_take_the_interface_languages_name() {
+    let mut s = gridcraft_engine::Session::new();
+    s.new_workbook();
+    s.execute("cell.set", serde_json::json!({"cell": "A1", "input": "Kỳ"})).unwrap();
+    s.execute("cell.set", serde_json::json!({"cell": "B1", "input": "Doanh thu"})).unwrap();
+    for i in 1..=16 {
+        s.execute("cell.set", serde_json::json!({"cell": format!("A{}", i + 1), "input": i.to_string()})).unwrap();
+        s.execute("cell.set", serde_json::json!({"cell": format!("B{}", i + 1), "input": (100 + i * 7).to_string()})).unwrap();
+    }
+    s.sheet_name_prefix = "Trang tính".into();
+    s.execute("data.forecastSheet", serde_json::json!({"range": "A1:B17", "periods": 3})).unwrap();
+    let names: Vec<String> = s.active().unwrap().wb.sheets.iter().map(|sh| sh.name.clone()).collect();
+    assert!(names.iter().any(|n| n == "Trang tính1"), "{names:?}");
+    assert_eq!(gridcraft_engine::model::workbook::sheet_prefix(), "", "the prefix is the command's only");
+    let wb = gridcraft_engine::model::Workbook::new();
+    let named = gridcraft_engine::model::workbook::with_sheet_prefix("Trang tính", || wb.next_sheet_name());
+    assert_eq!(named, "Trang tính1");
+    assert_eq!(wb.next_sheet_name(), "Sheet2");
+}

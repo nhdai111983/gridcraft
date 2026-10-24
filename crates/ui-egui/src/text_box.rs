@@ -17,6 +17,13 @@ pub struct EditState {
     rect: Option<Rect>,
 }
 
+impl EditState {
+    /// NexusOffice: the text differs from the text box's own (closing would lose it).
+    pub fn changed(&self) -> bool {
+        self.text != self.original
+    }
+}
+
 pub(crate) fn editor_id() -> egui::Id {
     egui::Id::new("gridcraft.text_box_editor")
 }

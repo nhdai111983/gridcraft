@@ -163,8 +163,9 @@ impl Workbook {
         self.sheet(self.active_sheet)
     }
     /// A fresh sheet name `SheetN` not in use.
+    /// The first free `SheetN` — or, while [`with_sheet_prefix`] runs, `{prefix}N`.
     pub fn next_sheet_name(&self) -> String {
-        self.next_sheet_name_with("Sheet")
+        self.next_sheet_name_with(&sheet_prefix())
     }
     /// The first free name `{prefix}N` (NexusOffice: the interface language's word for a sheet,
     /// "Trang tính" in Vietnamese); an empty prefix is "Sheet".
@@ -312,4 +313,35 @@ mod tests {
         assert!(wb.check_sheet_name(&"x".repeat(32), None).is_err());
         assert!(wb.check_sheet_name("Budget 2026", None).is_ok());
     }
+}
+
+// NexusOffice: what new sheets are called before their number, in the interface's language.
+thread_local! {
+    static SHEET_PREFIX: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
+/// The prefix [`Workbook::next_sheet_name`] uses now; empty is "Sheet".
+pub fn sheet_prefix() -> String {
+    SHEET_PREFIX.with(|p| p.try_borrow().map(|p| p.clone()).unwrap_or_default())
+}
+
+/// Runs `f` with sheets that `f` creates or imports without a usable name called `{prefix}N`
+/// ("Trang tính" → Trang tính1) on this thread, then puts the previous prefix back (even if `f`
+/// panics).
+pub fn with_sheet_prefix<R>(prefix: &str, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<String>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            if let Some(old) = self.0.take() {
+                SHEET_PREFIX.with(|p| {
+                    if let Ok(mut p) = p.try_borrow_mut() {
+                        *p = old;
+                    }
+                });
+            }
+        }
+    }
+    let old = SHEET_PREFIX.with(|p| p.try_borrow_mut().map(|mut p| std::mem::replace(&mut *p, prefix.to_string())).ok());
+    let _restore = Restore(old);
+    f()
 }
