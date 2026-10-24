@@ -34,11 +34,9 @@ fn spanish_names_are_not_vietnamese() {
 
 #[test]
 fn canonical_formulas_show_in_vietnamese_syntax() {
-    for (canonical, expected) in [
-        ("IF(TRUE,SUM(1.5,2.25),0)", "IF(TRUE;SUM(1,5;2,25);0)"),
-        ("SUM({1,2;3,4})", "SUM({1\\2;3\\4})"),
-        ("\"1,5\"&\"a;b\"", "\"1,5\"&\"a;b\""),
-    ] {
+    for (canonical, expected) in
+        [("IF(TRUE,SUM(1.5,2.25),0)", "IF(TRUE;SUM(1,5;2,25);0)"), ("SUM({1,2;3,4})", "SUM({1\\2;3\\4})"), ("\"1,5\"&\"a;b\"", "\"1,5\"&\"a;b\"")]
+    {
         assert_eq!(shown(canonical), expected, "{canonical}");
         assert_eq!(input(expected), canonical, "{expected} reads back");
     }

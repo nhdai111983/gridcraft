@@ -15,9 +15,9 @@ use std::sync::Arc;
 use gridcraft_core::{CellError, DateSystem, Value};
 
 pub use builtin::{builtin_format, builtin_id};
+pub use decimal::format_general_fit;
 pub use gridcraft_core::Locale;
 pub use parse::delocalize_code;
-pub use decimal::format_general_fit;
 
 use parse::{SecKind, Section, Tok};
 use render::Out;

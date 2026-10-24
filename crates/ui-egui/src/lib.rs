@@ -1062,7 +1062,8 @@ impl SheetApp {
         };
         // Data validation.
         if let Some(d) = self.session.active()
-            && let Some((dv, msg)) = gridcraft_engine::cmd::data::check_validation_in(&d.wb, ed.sheet, ed.cell, &text, i18n::regional_format_of(ed.locale))
+            && let Some((dv, msg)) =
+                gridcraft_engine::cmd::data::check_validation_in(&d.wb, ed.sheet, ed.cell, &text, i18n::regional_format_of(ed.locale))
         {
             if dv.error_style == gridcraft_engine::model::ErrorStyle::Stop {
                 let title = if dv.error_title.is_empty() { nexus::APP_NAME.to_string() } else { dv.error_title.clone() };

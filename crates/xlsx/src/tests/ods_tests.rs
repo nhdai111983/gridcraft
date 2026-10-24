@@ -3,7 +3,7 @@
 use gridcraft_core::{CellRef, RangeRef, Value};
 
 use super::make_zip;
-use crate::{Format, IoError, read_ods, read_xlsx, sniff, write_xlsx};
+use crate::{Format, IoError, read_ods, read_ods_named, read_xlsx, sniff, write_xlsx};
 
 const MIME: &[u8] = b"application/vnd.oasis.opendocument.spreadsheet";
 const MANIFEST: &[u8] = br#"<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.spreadsheet"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/></manifest:manifest>"#;
@@ -223,6 +223,17 @@ fn ods_invalid_sheet_names_are_made_safe_for_xlsx() {
     }
     assert!(report.warnings.iter().any(|w| w.contains("sheet names")));
     assert_eq!(read_xlsx(&write_xlsx(&wb).unwrap()).unwrap().0.sheets.len(), 4);
+}
+
+/// NexusOffice: a sheet the file leaves unnamed (or whose name can't be used) is named in the
+/// interface's language; named sheets keep their names whatever the language.
+#[test]
+fn ods_unnamed_sheets_take_the_interfaces_sheet_word() {
+    let bytes = ods(r#"<table:table table:name=""/><table:table table:name="Dữ liệu"/><table:table/>"#);
+    let names = |wb: &gridcraft_model::Workbook| wb.sheets.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&read_ods_named(&bytes, "Trang tính").unwrap().0), ["Trang tính1", "Dữ liệu", "Trang tính3"]);
+    assert_eq!(names(&read_ods(&bytes).unwrap().0), ["Sheet1", "Dữ liệu", "Sheet3"]);
+    assert_eq!(names(&read_ods_named(&bytes, " ").unwrap().0), ["Sheet1", "Dữ liệu", "Sheet3"]);
 }
 
 #[test]

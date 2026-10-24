@@ -50,7 +50,9 @@ pub(crate) fn render_general(sec: &Section, v: f64, width: usize, loc: Locale) -
     let mut out = Out::default();
     for t in &sec.toks {
         match t {
-            Tok::General => out.push(&format_general_fit(v, width).map(|g| loc.localize_number(&g)).unwrap_or_else(|| "#".repeat(width.clamp(1, 11)))),
+            Tok::General => {
+                out.push(&format_general_fit(v, width).map(|g| loc.localize_number(&g)).unwrap_or_else(|| "#".repeat(width.clamp(1, 11))))
+            }
             Tok::Fill(c) => out.fill(*c),
             other => out.push(&other.literal_text()),
         }

@@ -223,9 +223,8 @@ fn tab_and_enter(wps: bool) {
         h.state().session.active().and_then(|d| d.wb.active()).map(|sh| sh.value(at).display()).unwrap_or_default()
     };
     let focus = h.ctx.memory(|m| m.focused());
-    // (Enter after Tab moves down from the last cell here; Excel goes back to the row's first
-    // column. Upstream's behaviour, kept.)
-    assert_eq!([value("A1"), value("B1"), value("B2"), value("C2")], ["Khoản chi", "Số tiền", "Tiền điện", "1250000"], "wps {wps}, focus {focus:?}");
+    // Enter after a run of Tabs goes back to the column the run started in (Excel's behaviour).
+    assert_eq!([value("A1"), value("B1"), value("A2"), value("B2")], ["Khoản chi", "Số tiền", "Tiền điện", "1250000"], "wps {wps}, focus {focus:?}");
     assert!(h.state().backstage.is_none() && h.state().dialog.is_none(), "no button was pressed");
 }
 

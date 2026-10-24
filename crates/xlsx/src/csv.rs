@@ -87,6 +87,37 @@ pub fn sniff_delimiter(text: &str, quote: char) -> u8 {
     best.0
 }
 
+/// [`sniff_delimiter`] for a file written in a regional format. Where the list separator is `;`
+/// (vi-VN, whose decimal separator is `,`), a `;` anywhere outside quotes makes it the delimiter,
+/// as Excel there reads CSV with the system's list separator; and a file whose commas only sit
+/// between digits (`1,5`, a column of decimal-comma numbers) is one column, not split at them.
+/// Commas between other text (`Hà Nội,100`, an en-US export) still separate fields.
+pub fn sniff_delimiter_in(text: &str, quote: char, locale: gridcraft_core::Locale) -> u8 {
+    let sniffed = sniff_delimiter(text, quote);
+    if locale.list_separator() != ';' {
+        return sniffed;
+    }
+    let mut in_q = false;
+    let mut semicolon = false;
+    let mut comma_between_digits = true;
+    let mut commas = 0usize;
+    let chars: Vec<char> = text.chars().take(64 * 1024).collect();
+    for (i, &ch) in chars.iter().enumerate() {
+        if ch == quote {
+            in_q = !in_q;
+        } else if !in_q && ch == ';' {
+            semicolon = true;
+        } else if !in_q && ch == ',' {
+            commas += 1;
+            let digit = |c: Option<&char>| c.is_some_and(char::is_ascii_digit);
+            if !(digit(i.checked_sub(1).and_then(|p| chars.get(p))) && digit(chars.get(i + 1))) {
+                comma_between_digits = false;
+            }
+        }
+    }
+    if semicolon || (sniffed == b',' && commas > 0 && comma_between_digits) { b';' } else { sniffed }
+}
+
 /// Splits CSV text into records of fields.
 fn parse_records(text: &str, delim: char, quote: char, mut on_record: impl FnMut(Vec<String>) -> bool) {
     let mut field = String::new();
@@ -136,7 +167,7 @@ fn parse_records(text: &str, delim: char, quote: char, mut on_record: impl FnMut
 pub fn read_csv(bytes: &[u8], opts: &CsvOptions) -> Result<Workbook, IoError> {
     let text = decode_text(bytes);
     let quote = if opts.quote == 0 { '"' } else { opts.quote as char };
-    let delim = if opts.delimiter == 0 { sniff_delimiter(&text, quote) } else { opts.delimiter } as char;
+    let delim = if opts.delimiter == 0 { sniff_delimiter_in(&text, quote, opts.locale) } else { opts.delimiter } as char;
     if delim == quote {
         return Err(IoError::Format("the delimiter and quote character must differ".into()));
     }

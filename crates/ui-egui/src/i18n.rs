@@ -135,7 +135,6 @@ impl Language {
         regional_format_of(self.formula_locale())
     }
 
-
     /// Translates an interface label; untranslated labels fall back to English.
     ///
     /// A label that needs two translations (Home's text "Orientation" vs Page Layout's print

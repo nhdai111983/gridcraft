@@ -864,3 +864,69 @@ fn closed_brackets_still_hold_their_semicolons() {
     assert_eq!(f("0\\[0", 5.0), "0[5");
     assert_eq!(f("\"[\"0;0", 5.0), "[5");
 }
+
+fn vi(code: &str, n: f64) -> String {
+    format_value_in(&Value::Number(n), &NumberFormat::parse(code), S, Locale::ViVn).text
+}
+
+/// NexusOffice: vi-VN shows en-US codes with its separators, names and system formats.
+#[test]
+fn vietnamese_display() {
+    // (code, value, en-US, vi-VN)
+    let cases: &[(&str, f64, &str, &str)] = &[
+        ("General", 1234567.89, "1234567.89", "1234567,89"),
+        ("General", -0.5, "-0.5", "-0,5"),
+        ("General", 1e20, "1E+20", "1E+20"),
+        ("#,##0.00", 1234567.891, "1,234,567.89", "1.234.567,89"),
+        ("#,##0", -1234567.0, "-1,234,567", "-1.234.567"),
+        ("0.0%", 0.125, "12.5%", "12,5%"),
+        ("0.00E+00", 12345.0, "1.23E+04", "1,23E+04"),
+        ("# ?/?", 1234.5, "1234 1/2", "1234 1/2"),
+        ("#,##0 ?/?", 1234.5, "1,234 1/2", "1.234 1/2"),
+        ("#,##0 [$₫-42A]", 1234567.0, "1,234,567 ₫", "1.234.567 ₫"),
+        ("#,##0 [$₫-42A]", -1234567.4, "-1,234,567 ₫", "-1.234.567 ₫"),
+        ("\"Tổng: \"#,##0.0", 1234.5, "Tổng: 1,234.5", "Tổng: 1.234,5"),
+        // System short date (built-in 14) and its date-time (22) follow the locale.
+        ("m/d/yyyy", 46319.0, "10/24/2026", "24/10/2026"),
+        ("m/d/yyyy h:mm", 46319.75, "10/24/2026 18:00", "24/10/2026 18:00"),
+        ("[$-F800]dddd, mmmm dd, yyyy", 46319.0, "Saturday, October 24, 2026", "Thứ Bảy, 24 tháng 10, 2026"),
+        ("[$-x-sysdate]dddd, mmmm dd, yyyy", 46026.0, "Sunday, January 04, 2026", "Chủ Nhật, 4 tháng 1, 2026"),
+        ("[$-F400]h:mm:ss AM/PM", 0.75, "6:00:00 PM", "18:00:00"),
+        // Explicit codes keep their shape; names, AM/PM and fractional seconds are localized.
+        ("dd/mm/yyyy", 46319.0, "24/10/2026", "24/10/2026"),
+        ("dddd", 46319.0, "Saturday", "Thứ Bảy"),
+        ("ddd d mmm", 46319.0, "Sat 24 Oct", "Th 7 24 thg 10"),
+        ("mmmm", 46319.0, "October", "tháng 10"),
+        ("mmmmm", 46319.0, "O", "10"),
+        ("h:mm AM/PM", 0.25, "6:00 AM", "6:00 SA"),
+        ("h:mm AM/PM", 0.75, "6:00 PM", "6:00 CH"),
+        ("hh:mm", 0.75, "18:00", "18:00"),
+        ("ss.00", 1.5 / 86400.0, "01.50", "01,50"),
+        ("dd.mm.yyyy", 46319.0, "24.10.2026", "24.10.2026"),
+    ];
+    for (code, n, en, vi_text) in cases {
+        assert_eq!(f(code, *n), *en, "en-US {code} {n}");
+        assert_eq!(vi(code, *n), *vi_text, "vi-VN {code} {n}");
+    }
+    assert_eq!(format_general_fit_in(1234.5, 11, Locale::ViVn).as_deref(), Some("1234,5"));
+    // Text, booleans and errors are the same in every locale.
+    let fmt = NumberFormat::parse("#,##0.00");
+    for v in [Value::from("1.234,5"), Value::Bool(true), Value::Error(CellError::Div0)] {
+        assert_eq!(format_value_in(&v, &fmt, S, Locale::ViVn), format_value(&v, &fmt, S));
+    }
+}
+
+/// `TEXT` reads its format text and numeric text the locale's way (Excel's depends on the
+/// regional settings) and shows the result in it.
+#[test]
+fn vietnamese_text_function() {
+    let text = |v: Value, code: &str| text_function_in(&v, code, S, Locale::ViVn);
+    assert_eq!(text(Value::Number(1234.5), "#.##0,00").as_deref(), Ok("1.234,50"));
+    assert_eq!(text(Value::Number(46319.0), "dd/mm/yyyy").as_deref(), Ok("24/10/2026"));
+    assert_eq!(text(Value::Number(46319.0), "dddd").as_deref(), Ok("Thứ Bảy"));
+    assert_eq!(text(Value::from("1.234,5"), "0,0").as_deref(), Ok("1234,5"));
+    assert_eq!(text(Value::Number(0.125), "0,0%").as_deref(), Ok("12,5%"));
+    // en-US is unchanged: the same codes mean something else there.
+    assert_eq!(text_function(&Value::Number(1234.5), "#,##0.00", S).as_deref(), Ok("1,234.50"));
+    assert_eq!(text_function_in(&Value::Number(1234.5), "#,##0.00", S, Locale::EnUs).as_deref(), Ok("1,234.50"));
+}

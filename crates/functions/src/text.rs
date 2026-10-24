@@ -1087,6 +1087,24 @@ mod tests {
         }
     }
 
+    /// NexusOffice: VALUE reads text in the regional format, NUMBERVALUE's omitted separators are
+    /// the locale's (Microsoft's documentation of both).
+    #[test]
+    fn vietnamese_numbers_from_text() {
+        use crate::util::testutil::ev_in;
+        use gridcraft_core::Locale::ViVn;
+        close(ev_in("VALUE", vec![t("1.234,5")], ViVn), 1234.5);
+        close(ev_in("VALUE", vec![t("12,5%")], ViVn), 0.125);
+        close(ev_in("VALUE", vec![t("1.234 ₫")], ViVn), 1234.0);
+        close(ev_in("VALUE", vec![t("24/10/2026")], ViVn), 46319.0);
+        is_err(ev_in("VALUE", vec![t("1,234.5")], ViVn), CellError::Value);
+        close(ev_in("NUMBERVALUE", vec![t("2.500,27")], ViVn), 2500.27);
+        close(ev_in("NUMBERVALUE", vec![t("2,500.27"), t("."), t(",")], ViVn), 2500.27);
+        is_err(ev_in("NUMBERVALUE", vec![t("2,500.27")], ViVn), CellError::Value);
+        // en-US still reads its own spellings.
+        close(ev("NUMBERVALUE", vec![t("2,500.27")]), 2500.27);
+    }
+
     #[test]
     fn numbers_from_text() {
         close(ev("VALUE", vec![t("1,234.5")]), 1234.5);

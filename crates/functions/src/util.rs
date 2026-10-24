@@ -293,15 +293,19 @@ pub(crate) mod testutil {
     pub struct TestCtx {
         pub state: u64,
         pub sys: DateSystem,
+        pub locale: gridcraft_core::Locale,
     }
     impl Default for TestCtx {
         fn default() -> Self {
-            TestCtx { state: 0x2545_F491_4F6C_DD1D, sys: DateSystem::D1900 }
+            TestCtx { state: 0x2545_F491_4F6C_DD1D, sys: DateSystem::D1900, locale: gridcraft_core::Locale::EnUs }
         }
     }
     impl Ctx for TestCtx {
         fn date_system(&self) -> DateSystem {
             self.sys
+        }
+        fn locale(&self) -> gridcraft_core::Locale {
+            self.locale
         }
         fn now_serial(&self) -> f64 {
             46302.5
@@ -318,6 +322,11 @@ pub(crate) mod testutil {
     pub fn ev(name: &str, args: Vec<Arg>) -> Value {
         let spec = crate::lookup(name).unwrap_or_else(|| panic!("function {name} not registered"));
         crate::call(spec, &args, &mut TestCtx::default())
+    }
+    /// [`ev`] in a regional format.
+    pub fn ev_in(name: &str, args: Vec<Arg>, locale: gridcraft_core::Locale) -> Value {
+        let spec = crate::lookup(name).unwrap_or_else(|| panic!("function {name} not registered"));
+        crate::call(spec, &args, &mut TestCtx { locale, ..TestCtx::default() })
     }
     /// Literal number argument.
     pub fn n(x: f64) -> Arg {
