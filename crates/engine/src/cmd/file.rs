@@ -56,7 +56,7 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
         return ok();
     };
     let encrypted = gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Encrypted;
-    let context = crate::io::OpenContext { locale: s.locale, sheet_prefix: s.sheet_name_prefix.clone() };
+    let context = crate::io::OpenContext { locale: s.locale };
     let (mut wb, warnings) = crate::io::open_bytes_in(&name, &bytes, str_param(p, "password"), &context)?;
     wb.source_dir = str_param(p, "path").and_then(crate::io::source_dir);
     let imported =

@@ -59,17 +59,15 @@ pub fn open_bytes_with_password(name: &str, bytes: &[u8], password: Option<&str>
 }
 
 /// What the interface's language changes when a file is read (NexusOffice). The default is
-/// upstream's: en-US values, `Sheet` names.
+/// upstream's: en-US values.
 #[derive(Clone, Debug, Default)]
 pub struct OpenContext {
     /// The regional format the values of a CSV or text file are read in (`1.234,5` and
     /// `24/10/2026` in vi-VN). Workbook formats store en-US values and ignore it.
     pub locale: gridcraft_core::Locale,
-    /// What a sheet the file leaves unnamed is called before its number (`Session::sheet_name_prefix`).
-    pub sheet_prefix: String,
 }
 
-/// [`open_bytes_with_password`] with the interface's regional format and sheet names.
+/// [`open_bytes_with_password`] with the interface's regional format.
 pub fn open_bytes_in(name: &str, bytes: &[u8], password: Option<&str>, cx: &OpenContext) -> Result<(Workbook, Vec<String>)> {
     if gridcraft_xlsx::sniff(bytes) != gridcraft_xlsx::Format::Encrypted {
         let (mut wb, warnings) = open_plain(name, bytes, cx)?;
@@ -150,8 +148,8 @@ fn open_plain(name: &str, bytes: &[u8], cx: &OpenContext) -> Result<(Workbook, V
         _ => kind.filter(|k| matches!(k, FileKind::Ods | FileKind::Xlsb)),
     };
     if let Some(import) = import {
-        let read = if import == FileKind::Ods { gridcraft_xlsx::read_ods_named(bytes, &cx.sheet_prefix) } else { gridcraft_xlsx::read_xlsb(bytes) };
-        let (wb, report) = read.map_err(|e| EngineError::Other(format!("We can't import '{name}': {e}")))?;
+        let read = if import == FileKind::Ods { gridcraft_xlsx::read_ods } else { gridcraft_xlsx::read_xlsb };
+        let (wb, report) = read(bytes).map_err(|e| EngineError::Other(format!("We can't import '{name}': {e}")))?;
         return Ok((wb, report.warnings));
     }
     // Text named `.xlsx` is read as text.

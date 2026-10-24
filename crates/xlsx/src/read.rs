@@ -347,14 +347,9 @@ pub fn read_xlsx(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
 }
 
 pub(crate) fn unique_name(wb: &Workbook, name: &str, i: usize) -> String {
-    unique_name_with(wb, name, i, "Sheet")
-}
-
-/// [`unique_name`] calling a nameless sheet `{prefix}{i + 1}`.
-pub(crate) fn unique_name_with(wb: &Workbook, name: &str, i: usize, prefix: &str) -> String {
     let mut base: String = name.chars().filter(|c| !matches!(c, ':' | '\\' | '/' | '?' | '*' | '[' | ']')).take(31).collect();
     if base.trim().is_empty() {
-        base = format!("{prefix}{}", i + 1);
+        base = format!("Sheet{}", i + 1);
     }
     if wb.sheet_index(&base).is_none() {
         return base;

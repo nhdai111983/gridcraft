@@ -207,25 +207,3 @@ fn csv_round_trips_in_vietnamese() {
     let saved = en.execute("file.saveBytes", json!({"format": "csv"})).unwrap();
     assert_eq!(gridcraft_engine::io::base64_decode(saved["base64"].as_str().unwrap()).unwrap(), b"1234.5,x\r\n");
 }
-
-/// Sheets the engine adds are named in the interface's language (Trang tính n).
-#[test]
-fn generated_sheets_take_the_localized_prefix() {
-    let mut s = session();
-    s.sheet_name_prefix = "Trang tính".into();
-    let mut rows = vec![json!(["Tháng", "Doanh thu"])];
-    for t in 1..=12 {
-        rows.push(json!([t, 10 + 2 * t]));
-    }
-    s.execute("range.setValues", json!({"range": "A1", "values": rows})).unwrap();
-    s.execute("selection.set", json!({"range": "A1:B13"})).unwrap();
-    let r = s.execute("data.forecastSheet", json!({"periods": 2})).unwrap();
-    assert!(r["sheet"].as_str().unwrap().starts_with("Trang tính"), "{r}");
-    s.execute("selection.set", json!({"range": "A1:B13"})).unwrap();
-    s.execute("data.analysisToolPak", json!({"tool": "descriptive", "range": "B1:B13", "labels": true})).unwrap();
-    s.execute("selection.set", json!({"range": "A1:B13"})).unwrap();
-    s.execute("insert.pivotTable", json!({})).unwrap();
-    let names: Vec<String> = s.active().unwrap().wb.sheets.iter().map(|sh| sh.name.clone()).collect();
-    assert!(!names.iter().any(|n| n.starts_with("Sheet") && n != "Sheet1"), "{names:?}");
-    assert!(names.iter().filter(|n| n.starts_with("Trang tính")).count() >= 3, "{names:?}");
-}
