@@ -131,6 +131,12 @@ pub enum Icon {
     OpenFolder,
     Info,
     Print,
+    /// NexusOffice WPS layout: the File (Tệp) button's three bars.
+    Hamburger,
+    /// NexusOffice: the accounting format button in Vietnamese (đồng).
+    CurrencyDong,
+    /// NexusOffice WPS layout: the » that holds the ribbon tabs the top row has no room for.
+    ChevronDoubleRight,
 }
 
 struct G<'a> {
@@ -185,7 +191,8 @@ impl G<'_> {
 }
 
 /// Accent palette for icons (our own).
-pub const GREEN: Color32 = Color32::from_rgb(0x10, 0x7C, 0x41);
+/// Nexus Sheet: the Emerald ink shade (`theme::APP_INK`), not upstream's Excel-like green.
+pub const GREEN: Color32 = Color32::from_rgb(0x04, 0x78, 0x57);
 pub const BLUE: Color32 = Color32::from_rgb(0x2B, 0x7C, 0xD3);
 pub const RED: Color32 = Color32::from_rgb(0xD1, 0x3B, 0x2F);
 pub const YELLOW: Color32 = Color32::from_rgb(0xF2, 0xC3, 0x2E);
@@ -327,6 +334,7 @@ pub fn paint(p: &Painter, rect: Rect, icon: Icon, c: Color32) {
             g.poly(&[(13.0, 8.0), (10.5, 6.5), (10.5, 9.5)], BLUE);
         }
         Icon::Currency => g.text(8.0, 8.5, "$", 12.0, c, false, false),
+        Icon::CurrencyDong => g.text(8.0, 8.5, "₫", 12.0, c, false, false),
         Icon::Percent => g.text(8.0, 8.5, "%", 11.0, c, false, false),
         Icon::Comma => g.text(8.0, 7.0, ",", 14.0, c, true, false),
         Icon::DecInc => {
@@ -439,6 +447,15 @@ pub fn paint(p: &Painter, rect: Rect, icon: Icon, c: Color32) {
         Icon::Close => {
             g.line(&[(4.0, 4.0), (12.0, 12.0)], c, 1.3);
             g.line(&[(12.0, 4.0), (4.0, 12.0)], c, 1.3);
+        }
+        Icon::Hamburger => {
+            for y in [4.5, 8.0, 11.5] {
+                g.line(&[(2.5, y), (13.5, y)], c, 1.3);
+            }
+        }
+        Icon::ChevronDoubleRight => {
+            g.line(&[(3.5, 4.0), (7.5, 8.0), (3.5, 12.0)], c, 1.2);
+            g.line(&[(8.5, 4.0), (12.5, 8.0), (8.5, 12.0)], c, 1.2);
         }
         Icon::Check => g.line(&[(3.0, 8.5), (6.5, 12.0), (13.0, 4.5)], c, 1.3),
         Icon::Checkbox => {

@@ -911,7 +911,8 @@ pub fn ribbon_tab(app: &mut SheetApp, ui: &mut egui::Ui) {
 
 fn sep(ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
-    let (r, _) = ui.allocate_exact_size(vec2(13.0, 72.0), egui::Sense::hover());
+    // NexusOffice WPS strip: as tall as its two rows.
+    let (r, _) = ui.allocate_exact_size(vec2(13.0, crate::widgets::content_h(ui)), egui::Sense::hover());
     ui.painter().line_segment([pos2(r.center().x, r.top() + 6.0), pos2(r.center().x, r.bottom() - 6.0)], Stroke::new(1.0, t.separator));
 }
 

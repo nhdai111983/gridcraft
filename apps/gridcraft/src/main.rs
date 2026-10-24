@@ -310,6 +310,9 @@ fn main() -> eframe::Result<()> {
         session.new_workbook();
     }
     let mut app = SheetApp::new(session, services());
+    // NexusOffice layout in the style of WPS Office (no title bar, one row of tabs, a flat
+    // command strip); `app.toolbar` keeps the menu bar layout behind its flag.
+    app.wps = true;
     app.watch_desktop_theme();
     app.after_engine(); // Show warnings from the sample.
     let control_port = control_port;
