@@ -167,11 +167,11 @@ Sinh bằng `python3 -c "import uuid; print(uuid.uuid4())"` ngày 2026-10-16.
 | `crates/engine/src/cmd/print.rs` | NX-VI.1: số General khi in theo vùng | Nên PR upstream |
 | `crates/ui-egui/src/i18n.rs` | NX-VI.1: `Language::regional_format`, `regional_format_of`, `FormulaLocale::Vi` cho tiếng Việt | Một phần nên PR upstream |
 | `crates/ui-egui/src/formula_locale.rs` | NX-VI.1: giá trị tiếng Việt chuyển nguyên cho engine đọc theo vi-VN | Nên PR upstream |
-| `crates/ui-egui/src/lib.rs` | NX-VI.1: đặt vùng mỗi khung hình; `cell.set` gửi `locale`; Enter sau chuỗi Tab về cột đầu (Excel, `TabReturn`) | Nên PR upstream |
+| `crates/ui-egui/src/lib.rs` | NX-VI.1: đặt vùng mỗi khung hình; `cell.set` gửi `locale`; Enter sau chuỗi Tab về cột đầu (Excel, `TabReturn`); `keep_keyboard` huỷ việc egui chuyển focus khi lưới/ô sửa vừa nhận bàn phím | Nên PR upstream |
 | `crates/ui-egui/src/formula_bar.rs` | NX-VI.1: sửa lỗi gõ ký tự rồi Tab ở khung hình kế tiếp làm egui chuyển focus và mất phím; phím mũi tên kết thúc chuỗi Tab | Nên PR upstream (sửa lỗi) |
 | `crates/ui-egui/tests/interaction.rs` | NX-VI.1: test điều hướng bàn phím đổi kỳ vọng — Enter sau Tab về cột bắt đầu (B5, như Excel) thay vì đi thẳng xuống (C5) | Nên PR upstream cùng thay đổi |
 | `crates/ui-egui/tests/nexus_embed.rs` | NX-VI.1: test gõ một hàng bằng Tab/Enter kỳ vọng hàng sau bắt đầu ở cột A | — (test NexusOffice) |
-| `crates/ui-egui/src/grid.rs` | NX-VI.1: số General trong lưới theo vùng | Nên PR upstream |
+| `crates/ui-egui/src/grid.rs` | NX-VI.1: số General trong lưới theo vùng; nhớ id widget lưới (`focus_id`) cho `keep_keyboard` | Nên PR upstream |
 | `crates/ui-egui/src/ribbon.rs` | NX-VI.1: Currency trong danh sách Number Format = đồng khi tiếng Việt (`number_format_code`) | Có — tiền tệ mặc định theo vùng |
 | `crates/ui-egui/src/nexus_toolbar.rs` | NX-VI.1: Currency = đồng khi tiếng Việt | Có |
 

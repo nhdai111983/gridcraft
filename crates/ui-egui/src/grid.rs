@@ -102,6 +102,8 @@ pub enum Drag {
 
 #[derive(Default)]
 pub struct GridState {
+    /// The grid's widget id, last frame (see `SheetApp::keep_keyboard`).
+    pub(crate) focus_id: Option<egui::Id>,
     pub drag: Drag,
     pub ensure_visible: bool,
     /// With `ensure_visible`: scroll to the moving end of the selection instead of the active cell
@@ -565,6 +567,7 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
     };
     let resp = ui.allocate_rect(rect, Sense::click_and_drag());
     app.grid.rect = Some(rect);
+    app.grid.focus_id = Some(resp.id);
     let Some(d) = app.session.active() else { return };
     let wb: Arc<Workbook> = d.wb.clone();
     let si = wb.active_sheet;

@@ -1128,6 +1128,20 @@ impl SheetApp {
         self.session.mode = gridcraft_engine::Mode::Ready;
     }
 
+    /// The grid and the cell editor own Tab, the arrows and Escape, but egui learns that only from
+    /// a widget that held the focus in the previous frame (`set_focus_lock_filter`). In the frame
+    /// right after one of them took the focus (a character typed starts the editor; committing
+    /// gives the keyboard back to the grid) egui reads those keys as "move the focus": Tab right
+    /// after a character, or right after Enter/Tab committed an entry, sent egui's focus to
+    /// another widget and the keys typed next never reached the grid. Cancel that move before
+    /// any widget is drawn: the key is ours.
+    fn keep_keyboard(&self, ctx: &egui::Context) {
+        let ours = [Some(egui::Id::new("gridcraft.cell_editor")), Some(egui::Id::new("gridcraft.formula_bar")), self.grid.focus_id];
+        if self.dialog.is_none() && self.message.is_none() && ctx.memory(|m| m.focused()).is_some_and(|f| ours.contains(&Some(f))) {
+            ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+        }
+    }
+
     /// Enter/Tab move inside a multi-cell selection, otherwise to the next cell.
     ///
     /// Excel: "If you press Tab to enter data in several cells in a row and then press Enter at
@@ -1307,6 +1321,7 @@ impl SheetApp {
     /// Lays out the whole window.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        self.keep_keyboard(&ctx);
         self.poll_printing(&ctx);
         if !self.fonts_ready || self.fonts_rebind {
             ctx.request_repaint();
