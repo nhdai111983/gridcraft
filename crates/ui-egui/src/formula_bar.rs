@@ -269,7 +269,7 @@ pub fn editor_widget(app: &mut SheetApp, ui: &mut egui::Ui, id: egui::Id, font: 
         // after the focus was given (typing `a` and pressing Tab at once) egui reads Tab as "move
         // the focus on": the edit commits and egui hands the keyboard to the next widget drawn,
         // so the keys typed next never reach the grid. Cancel that move: the key was ours.
-        ui.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+        // (fix reverted to prove the test fails)
     }
     // The text widget.
     let refs = formula_refs(&ed.text);
