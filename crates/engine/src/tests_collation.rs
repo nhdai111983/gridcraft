@@ -935,3 +935,39 @@ fn hostile_sort_language_params_never_panic() {
     // Sort only moves cells: every combining mark is still there.
     assert_eq!(sheet_marks(&s), 10_000 + 2);
 }
+
+/// A plain text criterion ("begins with") and a wildcard criterion must match a cell whatever
+/// form either side is typed in, like every other text comparison in the engine. Before the fix
+/// both ran on `to_lowercase()` alone, so an NFD criterion missed an NFC cell and vice versa —
+/// the user sees an Advanced Filter that silently drops the rows they asked for.
+#[test]
+fn advanced_filter_text_criteria_match_across_nfc_and_nfd() {
+    let nfc_name = "Nguyễn";
+    let nfd_name = nfd(nfc_name);
+    assert_ne!(nfd_name, nfc_name);
+
+    // Criterion typed decomposed, cells typed both ways: both rows must come through.
+    let mut s = names_session(&["Tên", nfc_name, &nfd_name]);
+    s.execute("range.setValues", json!({"range": "C1", "values": [["Tên"], [nfd_name.clone()]]})).unwrap();
+    s.execute("data.advancedFilter", json!({"range": "A1:A3", "criteria": "C1:C2", "copyTo": "E1"})).unwrap();
+    assert_eq!(column(&s, "E", 3), ["Tên", nfc_name, &nfd_name], "NFD criterion, begins with");
+
+    // Criterion typed precomposed, same two cells.
+    let mut s = names_session(&["Tên", nfc_name, &nfd_name]);
+    s.execute("range.setValues", json!({"range": "C1", "values": [["Tên"], [nfc_name]]})).unwrap();
+    s.execute("data.advancedFilter", json!({"range": "A1:A3", "criteria": "C1:C2", "copyTo": "E1"})).unwrap();
+    assert_eq!(column(&s, "E", 3), ["Tên", nfc_name, &nfd_name], "NFC criterion, begins with");
+
+    // `=` with a wildcard goes down the same path (a leading apostrophe keeps it text, not a
+    // formula, exactly as a user has to type it in Excel).
+    let mut s = names_session(&["Tên", nfc_name, &nfd_name]);
+    s.execute("range.setValues", json!({"range": "C1", "values": [["Tên"], [format!("'=Nguy{}*", nfd("ễ"))]]})).unwrap();
+    s.execute("data.advancedFilter", json!({"range": "A1:A3", "criteria": "C1:C2", "copyTo": "E1"})).unwrap();
+    assert_eq!(column(&s, "E", 3), ["Tên", nfc_name, &nfd_name], "NFD wildcard criterion");
+
+    // `<>` with a wildcard is the same comparison negated: it must exclude both rows, not one.
+    let mut s = names_session(&["Tên", nfc_name, &nfd_name]);
+    s.execute("range.setValues", json!({"range": "C1", "values": [["Tên"], [format!("<>Nguy{}*", nfd("ễ"))]]})).unwrap();
+    s.execute("data.advancedFilter", json!({"range": "A1:A3", "criteria": "C1:C2", "copyTo": "E1"})).unwrap();
+    assert_eq!(column(&s, "E", 2), ["Tên", ""], "NFD negated wildcard criterion");
+}

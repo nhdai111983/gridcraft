@@ -694,7 +694,9 @@ fn custom_ok(v: &Value, text: &str, op: &str, crit: &str, folded: &str, coll: Co
         Some((a, b)) => a.partial_cmp(&b) == Some(Ordering::Equal),
         None => text_eq_prefolded(text, folded),
     };
-    let wild = || super::edit::wildcard(&text.to_lowercase(), &crit.to_lowercase());
+    // `folded` is the criterion folded once; folding the cell too makes a wildcard criterion
+    // match whatever form either side was typed in, like `eq` above.
+    let wild = || super::edit::wildcard(&gridcraft_core::fold_key(text), folded);
     match op {
         "=" => {
             if crit.contains(['*', '?']) {

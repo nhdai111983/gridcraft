@@ -1492,40 +1492,88 @@ fn matches(hay: &str, what: &str, case: bool, whole: bool) -> bool {
     if whole { h == w } else { h.contains(&w) }
 }
 
-/// `*`/`?` wildcard match with `~` escapes.
-pub(crate) fn wildcard(text: &str, pat: &str) -> bool {
-    let t: Vec<char> = text.chars().collect();
-    let mut p: Vec<(char, bool)> = Vec::new();
-    let mut it = pat.chars();
-    while let Some(c) = it.next() {
-        if c == '~' {
-            if let Some(n) = it.next() {
-                p.push((n, true));
-            }
-        } else {
-            p.push((c, false));
+/// The byte index just past the letter starting at `at`: one character, plus the combining marks
+/// U+0300..=U+036F that follow it. Returns `at` when there is no character there.
+fn letter_end(s: &str, at: usize) -> usize {
+    let Some(rest) = s.get(at..) else { return at };
+    let mut it = rest.char_indices();
+    let Some((_, first)) = it.next() else { return at };
+    let mut end = at.saturating_add(first.len_utf8());
+    for (i, c) in it {
+        if !('\u{300}'..='\u{36f}').contains(&c) {
+            break;
         }
+        end = at.saturating_add(i).saturating_add(c.len_utf8());
     }
+    end
+}
+
+/// Splits text into letters the way [`wildcard`] counts them: a character and the combining marks
+/// that follow it are one letter, so `ễ` is one whether it was typed precomposed or as `e` plus
+/// two marks. For text without marks every letter is one character, as before.
+fn letters(s: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut at = 0usize;
+    while at < s.len() {
+        let end = letter_end(s, at);
+        if end <= at {
+            break;
+        }
+        if let Some(part) = s.get(at..end) {
+            out.push(part);
+        }
+        at = end;
+    }
+    out
+}
+
+/// `*`/`?` wildcard match with `~` escapes, **by letter**: `?` stands for one letter, and a letter
+/// is a character with any combining marks that follow it. So a caller that folds both sides
+/// through [`gridcraft_core::fold_key`] gets a match that ignores case and encoding alike — `ễ`
+/// typed precomposed matches `ễ` typed as `e` + marks, and `?` still stands for exactly that one
+/// letter rather than for its three code points.
+pub(crate) fn wildcard(text: &str, pat: &str) -> bool {
+    let t = letters(text);
+    // Pattern letters, each flagged if `~` escaped it (an escaped `*` or `?` is a literal).
+    let mut p: Vec<(&str, bool)> = Vec::new();
+    let mut at = 0usize;
+    while at < pat.len() {
+        let escaped = pat.get(at..).and_then(|r| r.chars().next()) == Some('~');
+        let start = if escaped { at.saturating_add(1) } else { at };
+        let end = letter_end(pat, start);
+        if end <= start {
+            // A trailing `~` escapes nothing.
+            break;
+        }
+        let single = !escaped && matches!(pat.get(start..end), Some("*" | "?"));
+        if let Some(part) = pat.get(start..end) {
+            p.push((part, escaped && !single));
+        }
+        at = end;
+    }
+    let is = |x: Option<&(&str, bool)>, lit: &str| x == Some(&(lit, false));
     let (mut ti, mut pi) = (0usize, 0usize);
     let (mut star, mut mark) = (None, 0usize);
     while ti < t.len() {
-        if pi < p.len() && (p[pi] == ('?', false) || (p[pi].0 == t[ti] && p[pi] != ('*', false))) {
-            ti += 1;
-            pi += 1;
-        } else if pi < p.len() && p[pi] == ('*', false) {
+        let cur = p.get(pi);
+        let same = cur.is_some_and(|(s, esc)| (*esc || !matches!(*s, "*" | "?")) && t.get(ti).is_some_and(|x| x == s));
+        if is(cur, "?") || same {
+            ti = ti.saturating_add(1);
+            pi = pi.saturating_add(1);
+        } else if is(cur, "*") {
             star = Some(pi);
             mark = ti;
-            pi += 1;
+            pi = pi.saturating_add(1);
         } else if let Some(sp) = star {
-            pi = sp + 1;
-            mark += 1;
+            pi = sp.saturating_add(1);
+            mark = mark.saturating_add(1);
             ti = mark;
         } else {
             return false;
         }
     }
-    while pi < p.len() && p[pi] == ('*', false) {
-        pi += 1;
+    while is(p.get(pi), "*") {
+        pi = pi.saturating_add(1);
     }
     pi == p.len()
 }
@@ -1817,6 +1865,17 @@ mod tests {
         assert!(wildcard("a*b", "a~*b"));
         assert!(!wildcard("axb", "a~*b"));
         assert!(wildcard("", "*"));
+        // `?` stands for one letter, so it matches a letter typed as base + combining marks as
+        // well as the precomposed form. Both sides are folded by the caller, so the two forms of
+        // the same name match each other; without that, a filter silently drops rows.
+        let nfc = "nguy\u{1ec5}n";
+        let nfd = "nguye\u{302}\u{303}n";
+        assert!(wildcard(nfc, "nguy?n"), "`?` is one precomposed letter");
+        assert!(wildcard(nfd, "nguy?n"), "`?` is one letter typed as base + marks");
+        assert!(wildcard(nfd, &format!("nguy{}*", "e\u{302}\u{303}")), "decomposed pattern");
+        assert!(wildcard("nguye?", "nguye~?"), "an escaped `?` is a literal `?`");
+        assert!(!wildcard(nfd, "nguye~?*"), "an escaped `?` matches no letter here");
+        assert!(!wildcard(nfd, "nguy??n"), "the letter is one `?`, not two");
     }
 
     #[test]

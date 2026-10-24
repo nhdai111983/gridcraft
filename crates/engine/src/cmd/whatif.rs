@@ -749,8 +749,10 @@ pub(crate) fn criterion_matches(v: &Value, text: &str, crit: &Value, coll: gridc
         };
     }
     let num = gridcraft_core::parse::parse_number_text(operand);
-    let lower_text = text.to_lowercase();
-    let lower_op = operand.to_lowercase();
+    // Folded, not merely lowercased: a wildcard criterion must match a cell whatever form
+    // either side was typed in, the same as every other text comparison here.
+    let folded_text = gridcraft_core::fold_key(text);
+    let folded_op = gridcraft_core::fold_key(operand);
     use std::cmp::Ordering;
     let cmp: Option<Ordering> = match (v, num) {
         (Value::Number(a), Some(b)) => a.partial_cmp(&b),
@@ -759,11 +761,11 @@ pub(crate) fn criterion_matches(v: &Value, text: &str, crit: &Value, coll: gridc
         (_, Some(_)) if op != "begins" => None,
         _ => Some(gridcraft_core::compare_text_with(text, operand, coll)),
     };
-    let wild = |pat: &str| super::edit::wildcard(&lower_text, pat);
+    let wild = |pat: &str| super::edit::wildcard(&folded_text, pat);
     match op {
         "=" => {
             if num.is_none() && operand.contains(['*', '?']) {
-                wild(&lower_op)
+                wild(&folded_op)
             } else if num.is_none() {
                 text_eq(text, operand)
             } else {
@@ -772,7 +774,7 @@ pub(crate) fn criterion_matches(v: &Value, text: &str, crit: &Value, coll: gridc
         }
         "<>" => {
             if num.is_none() && operand.contains(['*', '?']) {
-                !wild(&lower_op)
+                !wild(&folded_op)
             } else if num.is_none() {
                 !text_eq(text, operand)
             } else {
@@ -787,7 +789,7 @@ pub(crate) fn criterion_matches(v: &Value, text: &str, crit: &Value, coll: gridc
             // Plain text criterion: begins with (wildcards allowed); a plain number equals.
             match (v, num) {
                 (Value::Number(a), Some(b)) => (a - b).abs() <= 1e-12 * b.abs().max(1.0),
-                _ => !v.is_empty() && wild(&format!("{lower_op}*")),
+                _ => !v.is_empty() && wild(&format!("{folded_op}*")),
             }
         }
     }
