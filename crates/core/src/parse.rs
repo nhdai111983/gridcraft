@@ -544,7 +544,7 @@ mod tests {
         }
         // en-US spellings that mean something else here stay text, as Excel's vi-VN does.
         for s in ["1,234.5", "1.5", "1.23", "1,2,3", "₫", "1.234 ₫ ₫", "12%₫", "đồng", "Tiếng Việt", "1.2.3.4"] {
-            assert_eq!(vi(s).value, Value::text(*s), "{s}");
+            assert_eq!(vi(s).value, Value::text(s), "{s}");
         }
         assert_eq!(vi("1.234").value, Value::Number(1234.0));
         assert_eq!(vi("'1,5").value, Value::text("1,5"));
