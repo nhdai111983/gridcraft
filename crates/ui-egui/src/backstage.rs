@@ -881,6 +881,11 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
     };
     let title = app.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
     let stem = std::path::Path::new(&title).file_stem().and_then(|s| s.to_str()).unwrap_or("Book1").to_string();
+    // NexusOffice: the host's dialog answers later; the copy is written then.
+    let copy = crate::file_dialogs::AfterPick::SaveCopy { command: id.into(), ext: fmt.into() };
+    if app.ask_file(crate::FileDialogRequest::Save { name: format!("{stem}.{fmt}") }, copy) {
+        return true;
+    }
     if let Some(pick) = &app.services.pick_save {
         let Some(path) = pick(&format!("{stem}.{fmt}")) else { return false };
         // The picker may suggest a workbook extension; the export writes the chosen format.

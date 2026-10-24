@@ -1170,32 +1170,49 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                     d.values.insert("path".into(), json!(path.clone()));
                     ok_cancel(ui, &mut confirm, &mut open);
                     if confirm {
-                        let target = if path.is_empty() { app.services.pick_save.as_ref().and_then(|f| f(&format!("Copy.{fmt}"))) } else { Some(path) };
+                        let id = match fmt.as_str() {
+                            "csv" => "file.exportCsv",
+                            "html" => "file.exportHtml",
+                            _ => "file.saveAs",
+                        };
+                        // NexusOffice: the host's dialog answers later; the copy is written then.
+                        let asked = path.is_empty()
+                            && app.ask_file(
+                                crate::FileDialogRequest::Save { name: format!("Copy.{fmt}") },
+                                crate::file_dialogs::AfterPick::SaveCopy { command: id.into(), ext: fmt.clone() },
+                            );
+                        let target = if asked {
+                            None
+                        } else if path.is_empty() {
+                            app.services.pick_save.as_ref().and_then(|f| f(&format!("Copy.{fmt}")))
+                        } else {
+                            Some(path)
+                        };
                         if let Some(t) = target {
-                            let id = match fmt.as_str() {
-                                "csv" => "file.exportCsv",
-                                "html" => "file.exportHtml",
-                                _ => "file.saveAs",
-                            };
                             app.run_or_alert(id, json!({"path": t}));
                         }
                     }
                 }
                 "saveChanges" => {
-                    ui.label(format!("Do you want to save the changes you made to {}?", d.values.get("title").and_then(Json::as_str).unwrap_or("this workbook")));
+                    let lang = app.ui.language;
+                    let title = d.values.get("title").and_then(Json::as_str).unwrap_or("this workbook");
+                    ui.label(lang.tr("Do you want to save the changes you made to {title}?").replace("{title}", title));
                     ui.horizontal(|ui| {
-                        if ui.button("Don't Save").clicked() {
+                        if ui.button(lang.tr("Don't Save")).clicked() {
                             app.run_or_alert("file.close", json!({"force": true}));
                             open = false;
                         }
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(lang.tr("Cancel")).clicked() {
                             open = false;
                         }
                         // File operations must include the cell the user is still editing (as the File > Save menu item already does).
-                        if ui.button("Save").clicked() && app.commit_edit(0, 0, false, false) {
+                        if ui.button(lang.tr("Save")).clicked() && app.commit_edit(0, 0, false, false) {
                             app.run_or_alert("file.save", json!({}));
                             if app.session.active().is_some_and(|x| !x.is_dirty()) {
                                 app.run_or_alert("file.close", json!({"force": true}));
+                            } else {
+                                // NexusOffice: a workbook with no file waits for the host's Save As.
+                                app.close_after_pending_save();
                             }
                             open = false;
                         }

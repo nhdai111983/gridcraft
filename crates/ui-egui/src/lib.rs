@@ -14,6 +14,7 @@ pub mod control;
 pub mod credits;
 pub mod dialogs;
 pub mod editor;
+pub mod file_dialogs;
 pub mod fonts;
 pub mod formula_bar;
 mod formula_locale;
@@ -24,6 +25,7 @@ pub mod keymap;
 pub mod keytips;
 pub mod nexus;
 pub mod nexus_toolbar;
+pub mod nexus_wps;
 pub mod outline;
 pub mod panes;
 pub mod paper_view;
@@ -173,6 +175,8 @@ pub struct Notice {
     pub action: Option<(String, String)>,
 }
 
+pub use file_dialogs::{FileDialogAnswer, FileDialogRequest};
+
 /// Host services the platform shell provides (file pickers, opening URLs).
 #[derive(Default)]
 pub struct Services {
@@ -208,6 +212,16 @@ pub struct Services {
     /// Web: hand PDF bytes to the browser's print flow directly (no download,
     /// no intermediate file) — opens the system print dialog on that PDF.
     pub print: Option<Box<dyn Fn(&[u8])>>,
+    /// NexusOffice: Open and Save As dialogs the host shows without blocking (its answer comes
+    /// later on the channel; see [`file_dialogs`]). Wins over `pick_open` / `pick_save`.
+    pub file_dialog: Option<Box<dyn Fn(FileDialogRequest) -> std::sync::mpsc::Receiver<FileDialogAnswer>>>,
+    /// NexusOffice: a host with tabs takes File › New, Ctrl+N and the sample workbooks (the
+    /// `file.new` params) and opens a new tab; this workbook stays as it is.
+    pub new_document: Option<Box<dyn Fn(Json)>>,
+    /// NexusOffice: a host with tabs opens a picked workbook in a tab of its own (or brings its tab
+    /// forward). Not asked when this window holds only an untouched blank workbook, which the
+    /// opened one replaces as upstream does.
+    pub open_document: Option<Box<dyn Fn(&str)>>,
 }
 
 /// Shared queue of files read asynchronously (browser file picker, drag and drop).
@@ -278,6 +292,16 @@ pub struct SheetApp {
     /// NexusOffice layout: a menu bar and one tool row instead of the ribbon ([`nexus_toolbar`]).
     /// The Nexus apps turn it on; off (the default) keeps upstream's ribbon.
     pub toolbar: bool,
+    /// NexusOffice layout in the style of WPS Office ([`nexus_wps`]): no title bar; one row with
+    /// File, the Quick Access Toolbar, the ribbon tabs, the save state, Search, Comments and Share;
+    /// under it the current tab's groups as one flat strip whose trailing groups fold into a "…"
+    /// panel. Wins over [`toolbar`](Self::toolbar). Off keeps upstream's title bar and ribbon.
+    pub wps: bool,
+    /// Hosted inside another program's window (a tab of the NexusOffice window): the app leaves the
+    /// window's title alone and its top row doesn't move or maximise the window.
+    pub embedded: bool,
+    /// The host's file dialog being shown ([`file_dialogs`]).
+    pub(crate) file_dialog: Option<file_dialogs::PendingDialog>,
 }
 
 impl SheetApp {
@@ -322,6 +346,9 @@ impl SheetApp {
             cut_text: None,
             started: now_ms(),
             toolbar: false,
+            wps: false,
+            embedded: false,
+            file_dialog: None,
         }
     }
 
@@ -392,6 +419,14 @@ impl SheetApp {
             )
         {
             self.commit_text_box_edit()?;
+        }
+        // NexusOffice: the host's tabs take new workbooks; this one stays as it is.
+        if id == "file.new"
+            && let Some(new) = &self.services.new_document
+        {
+            new(params);
+            self.backstage = None;
+            return Ok(json!({"host": "file.new"}));
         }
         if let Some(r) = self.run_ui_command(id, &params) {
             return r;
@@ -518,7 +553,10 @@ impl SheetApp {
         }
         // Menu-style Export as PDF with no file named: ask where to save, like Save As does.
         // Programmatic callers use `run` and keep getting the PDF bytes back.
-        if id == "file.exportPdf" && self.services.pick_save.is_some() && params.get("path").and_then(Json::as_str).is_none_or(str::is_empty) {
+        if id == "file.exportPdf"
+            && (self.services.pick_save.is_some() || self.services.file_dialog.is_some())
+            && params.get("path").and_then(Json::as_str).is_none_or(str::is_empty)
+        {
             return self.export_pdf_with_picker(params);
         }
         if let Err(e) = self.run(id, params) {
@@ -534,6 +572,9 @@ impl SheetApp {
         }
         let title = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
         let stem = std::path::Path::new(&title).file_stem().and_then(|s| s.to_str()).unwrap_or("Book1").to_string();
+        if self.ask_file(FileDialogRequest::Save { name: format!("{stem}.pdf") }, file_dialogs::AfterPick::ExportPdf(params.clone())) {
+            return;
+        }
         let Some(pick) = &self.services.pick_save else { return };
         let Some(path) = pick(&format!("{stem}.pdf")) else { return };
         // The picker may suggest a workbook extension; the export writes a PDF.
@@ -748,6 +789,7 @@ impl SheetApp {
             return;
         }
         match name {
+            "open" if self.ask_file(FileDialogRequest::Open { purpose: "workbook".into() }, file_dialogs::AfterPick::OpenWorkbook) => {}
             "open" => {
                 if let Some(start) = &self.services.open_async {
                     start();
@@ -759,7 +801,10 @@ impl SheetApp {
             }
             "saveAs" => {
                 let suggested = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
-                if let Some(pick) = &self.services.pick_save {
+                let name = if std::path::Path::new(&suggested).extension().is_none() { format!("{suggested}.xlsx") } else { suggested.clone() };
+                if self.ask_file(FileDialogRequest::Save { name }, file_dialogs::AfterPick::Save { then_close: false }) {
+                    // The host shows the dialog; the save happens when its answer comes.
+                } else if let Some(pick) = &self.services.pick_save {
                     if let Some(path) = pick(&suggested) {
                         let path = if std::path::Path::new(&path).extension().is_none() { format!("{path}.xlsx") } else { path };
                         self.run_or_alert("file.save", json!({"path": path}));
@@ -796,6 +841,20 @@ impl SheetApp {
     }
 
     pub fn open_path(&mut self, path: &str) {
+        // NexusOffice: a host with tabs opens it in a tab of its own, unless this window holds only
+        // an untouched blank workbook (which the opened one replaces) or has it open already.
+        if let Some(open) = &self.services.open_document
+            && !self.session.documents().iter().any(|d| d.path.as_deref() == Some(path))
+            && !(self.session.documents().len() == 1
+                && self
+                    .session
+                    .active()
+                    .is_some_and(|d| d.path.is_none() && !d.is_dirty() && d.undo.is_empty() && d.wb.sheets.iter().all(|sh| sh.cells.is_empty())))
+        {
+            open(path);
+            self.backstage = None;
+            return;
+        }
         match self.run("file.open", json!({"path": path})) {
             Ok(r) => self.after_open(Some(path), &r),
             // A password-protected workbook: ask for the password; the dialog opens it.
@@ -1092,6 +1151,7 @@ impl SheetApp {
             ctx.request_repaint();
         }
         control::poll(self, ctx);
+        self.poll_file_dialog();
         // Files read asynchronously (web file picker, dropped files).
         let arrived: Vec<(String, Vec<u8>)> = self
             .services
@@ -1142,12 +1202,16 @@ impl SheetApp {
         if self.backstage.is_none() {
             self.ribbon_keys(&ctx);
         }
-        ribbon::title_bar(self, ui);
+        if !self.wps {
+            ribbon::title_bar(self, ui);
+        }
         if self.backstage.is_some() {
             // File tab: the Backstage view replaces everything below the title bar.
             backstage::show(self, ui);
         } else {
-            if self.toolbar {
+            if self.wps {
+                nexus_wps::show(self, ui);
+            } else if self.toolbar {
                 nexus_toolbar::show(self, ui);
             } else {
                 ribbon::show(self, ui);
@@ -1196,8 +1260,10 @@ impl SheetApp {
             self.store_view_state();
             let _ = self.session.run("file.save", json!({}));
         }
-        // Window title.
-        if let Some(d) = self.session.active() {
+        // Window title (a hosted app leaves the host window's title alone).
+        if !self.embedded
+            && let Some(d) = self.session.active()
+        {
             let title = format!("{}{}", d.display_title(), if d.is_dirty() { " — Edited" } else { "" });
             if self.grid.last_title.as_deref() != Some(title.as_str()) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
