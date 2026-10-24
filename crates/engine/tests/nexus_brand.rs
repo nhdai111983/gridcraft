@@ -84,3 +84,21 @@ fn info_osversion_names_nexus_sheets() {
     s.execute("cell.set", json!({"cell": "A1", "input": "=INFO(\"osversion\")"})).unwrap();
     assert_eq!(s.execute("cell.get", json!({"cell": "A1"})).unwrap()["value"], json!("Nexus Sheet"));
 }
+
+/// NexusOffice: new sheets are named in the interface's language when it sets a prefix
+/// (Vietnamese: Trang tính1, Trang tính2); upstream's Sheet1 otherwise.
+#[test]
+fn sheets_take_the_interface_languages_name() {
+    let mut s = gridcraft_engine::Session::new();
+    s.new_workbook();
+    assert_eq!(s.active().unwrap().wb.sheets[0].name, "Sheet1");
+    s.sheet_name_prefix = "Trang tính".into();
+    s.prefs.sheets_in_new_workbook = 2;
+    s.new_workbook();
+    let names: Vec<String> = s.active().unwrap().wb.sheets.iter().map(|sh| sh.name.clone()).collect();
+    assert_eq!(names, ["Trang tính1", "Trang tính2"]);
+    s.execute("home.insertSheet", serde_json::json!({})).unwrap();
+    assert!(s.active().unwrap().wb.sheets.iter().any(|sh| sh.name == "Trang tính3"));
+    s.sheet_name_prefix = "  ".into();
+    assert_eq!(s.active().unwrap().wb.next_sheet_name_with(&s.sheet_name_prefix), "Sheet1", "a blank prefix is Sheet");
+}

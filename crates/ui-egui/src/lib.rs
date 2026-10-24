@@ -604,7 +604,10 @@ impl SheetApp {
         }
         let title = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
         let stem = std::path::Path::new(&title).file_stem().and_then(|s| s.to_str()).unwrap_or("Book1").to_string();
-        if self.ask_file(FileDialogRequest::Save { name: format!("{stem}.pdf") }, file_dialogs::AfterPick::ExportPdf(params.clone())) {
+        if self.ask_file(
+            FileDialogRequest::Save { name: format!("{stem}.pdf"), types: vec!["pdf".into()] },
+            file_dialogs::AfterPick::ExportPdf(params.clone()),
+        ) {
             return;
         }
         let Some(pick) = &self.services.pick_save else { return };
@@ -834,11 +837,12 @@ impl SheetApp {
             "saveAs" => {
                 let suggested = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
                 let name = if std::path::Path::new(&suggested).extension().is_none() { format!("{suggested}.xlsx") } else { suggested.clone() };
-                if self.ask_file(FileDialogRequest::Save { name }, file_dialogs::AfterPick::Save { then_close: false }) {
+                // Save As writes the workbook: only workbook types (a CSV or PDF is a copy, made by Export).
+                if self.ask_file(FileDialogRequest::Save { name, types: vec!["xlsx".into()] }, file_dialogs::AfterPick::Save { then_close: false }) {
                     // The host shows the dialog; the save happens when its answer comes.
                 } else if let Some(pick) = &self.services.pick_save {
                     if let Some(path) = pick(&suggested) {
-                        let path = if std::path::Path::new(&path).extension().is_none() { format!("{path}.xlsx") } else { path };
+                        let path = file_dialogs::with_workbook_extension(path, false);
                         self.run_or_alert("file.save", json!({"path": path}));
                     }
                 } else if self.services.download.is_some()
@@ -877,11 +881,7 @@ impl SheetApp {
         // an untouched blank workbook (which the opened one replaces) or has it open already.
         if let Some(open) = &self.services.open_document
             && !self.session.documents().iter().any(|d| d.path.as_deref() == Some(path))
-            && !(self.session.documents().len() == 1
-                && self
-                    .session
-                    .active()
-                    .is_some_and(|d| d.path.is_none() && !d.is_dirty() && d.undo.is_empty() && d.wb.sheets.iter().all(|sh| sh.cells.is_empty())))
+            && !(self.session.documents().len() == 1 && self.session.active().is_some_and(gridcraft_engine::DocState::is_untouched_blank))
         {
             open(path);
             self.backstage = None;
@@ -925,16 +925,22 @@ impl SheetApp {
         }
         let vba: Vec<&str> = msgs.iter().copied().filter(|m| m.to_lowercase().contains("macro") || m.contains("VBA")).collect();
         if !vba.is_empty() {
+            let lang = self.ui.language;
             self.notice = Some(Notice {
-                text: "This workbook contains VBA macros. Nexus Sheet keeps them intact when you save, but does not run them.".into(),
+                text: lang.tr("This workbook contains VBA macros. Nexus Sheet keeps them intact when you save, but does not run them.").into(),
                 kind: NoticeKind::Warning,
-                action: Some(("What this means".into(), "macros".into())),
+                action: Some((lang.tr("What this means").into(), "macros".into())),
             });
         } else {
+            let first = msgs.first().copied().unwrap_or_default();
             let text = if msgs.len() == 1 {
-                msgs[0].to_string()
+                first.to_string()
             } else {
-                format!("{} items in this file were handled differently. First: {}", msgs.len(), msgs[0])
+                self.ui
+                    .language
+                    .tr("{count} items in this file were handled differently. First: {first}")
+                    .replace("{count}", &msgs.len().to_string())
+                    .replace("{first}", first)
             };
             self.notice = Some(Notice { text, kind: NoticeKind::Info, action: None });
         }
@@ -1175,6 +1181,11 @@ impl SheetApp {
             ctx.set_theme(preference);
             ctx.request_repaint();
         }
+        // NexusOffice: new sheets are named in the interface's language (Trang tính1).
+        let prefix = if self.ui.language == i18n::Language::Vi { "Trang tính" } else { "" };
+        if self.session.sheet_name_prefix != prefix {
+            self.session.sheet_name_prefix = prefix.to_string();
+        }
         // NexusOffice: the user's accent colour (File › Options, `ui.accent`).
         theme::set_accent(ctx, self.ui.accent.as_deref().and_then(theme::parse_hex));
         self.effective_dark = ctx.theme() == egui::Theme::Dark;
@@ -1229,6 +1240,15 @@ impl SheetApp {
         let ctx = ui.ctx().clone();
         self.poll_printing(&ctx);
         if !self.fonts_ready || self.fonts_rebind {
+            ctx.request_repaint();
+            return;
+        }
+        // NexusOffice: a host window that brings this tab forward in the middle of a frame (a
+        // click on its tab strip) draws it before `logic` has seen another editor's fonts: paint
+        // nothing this frame and install ours again, instead of drawing with families egui no
+        // longer has (which panics).
+        if self.embedded && !self.fonts_installed(&ctx) {
+            self.restyle();
             ctx.request_repaint();
             return;
         }

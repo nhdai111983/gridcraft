@@ -972,6 +972,12 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Export as Web Page (.html)…" => "Xuất trang web (.html)…",
         "AutoSave: save after every change (workbooks saved to a file)" => "Tự động lưu: lưu sau mỗi thay đổi (sổ đã có tệp)",
         "No file dialog could be shown" => "Không mở được hộp thoại tệp",
+        "₫ Vietnamese" => "₫ Tiếng Việt",
+        "This workbook contains VBA macros. Nexus Sheet keeps them intact when you save, but does not run them." => {
+            "Sổ làm việc này có macro VBA. Nexus Sheet giữ nguyên chúng khi lưu nhưng không chạy chúng."
+        }
+        "What this means" => "Điều này nghĩa là gì",
+        "{count} items in this file were handled differently. First: {first}" => "{count} mục trong tệp được xử lý khác đi. Mục đầu: {first}",
         _ => return None,
     })
 }

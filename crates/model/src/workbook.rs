@@ -164,7 +164,13 @@ impl Workbook {
     }
     /// A fresh sheet name `SheetN` not in use.
     pub fn next_sheet_name(&self) -> String {
-        (1..).map(|n| format!("Sheet{n}")).find(|n| self.sheet_index(n).is_none()).unwrap_or_else(|| "Sheet".into())
+        self.next_sheet_name_with("Sheet")
+    }
+    /// The first free name `{prefix}N` (NexusOffice: the interface language's word for a sheet,
+    /// "Trang tính" in Vietnamese); an empty prefix is "Sheet".
+    pub fn next_sheet_name_with(&self, prefix: &str) -> String {
+        let prefix = if prefix.trim().is_empty() { "Sheet" } else { prefix };
+        (1..).map(|n| format!("{prefix}{n}")).find(|n| self.sheet_index(n).is_none()).unwrap_or_else(|| prefix.into())
     }
     /// Validates a sheet name like Excel: 1–31 chars, none of `: \ / ? * [ ]`, not starting or
     /// ending with `'`, unique (case-insensitive) unless it is `except`'s own name.

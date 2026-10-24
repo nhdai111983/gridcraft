@@ -883,7 +883,7 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
     let stem = std::path::Path::new(&title).file_stem().and_then(|s| s.to_str()).unwrap_or("Book1").to_string();
     // NexusOffice: the host's dialog answers later; the copy is written then.
     let copy = crate::file_dialogs::AfterPick::SaveCopy { command: id.into(), ext: fmt.into() };
-    if app.ask_file(crate::FileDialogRequest::Save { name: format!("{stem}.{fmt}") }, copy) {
+    if app.ask_file(crate::FileDialogRequest::Save { name: format!("{stem}.{fmt}"), types: vec![fmt.to_string()] }, copy) {
         return true;
     }
     if let Some(pick) = &app.services.pick_save {

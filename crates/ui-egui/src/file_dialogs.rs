@@ -18,9 +18,9 @@ use crate::SheetApp;
 pub enum FileDialogRequest {
     /// Pick a file to open; `purpose` says what for (`workbook`).
     Open { purpose: String },
-    /// Pick a path to save to, given a suggested file name (its extension names the format:
-    /// `xlsx`, or `pdf`, `csv`, `html` for an export).
-    Save { name: String },
+    /// Pick a path to save to, given a suggested file name and the types to offer (extensions,
+    /// the first the default): `xlsx` to save the workbook, `pdf`, `csv` or `html` for an export.
+    Save { name: String, types: Vec<String> },
 }
 
 /// The host's answer: the picked path, `Ok(None)` when the user cancelled, or an error when no
@@ -41,6 +41,17 @@ pub fn save_types(name: &str) -> Vec<(&'static str, &'static str)> {
     let ext = std::path::Path::new(name).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
     let first = TYPES.iter().find(|(_, x)| ext.as_deref() == Some(*x)).copied().unwrap_or(TYPES[0]);
     std::iter::once(first).chain(TYPES.iter().copied().filter(|t| *t != first)).collect()
+}
+
+/// The path a workbook is saved to: `.xlsx` added when the name has no type Nexus Sheet writes
+/// ("Báo cáo 10.2026" has the extension "2026"). With `workbook_only`, also when the type is one
+/// that only writes a copy (CSV, HTML, PDF…): Save must leave a workbook file behind.
+pub(crate) fn with_workbook_extension(path: String, workbook_only: bool) -> String {
+    use gridcraft_engine::io::FileKind;
+    let kind = FileKind::from_path(&path);
+    let pdf = std::path::Path::new(&path).extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
+    let keep = if workbook_only { matches!(kind, Some(FileKind::Xlsx | FileKind::Json)) } else { kind.is_some() || pdf };
+    if keep { path } else { format!("{path}.xlsx") }
 }
 
 /// What to do with the path picked in a dialog.
@@ -116,7 +127,7 @@ impl SheetApp {
         match after {
             AfterPick::OpenWorkbook => self.open_path(&path),
             AfterPick::Save { then_close } => {
-                let path = if std::path::Path::new(&path).extension().is_none() { format!("{path}.xlsx") } else { path };
+                let path = with_workbook_extension(path, true);
                 self.run_or_alert("file.save", json!({"path": path}));
                 if then_close && self.session.active().is_some_and(|d| !d.is_dirty()) {
                     self.run_or_alert("file.close", json!({"force": true}));
@@ -144,6 +155,19 @@ impl SheetApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_workbook_save_always_names_a_workbook_file() {
+        let w = |p: &str, only| with_workbook_extension(p.to_string(), only);
+        assert_eq!(w("Báo cáo 10.2026", true), "Báo cáo 10.2026.xlsx", "a dot in the name is not a type");
+        assert_eq!(w("Báo cáo 10.2026", false), "Báo cáo 10.2026.xlsx");
+        assert_eq!(w("Sổ quỹ", true), "Sổ quỹ.xlsx");
+        assert_eq!(w("Sổ quỹ.XLSX", true), "Sổ quỹ.XLSX");
+        assert_eq!(w("Sổ quỹ.json", true), "Sổ quỹ.json");
+        assert_eq!(w("Sổ quỹ.csv", true), "Sổ quỹ.csv.xlsx", "Save keeps a workbook, not a copy");
+        assert_eq!(w("Sổ quỹ.csv", false), "Sổ quỹ.csv", "the stand-alone picker's own type choice");
+        assert_eq!(w("Sổ quỹ.pdf", false), "Sổ quỹ.pdf");
+    }
 
     #[test]
     fn save_types_put_the_suggested_format_first() {

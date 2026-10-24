@@ -844,9 +844,17 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
         stack(ui, |ui| {
             number_combo(app, ui, &st);
             ui.horizontal(|ui| {
-                let (c, ca) = split_button(ui, Icon::Currency, None, "Accounting Number Format");
+                // NexusOffice: in Vietnamese the button is đồng's (VND, no decimals), as Excel's is the
+                // system currency's.
+                let vnd = app.ui.language == crate::i18n::Language::Vi;
+                let (c, ca) = split_button(ui, if vnd { Icon::CurrencyDong } else { Icon::Currency }, None, "Accounting Number Format");
                 control_keytip(app, ui, &ca, "home.accounting");
-                if c {
+                ca.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), app.ui.language.tr("Accounting Number Format"))
+                });
+                if c && vnd {
+                    act(app, "home.numberFormat", json!({"code": VND_ACCOUNTING}));
+                } else if c {
                     act(app, "home.accounting", json!({}));
                 }
                 egui::Popup::menu(&ca).show(|ui| {
@@ -854,6 +862,7 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
                         app,
                         ui,
                         &[
+                            ("₫ Vietnamese", "home.numberFormat", json!({"code": VND_ACCOUNTING})),
                             (
                                 "$ English (United States)",
                                 "home.numberFormat",
@@ -1124,6 +1133,9 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
         });
     });
 }
+
+/// NexusOffice: the accounting format in Vietnamese đồng (vi-VN, no decimals), as Excel writes it.
+pub(crate) const VND_ACCOUNTING: &str = "_-* #,##0 [$₫-42A]_-;-* #,##0 [$₫-42A]_-;_-* \"-\" [$₫-42A]_-;_-@_-";
 
 pub(crate) fn font_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     let name = st.font.name.clone();

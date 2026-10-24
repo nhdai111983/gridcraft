@@ -109,7 +109,7 @@ fn save_as_waits_for_the_hosts_dialog() {
     h.run_steps(3);
     assert!(h.state().file_dialog_open());
     let (req, tx) = waiting.borrow_mut().pop().unwrap();
-    assert!(matches!(&req, FileDialogRequest::Save { name } if name.ends_with(".xlsx")), "{req:?}");
+    assert!(matches!(&req, FileDialogRequest::Save { name, types } if name.ends_with(".xlsx") && *types == ["xlsx"]), "{req:?}");
     // Another Save while the dialog is up asks nothing more.
     h.state_mut().run_or_alert("file.saveAs", json!({}));
     assert!(waiting.borrow().is_empty());
@@ -227,4 +227,62 @@ fn tab_and_enter(wps: bool) {
     // column. Upstream's behaviour, kept.)
     assert_eq!([value("A1"), value("B1"), value("B2"), value("C2")], ["Khoản chi", "Số tiền", "Tiền điện", "1250000"], "wps {wps}, focus {focus:?}");
     assert!(h.state().backstage.is_none() && h.state().dialog.is_none(), "no button was pressed");
+}
+
+/// A host that brings the tab forward in the middle of a frame draws it before its `logic` runs:
+/// with another editor's fonts in the window, `ui` paints nothing that frame (and asks for its
+/// fonts again) instead of panicking on a family egui no longer has.
+#[test]
+fn drawn_before_logic_with_another_editors_fonts_it_waits_a_frame() {
+    let mut session = Session::new();
+    session.new_workbook();
+    let mut app = SheetApp::new(session, Services::default());
+    app.wps = true;
+    app.embedded = true;
+    // (app, run logic before drawing)
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1280.0, 800.0)).build_ui_state(
+        |ui, s: &mut (SheetApp, bool)| {
+            let ctx = ui.ctx().clone();
+            if s.1 {
+                s.0.logic(&ctx);
+            }
+            s.0.ui(ui);
+        },
+        (app, true),
+    );
+    h.run_steps(6);
+    let mut other = egui::FontDefinitions::default();
+    let chain = other.families.get(&egui::FontFamily::Proportional).cloned().unwrap_or_default();
+    other.families.insert(egui::FontFamily::Name("semibold".into()), chain);
+    h.ctx.set_fonts(other);
+    h.state_mut().1 = false;
+    h.run_steps(2);
+    h.state_mut().1 = true;
+    h.run_steps(4);
+    let has = h.ctx.fonts(|f| f.definitions().families.contains_key(&egui::FontFamily::Name("ui".into())));
+    assert!(has, "its fonts came back");
+}
+
+/// In Vietnamese, new sheets are "Trang tính n" and the accounting format is đồng's.
+#[test]
+fn vietnamese_names_sheets_and_formats_dong() {
+    let mut h = harness(Services::default());
+    h.state_mut().ui.language = gridcraft_ui_egui::i18n::Language::Vi;
+    h.run_steps(4);
+    h.state_mut().run_or_alert("home.insertSheet", json!({}));
+    h.run_steps(2);
+    let names: Vec<String> = h.state().session.active().unwrap().wb.sheets.iter().map(|s| s.name.clone()).collect();
+    assert_eq!(names.last().map(String::as_str), Some("Trang tính1"), "{names:?}");
+    h.state_mut().run("cell.set", json!({"cell": "A1", "input": "1250000"})).unwrap();
+    h.get_by_label("Định dạng số kế toán").click();
+    h.run_steps(3);
+    h.get_by_label("₫ Tiếng Việt").click();
+    h.run_steps(3);
+    let d = h.state().session.active().unwrap();
+    let sh = d.wb.active().unwrap();
+    let at = gridcraft_engine::core::CellRef::parse("A1").unwrap();
+    let code = d.wb.styles.get(sh.style_id(at)).num_fmt.as_str().to_string();
+    assert!(code.contains('₫'), "{code}");
+    let shown = gridcraft_engine::numfmt::format_value(&sh.value(at), &gridcraft_engine::numfmt::NumberFormat::parse(&code), d.wb.date_system).text;
+    assert!(shown.contains("1,250,000") && shown.contains('₫'), "{shown:?}");
 }

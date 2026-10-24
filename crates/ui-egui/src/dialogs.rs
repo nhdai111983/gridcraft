@@ -1178,7 +1178,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                         // NexusOffice: the host's dialog answers later; the copy is written then.
                         let asked = path.is_empty()
                             && app.ask_file(
-                                crate::FileDialogRequest::Save { name: format!("Copy.{fmt}") },
+                                crate::FileDialogRequest::Save { name: format!("Copy.{fmt}"), types: vec![fmt.clone()] },
                                 crate::file_dialogs::AfterPick::SaveCopy { command: id.into(), ext: fmt.clone() },
                             );
                         let target = if asked {
