@@ -171,7 +171,11 @@ pub fn handle(app: &mut SheetApp, ctx: &egui::Context, method: &str, p: &Json) -
         "engine.execute" | "command" | "ui.menu.invoke" => {
             let Some(id) = s("command").or(s("id")) else { return err("missing `command`") };
             let params = p.get("params").cloned().unwrap_or(json!({}));
-            wrap(app.run(id, if params.is_null() { json!({}) } else { params }))
+            // NexusOffice: the API reads and shows en-US whatever regional format the window
+            // shows, unless the call names one (`locale` in the command's params or the request).
+            let tag = params.get("locale").and_then(Json::as_str).or(s("locale"));
+            let locale = tag.and_then(gridcraft_engine::core::Locale::from_tag).unwrap_or_default();
+            wrap(gridcraft_engine::display::with_locale(locale, || app.run(id, if params.is_null() { json!({}) } else { params })))
         }
         "engine.commands" => {
             let mut v: Vec<Json> = app.session.commands().into_iter().map(|c| serde_json::to_value(c).unwrap_or_default()).collect();

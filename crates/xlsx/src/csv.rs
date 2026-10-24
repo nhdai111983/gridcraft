@@ -88,34 +88,65 @@ pub fn sniff_delimiter(text: &str, quote: char) -> u8 {
 }
 
 /// [`sniff_delimiter`] for a file written in a regional format. Where the list separator is `;`
-/// (vi-VN, whose decimal separator is `,`), a `;` anywhere outside quotes makes it the delimiter,
-/// as Excel there reads CSV with the system's list separator; and a file whose commas only sit
-/// between digits (`1,5`, a column of decimal-comma numbers) is one column, not split at them.
-/// Commas between other text (`Hà Nội,100`, an en-US export) still separate fields.
+/// (vi-VN, whose decimal separator is `,`), Excel reads CSV with `;`: a `;` on every line (outside
+/// quotes) makes it the delimiter even when the decimal commas outnumber it, and a file whose lines
+/// hold exactly one comma, between two digits (a column of `1,5`), is one column of numbers.
+/// Otherwise the file decides as everywhere else: a consistent `,` (an en-US export, `1,2,3`) or
+/// tab still separates fields.
 pub fn sniff_delimiter_in(text: &str, quote: char, locale: gridcraft_core::Locale) -> u8 {
     let sniffed = sniff_delimiter(text, quote);
-    if locale.list_separator() != ';' {
+    if locale.list_separator() != ';' || sniffed == b'\t' {
         return sniffed;
     }
+    // Per non-blank line (the first 20, as `sniff_delimiter` reads): `;` count, `,` count, and
+    // whether every `,` sits between two digits.
+    let mut lines: Vec<(usize, usize, bool)> = Vec::new();
+    let mut cur = (0usize, 0usize, true);
+    let mut blank = true;
     let mut in_q = false;
-    let mut semicolon = false;
-    let mut comma_between_digits = true;
-    let mut commas = 0usize;
-    let chars: Vec<char> = text.chars().take(64 * 1024).collect();
-    for (i, &ch) in chars.iter().enumerate() {
+    let mut prev: Option<char> = None;
+    let mut chars = text.chars().take(64 * 1024).peekable();
+    while let Some(ch) = chars.next() {
+        if !in_q && ch == '\n' {
+            if !blank {
+                lines.push(cur);
+            }
+            cur = (0, 0, true);
+            blank = true;
+            prev = None;
+            if lines.len() >= 20 {
+                break;
+            }
+            continue;
+        }
+        if ch != '\r' {
+            blank = false;
+        }
         if ch == quote {
             in_q = !in_q;
         } else if !in_q && ch == ';' {
-            semicolon = true;
+            cur.0 += 1;
         } else if !in_q && ch == ',' {
-            commas += 1;
-            let digit = |c: Option<&char>| c.is_some_and(char::is_ascii_digit);
-            if !(digit(i.checked_sub(1).and_then(|p| chars.get(p))) && digit(chars.get(i + 1))) {
-                comma_between_digits = false;
+            cur.1 += 1;
+            if !(prev.is_some_and(|c| c.is_ascii_digit()) && chars.peek().is_some_and(char::is_ascii_digit)) {
+                cur.2 = false;
             }
         }
+        prev = Some(ch);
     }
-    if semicolon || (sniffed == b',' && commas > 0 && comma_between_digits) { b';' } else { sniffed }
+    if !blank {
+        lines.push(cur);
+    }
+    if lines.is_empty() {
+        return sniffed;
+    }
+    if lines.iter().all(|l| l.0 > 0) {
+        return b';';
+    }
+    if sniffed == b',' && lines.iter().all(|l| l.1 == 1 && l.2) {
+        return b';';
+    }
+    sniffed
 }
 
 /// Splits CSV text into records of fields.

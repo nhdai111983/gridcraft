@@ -89,24 +89,58 @@ fn parse_numeric_in(t: &str, sys: DateSystem, locale: Locale) -> Option<(f64, Op
         return None;
     }
     if let Some(inner) = t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
-        return parse_numeric_in(inner.trim(), sys, locale).map(|(n, f)| (-n, f));
+        // One pair only: `((1))` is text, as in Excel, and nesting can't grow the stack.
+        let inner = inner.trim();
+        if inner.starts_with('(') {
+            return None;
+        }
+        return parse_numeric_in(inner, sys, locale).map(|(n, f)| (-n, f));
     }
-    // The đồng sign, after the amount as vi-VN writes it (`1.234 ₫`) or before it.
-    if let Some(body) = t.strip_suffix(DONG).or_else(|| t.strip_prefix(DONG)) {
+    // The đồng, after the amount as vi-VN writes it (`1.234 ₫`, `1.234đ`, `1.234 VNĐ`) or before it.
+    if let Some(body) = strip_dong(t) {
         let body = body.trim();
-        if body.contains(['%', '$', 'e', 'E', DONG]) {
+        if body.contains(['%', '$', 'e', 'E', DONG]) || strip_dong(body).is_some() || leading_zero_group(body, locale) {
             return None;
         }
         let (n, _) = parse_plain(&locale.delocalize_number(body))?;
         return Some((n, Some(if body.contains(locale.decimal_separator()) { VND_FORMAT_DECIMALS } else { VND_FORMAT })));
     }
-    if let Some(r) = parse_plain(&locale.delocalize_number(t)) {
+    if !leading_zero_group(t, locale)
+        && let Some(r) = parse_plain(&locale.delocalize_number(t))
+    {
         return Some(r);
     }
     if let Some(r) = parse_fraction(t) {
         return Some((r, Some("# ?/?")));
     }
     parse_datetime_dmy(t, sys)
+}
+
+/// The amount of `₫1.234`, `1.234 ₫`, `1.234đ`, `1.234 VNĐ` or `VND 1.234` (case-insensitive).
+fn strip_dong(t: &str) -> Option<&str> {
+    const SIGNS: [&str; 4] = ["₫", "vnđ", "vnd", "đ"];
+    let lower = t.to_lowercase();
+    // Lower-casing these letters keeps their byte lengths, so the slices line up.
+    if lower.len() != t.len() {
+        return None;
+    }
+    for sign in SIGNS {
+        if lower.ends_with(sign) {
+            return t.get(..t.len() - sign.len());
+        }
+        if lower.starts_with(sign) {
+            return t.get(sign.len()..);
+        }
+    }
+    None
+}
+
+/// `0.125` or `090.312.345` in a locale that groups with `.`: a first group starting with 0 isn't
+/// a grouped number (Excel keeps it as text), unlike en-US `0.125`.
+fn leading_zero_group(t: &str, locale: Locale) -> bool {
+    let body = t.trim_start_matches(['-', '+', ' ', DONG]);
+    let int = body.split(locale.decimal_separator()).next().unwrap_or("");
+    int.contains(locale.group_separator()) && int.starts_with('0')
 }
 
 /// Numeric text as arithmetic coerces it ("1,000", "50%", "$3", "1/2/2020", "10:00").
@@ -125,7 +159,12 @@ fn parse_numeric(t: &str, sys: DateSystem) -> Option<(f64, Option<&'static str>)
     }
     // Parenthesised negatives: (100) = -100.
     if let Some(inner) = t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
-        return parse_numeric(inner.trim(), sys).map(|(n, f)| (-n, f));
+        // One pair only: `((1))` is text, as in Excel, and nesting can't grow the stack.
+        let inner = inner.trim();
+        if inner.starts_with('(') {
+            return None;
+        }
+        return parse_numeric(inner, sys).map(|(n, f)| (-n, f));
     }
     if let Some(r) = parse_plain(t) {
         return Some(r);
@@ -378,6 +417,7 @@ fn time_format(tf: f64, secs: bool, ampm: bool) -> &'static str {
 /// and date-times, as the day-first regional formats type them. `.` is not a date separator
 /// there (it groups digits), so `1.5` is not a date.
 fn parse_datetime_dmy(t: &str, sys: DateSystem) -> Option<(f64, Option<&'static str>)> {
+    let t = &vi_am_pm(t);
     if let Some((tf, secs, ampm)) = parse_time(t) {
         return Some((tf, Some(time_format(tf, secs, ampm))));
     }
@@ -391,6 +431,21 @@ fn parse_datetime_dmy(t: &str, sys: DateSystem) -> Option<(f64, Option<&'static 
         }
     }
     None
+}
+
+/// `10:30 SA` / `2:30 CH` (sáng/chiều, vi-VN's AM/PM, as the formats show them) read as AM/PM.
+fn vi_am_pm(t: &str) -> String {
+    let trimmed = t.trim_end();
+    let lower = trimmed.to_ascii_lowercase();
+    for (vi, en) in [("sa", "AM"), ("ch", "PM")] {
+        if let Some(head) = lower.strip_suffix(vi)
+            && head.trim_end().ends_with(|c: char| c.is_ascii_digit())
+            && let Some(original) = trimmed.get(..head.len())
+        {
+            return format!("{original}{en}");
+        }
+    }
+    t.to_string()
 }
 
 fn parse_date_dmy(t: &str, sys: DateSystem) -> Option<(f64, &'static str)> {
@@ -548,12 +603,37 @@ mod tests {
         }
         assert_eq!(vi("1.234").value, Value::Number(1234.0));
         assert_eq!(vi("'1,5").value, Value::text("1,5"));
+        // A first group starting with 0 isn't grouping (phone numbers, en-US decimals).
+        for s in ["0.125", "090.312.345", "-0.125", "0.125 ₫"] {
+            assert_eq!(vi(s).value, Value::text(s), "{s}");
+        }
+        assert_eq!(vi("0,125").value, Value::Number(0.125));
+        // The đồng in the ways people write it.
+        for s in ["1.234đ", "1.234 Đ", "1.234 VNĐ", "1.234 vnd", "VND 1.234", "₫1.234"] {
+            assert_eq!(vi(s).value, Value::Number(1234.0), "{s}");
+            assert_eq!(vi(s).format, Some(VND_FORMAT), "{s}");
+        }
+        for s in ["đ", "VNĐ", "đồng", "1.234 đđ"] {
+            assert_eq!(vi(s).value, Value::text(s), "{s}");
+        }
         assert_eq!(vi("TRUE").value, Value::Bool(true));
         assert_eq!(vi("#N/A").value, Value::Error(CellError::NA));
         assert_eq!(parse_number_text_locale(" 1.234,5 ", DateSystem::D1900, Locale::ViVn), Some(1234.5));
         assert_eq!(parse_number_text_locale("1,234.5", DateSystem::D1900, Locale::ViVn), None);
         // en-US is unchanged.
         assert_eq!(parse_input_in("1,234.5", DateSystem::D1900, Locale::EnUs), p("1,234.5"));
+    }
+
+    /// Deeply nested parentheses never recurse: a 100,000-deep entry is text, not a stack overflow.
+    #[test]
+    fn nested_parentheses_are_bounded() {
+        let deep = format!("{}1{}", "(".repeat(100_000), ")".repeat(100_000));
+        for locale in Locale::ALL {
+            assert_eq!(parse_input_in(&deep, DateSystem::D1900, locale).value, Value::text(deep.as_str()));
+            assert_eq!(parse_input_in("((1))", DateSystem::D1900, locale).value, Value::text("((1))"));
+            assert_eq!(parse_input_in("(1)", DateSystem::D1900, locale).value, Value::Number(-1.0));
+        }
+        assert_eq!(parse_number_text(&deep), None);
     }
 
     #[test]
@@ -570,6 +650,10 @@ mod tests {
         assert_eq!(vi("24/10/2026 14:30").format, Some("m/d/yyyy h:mm"));
         assert_eq!(vi("14:30").value, Value::Number(14.5 / 24.0));
         assert_eq!(vi("14:30").format, Some("h:mm"));
+        assert_eq!(vi("2:30 CH").value, Value::Number(14.5 / 24.0));
+        assert_eq!(vi("2:30 CH").format, Some("h:mm AM/PM"));
+        assert_eq!(vi("10:00 sa").value, Value::Number(10.0 / 24.0));
+        assert_eq!(vi("sách").value, Value::text("sách"));
         assert_eq!(vi("24/10").format, Some("d-mmm"));
         assert_eq!(vi("10/2026").format, Some("mmm-yy"));
         // Hostile input never panics.

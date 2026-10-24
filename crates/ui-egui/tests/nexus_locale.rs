@@ -183,3 +183,30 @@ fn vietnamese_values_typed_key_by_key() {
     assert_eq!(value(&h, "B1"), Value::Number(46319.0));
     assert_eq!(active(&h), "A2");
 }
+
+/// The control channel stays en-US while the window shows vi-VN, unless a call names a locale;
+/// text pasted from another app reads the window's regional format.
+#[test]
+fn control_channel_is_locale_neutral_and_paste_follows_the_window() {
+    let mut h = harness(Language::Vi, false);
+    enter(&mut h, "A1", "1.234,5");
+    let ask = |h: &mut H, params: serde_json::Value| {
+        let ctx = h.ctx.clone();
+        match gridcraft_ui_egui::control::handle(h.state_mut(), &ctx, "engine.execute", &params) {
+            gridcraft_ui_egui::control::Outcome::Done(reply) => reply.to_string(),
+            gridcraft_ui_egui::control::Outcome::Screenshot { .. } => String::new(),
+        }
+    };
+    let en = ask(&mut h, json!({"command": "cell.get", "params": {"cell": "A1"}}));
+    assert!(en.contains("1,234.50"), "{en}");
+    let vi = ask(&mut h, json!({"command": "cell.get", "params": {"cell": "A1"}, "locale": "vi-VN"}));
+    assert!(vi.contains("1.234,50"), "{vi}");
+    // An API entry without `locale` is en-US even here.
+    ask(&mut h, json!({"command": "cell.set", "params": {"cell": "A2", "input": "1.5"}}));
+    assert_eq!(value(&h, "A2"), Value::Number(1.5));
+    // Paste from another app (Ctrl+V) reads vi-VN.
+    h.state_mut().run("selection.set", json!({"cell": "B1"})).unwrap();
+    h.state_mut().paste_external("2.500\t0,75\n".into());
+    assert_eq!(value(&h, "B1"), Value::Number(2500.0));
+    assert_eq!(value(&h, "C1"), Value::Number(0.75));
+}

@@ -208,3 +208,88 @@ fn csv_round_trips_in_vietnamese() {
     let saved = en.execute("file.saveBytes", json!({"format": "csv"})).unwrap();
     assert_eq!(gridcraft_engine::io::base64_decode(saved["base64"].as_str().unwrap()).unwrap(), b"1234.5,x\r\n");
 }
+
+/// Text pasted from another app is read in the regional format the paste names, like typing.
+#[test]
+fn pasted_text_reads_the_regional_format() {
+    let mut s = session();
+    s.execute("edit.paste", json!({"at": "A1", "text": "1.234\t1.234,5\t24/10/2026\t0.125\n", "locale": "vi-VN"})).unwrap();
+    assert_eq!(value(&s, "A1"), Value::Number(1234.0));
+    assert_eq!(value(&s, "B1"), Value::Number(1234.5));
+    assert_eq!(value(&s, "C1"), Value::Number(46319.0));
+    assert_eq!(value(&s, "D1"), Value::text("0.125"));
+    // Without `locale` the API pastes en-US.
+    s.execute("edit.paste", json!({"at": "A2", "text": "1.234\t1.234,5\n"})).unwrap();
+    assert_eq!(value(&s, "A2"), Value::Number(1.234));
+    assert_eq!(value(&s, "B2"), Value::text("1.234,5"));
+}
+
+/// Values typed in dialogs (filter, scenario, solver, forecast, From Text) read the regional format
+/// and what the workbook stores stays en-US.
+#[test]
+fn dialog_values_read_the_regional_format_and_store_en_us() {
+    let mut s = session();
+    s.execute("range.setValues", json!({"range": "A1", "values": [["Giá"], [1.2], [1.6], [2.5]]})).unwrap();
+    s.execute("data.filter", json!({"range": "A1:A4"})).unwrap();
+    s.execute("data.filterBy", json!({"column": "A", "custom": {"op": ">", "value": "1,5"}, "locale": "vi-VN"})).unwrap();
+    let sh = s.active().unwrap().wb.active().unwrap().clone();
+    assert!(sh.is_row_hidden(1) && !sh.is_row_hidden(2) && !sh.is_row_hidden(3), "only 1.2 is hidden");
+    let stored = format!("{:?}", sh.autofilter.as_ref().unwrap().criteria);
+    assert!(stored.contains("\"1.5\"") && !stored.contains("1,5"), "{stored}");
+
+    let mut s = session();
+    s.execute("range.setValues", json!({"range": "B2", "values": [[1], [2]]})).unwrap();
+    s.execute("data.scenarioAdd", json!({"name": "Thấp", "changing": "B2:B3", "values": ["1,5", "1,234.5"], "locale": "vi-VN"})).unwrap();
+    s.execute("data.scenarioShow", json!({"name": "Thấp"})).unwrap();
+    assert_eq!(value(&s, "B2"), Value::Number(1.5));
+    assert_eq!(value(&s, "B3"), Value::text("1,234.5"), "text in vi-VN stays text when shown");
+
+    let mut s = session();
+    set(&mut s, "A1", "1", None);
+    set(&mut s, "B1", "=A1*2", None);
+    let r = s
+        .execute(
+            "data.solver",
+            json!({"objective": "B1", "goal": "max", "variables": "A1", "constraints": ["A1 <= 2,5"], "method": "simplex", "locale": "vi-VN"}),
+        )
+        .unwrap();
+    assert_eq!(r["status"], "optimal", "{r}");
+    assert!((value(&s, "A1").as_f64().unwrap() - 2.5).abs() < 1e-9);
+
+    let mut s = session();
+    let r = s.execute("data.getData", json!({"text": "Số;Ngày\n1,5;24/10/2026\n", "locale": "vi-VN"})).unwrap();
+    assert!(r.is_object(), "{r}");
+    let sh = s.active().unwrap().wb.active().unwrap().clone();
+    let found: Vec<Value> = sh.cells.iter().map(|(_, c)| c.value.clone()).collect();
+    assert!(found.contains(&Value::Number(1.5)) && found.contains(&Value::Number(46319.0)), "{found:?}");
+}
+
+/// A workbook opened in a vi-VN session is recalculated in it when a formula depends on the
+/// locale (its cached results are the file's en-US ones), and stays saved.
+#[test]
+fn opening_in_vietnamese_recalculates_locale_dependent_formulas() {
+    let mut en = session();
+    set(&mut en, "A1", "=TEXT(1234.5,\"#.##0,00\")", None);
+    let en_value = value(&en, "A1");
+    let saved = en.execute("file.saveBytes", json!({"format": "xlsx"})).unwrap();
+    let mut s = Session::new();
+    s.set_locale(Locale::ViVn);
+    s.execute("file.open", json!({"name": "en.xlsx", "base64": saved["base64"]})).unwrap();
+    assert_eq!(value(&s, "A1"), Value::text("1.234,50"));
+    assert_ne!(value(&s, "A1"), en_value);
+    assert!(!s.active().unwrap().is_dirty());
+}
+
+/// The API's display can be en-US while the workbook shows vi-VN (the control channel's default).
+#[test]
+fn display_locale_can_be_overridden_for_the_api() {
+    let mut s = session();
+    set(&mut s, "A1", "1234.5", None);
+    s.set_locale(Locale::ViVn);
+    assert_eq!(text(&s, "A1"), "1234,5");
+    let shown = gridcraft_engine::display::with_locale(Locale::EnUs, || text(&s, "A1"));
+    assert_eq!(shown, "1234.5");
+    let csv = gridcraft_engine::display::with_locale(Locale::EnUs, || s.active().map(|d| gridcraft_engine::io::save_bytes(&d.wb, "x.csv").unwrap()));
+    assert_eq!(csv.unwrap(), b"1234.5\r\n");
+    assert_eq!(text(&s, "A1"), "1234,5", "the override ends with the call");
+}

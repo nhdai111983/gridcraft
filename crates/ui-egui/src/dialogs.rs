@@ -939,6 +939,19 @@ fn data_validation_form(ui: &mut egui::Ui, d: &mut Dialog, confirm: &mut bool, o
 }
 
 /// Builds the command params from form values for dialogs that need translation.
+/// Commands whose typed values a dialog sends in the interface's regional format (`locale`).
+const LOCALE_COMMANDS: &[&str] = &[
+    "data.textToColumns",
+    "data.forecastSheet",
+    "data.solver",
+    "data.scenarioAdd",
+    "data.getData",
+    "data.fromTextCsv",
+    "data.filterBy",
+    "cell.set",
+    "range.fill",
+];
+
 fn build_params(d: &Dialog) -> Json {
     let mut v = Json::Object(d.values.clone());
     match d.name.as_str() {
@@ -1274,7 +1287,13 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
         confirm = false;
     }
     if confirm && let Some(cmd) = d.command {
-        let params = build_params(&d);
+        let mut params = build_params(&d);
+        // Numbers and dates typed in these dialogs are in the interface's regional format.
+        if LOCALE_COMMANDS.contains(&cmd)
+            && let Some(m) = params.as_object_mut()
+        {
+            m.insert("locale".into(), json!(app.ui.language.regional_format().tag()));
+        }
         match app.run(cmd, params) {
             Ok(r) => {
                 open = false;
@@ -2308,7 +2327,13 @@ fn goal_seek(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: &mu
     let mut open = true;
     ok_cancel(ui, confirm, &mut open);
     if *confirm {
-        match app.run("data.goalSeek", json!({"set": set, "to": to.parse::<f64>().unwrap_or(0.0), "changing": changing})) {
+        // The target is typed in the interface's regional format (`1,5` in vi-VN).
+        let target = gridcraft_engine::core::parse::parse_number_text_locale(
+            &to,
+            gridcraft_engine::core::DateSystem::D1900,
+            app.ui.language.regional_format(),
+        );
+        match app.run("data.goalSeek", json!({"set": set, "to": target.unwrap_or(0.0), "changing": changing})) {
             Ok(r) => app.toast = Some((format!("Goal Seeking found a solution: {}", r["value"]), crate::now_ms())),
             Err(e) => app.message = Some(("Goal Seek".into(), crate::clean_error(&e))),
         }

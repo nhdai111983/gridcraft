@@ -214,6 +214,15 @@ fn csv_in_vietnamese() {
     assert_eq!(wb.sheets[0].value(CellRef::new(1, 1)), Value::Number(5.0));
     assert_eq!(sniff_delimiter_in("1,5\n", '"', EnUs), b',');
     assert_eq!(sniff_delimiter_in("\"a;b\",1\n", '"', ViVn), b',');
+    // A `;` on one line only doesn't outvote a consistent comma (or tab) layout.
+    assert_eq!(sniff_delimiter_in("a,b,c\nx;y,1,2\nd,e,f\n", '"', ViVn), b',');
+    assert_eq!(sniff_delimiter_in("a\tb\nc;d\te\n", '"', ViVn), b'\t');
+    // `;` on every line wins over more decimal commas.
+    assert_eq!(sniff_delimiter_in("1,5;2,5;3,5\n4,5;5,5;6,5\n", '"', ViVn), b';');
+    // Several commas per line, all between digits: an en-US numeric export, split at the commas.
+    let wb = read_csv(b"1,2,3\n4,5,6\n", &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 2)), Value::Number(6.0));
+    assert_eq!(wb.csv_delimiter, Some(b','), "saving it keeps the commas");
     let en = CsvOptions { delimiter: 0, ..Default::default() };
     assert_eq!(read_csv(b"1.5,2\n", &en).unwrap().sheets[0].value(CellRef::new(0, 0)), Value::Number(1.5));
 }

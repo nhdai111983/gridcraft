@@ -270,6 +270,15 @@ pub struct Session {
     pub locale: gridcraft_core::Locale,
 }
 
+/// Whether a formula of the workbook calls a function whose result depends on the regional format
+/// (`TEXT`, `VALUE`, `NUMBERVALUE`, and the names that contain them), so a locale change needs a
+/// recalculation. A cheap scan of the formula texts instead of a recalculation of every workbook.
+fn locale_sensitive(wb: &Workbook) -> bool {
+    let calls = |text: &str| text.contains("TEXT(") || text.contains("VALUE(");
+    wb.names.iter().any(|n| calls(&n.formula.to_ascii_uppercase()))
+        || wb.sheets.iter().any(|sh| sh.cells.iter().any(|(_, c)| c.formula.as_ref().is_some_and(|f| calls(&f.text.to_ascii_uppercase()))))
+}
+
 impl Session {
     pub fn new() -> Session {
         Session::default()
@@ -298,11 +307,17 @@ impl Session {
         self.active_mut().ok_or(EngineError::NoDocument)
     }
     pub fn add_document(&mut self, mut d: DocState) -> usize {
-        // A new or opened workbook takes the session's regional format at once, without
-        // recalculating (its cached results are the file's) and without becoming unsaved.
+        // A new or opened workbook takes the session's regional format at once, and is
+        // recalculated in it (`TEXT`, `VALUE`, `NUMBERVALUE` follow the locale; the file's cached
+        // results are en-US ones), without becoming unsaved.
         if d.wb.locale != self.locale {
             let clean = !d.is_dirty();
-            Arc::make_mut(&mut d.wb).locale = self.locale;
+            let mut wb = (*d.wb).clone();
+            wb.locale = self.locale;
+            if wb.calc.mode != gridcraft_model::CalcMode::Manual && locale_sensitive(&wb) {
+                d.calc.recalc_all(&mut wb);
+            }
+            d.wb = Arc::new(wb);
             if clean {
                 d.saved = d.wb.clone();
             }
@@ -331,7 +346,7 @@ impl Session {
             let clean = !d.is_dirty();
             let mut wb = (*d.wb).clone();
             wb.locale = locale;
-            if wb.calc.mode != gridcraft_model::CalcMode::Manual {
+            if wb.calc.mode != gridcraft_model::CalcMode::Manual && locale_sensitive(&wb) {
                 d.calc.recalc_all(&mut wb);
             }
             d.wb = Arc::new(wb);

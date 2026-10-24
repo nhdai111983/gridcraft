@@ -55,7 +55,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste",
             ["Home", "Clipboard"],
             Some("Cmd+V"),
-            "{at?: \"C3\", text?: \"tab-separated text from the system clipboard\", html?: \"the clipboard's HTML flavour; cells the source recorded as numbers (x:num, sdval) stay numbers\"}",
+            "{at?: \"C3\", text?: \"tab-separated text from the system clipboard\", html?: \"the clipboard's HTML flavour; cells the source recorded as numbers (x:num, sdval) stay numbers\", locale?: \"vi-VN\" (the regional format of `text`; en-US by default)}",
             has_doc,
             paste
         ),
@@ -139,6 +139,20 @@ pub(crate) fn locale_param(id: &str, p: &Json) -> Result<gridcraft_core::Locale>
     match str_param(p, "locale") {
         None => Ok(gridcraft_core::Locale::EnUs),
         Some(tag) => gridcraft_core::Locale::from_tag(tag).ok_or_else(|| bad(id, format!("unknown `locale` {tag:?}: use \"en-US\" or \"vi-VN\""))),
+    }
+}
+
+/// A constant typed in `locale` as the en-US text the engine stores and reads (`1,5` → `1.5`,
+/// `24/10/2026` → its serial): numbers become their canonical digits; text, formulas and
+/// anything that isn't a number stay as typed. Parameters that end up in the workbook (filter
+/// criteria, scenario values, solver constraints) go through it, so files stay en-US.
+pub(crate) fn canonical_number_text(text: &str, sys: gridcraft_core::DateSystem, locale: gridcraft_core::Locale) -> String {
+    if locale == gridcraft_core::Locale::EnUs || text.trim_start().starts_with('=') {
+        return text.to_string();
+    }
+    match gridcraft_core::parse::parse_input_in(text, sys, locale).value {
+        Value::Number(n) => gridcraft_core::number_to_text(n),
+        _ => text.to_string(),
     }
 }
 
@@ -824,6 +838,7 @@ fn paste_text(s: &mut Session, p: &Json, text: &str) -> Result<Json> {
     let sheet = target_sheet(s, p)?;
     let at = cell_param_on(s, p, "at", sheet)?.unwrap_or(s.doc()?.selection.current().start);
     let rows: Vec<Vec<String>> = parse_tsv(text);
+    let locale = locale_param("edit.paste", p)?;
     // The HTML flavour, when the host passed it: the number behind each cell's shown text.
     let html = str_param(p, "html").map(crate::clip_html::table_cells).unwrap_or_default();
     let h = rows.len();
@@ -832,7 +847,7 @@ fn paste_text(s: &mut Session, p: &Json, text: &str) -> Result<Json> {
         for (ri, row) in rows.iter().enumerate() {
             for (ci, v) in row.iter().enumerate() {
                 let Some(c) = at.offset(ri as i64, ci as i64) else { continue };
-                let mut cell = input_to_cell(v, sheet, c, &mut cx.wb).unwrap_or_else(|_| Some(Cell::value(Value::text(v.as_str()))));
+                let mut cell = input_to_cell_in(v, sheet, c, &mut cx.wb, locale).unwrap_or_else(|_| Some(Cell::value(Value::text(v.as_str()))));
                 if let Some(cl) = cell.as_mut() {
                     numeric_from_html(cl, v, html.get(ri).and_then(|r| r.get(ci)), &mut cx.wb);
                 }

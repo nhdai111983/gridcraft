@@ -81,28 +81,47 @@ type. Files, stored formulas, number-format codes and the command API stay en-US
 - **Currency:** đồng after the amount with a space, no decimals: `#,##0 [$₫-42A]` → `1.234.567 ₫`.
   The Number Format list's Currency and the accounting button apply đồng's formats in Vietnamese.
 - **Entry** (`core::parse::parse_input_in`, `cell.set`/`range.fill` `locale: "vi-VN"`): `1.234,5`,
-  `1234,5`, `12,5%`, `1.234 ₫`/`₫1.234` (currency format), `24/10/2026`, `24-10-26`, `24/10`,
-  ISO dates, `14:30`, date-times. `.` is not a date separator and en-US spellings such as
+  `1234,5`, `12,5%`, `1.234 ₫`/`₫1.234`/`1.234đ`/`1.234 VNĐ`/`VND 1.234` (currency format),
+  `24/10/2026`, `24-10-26`, `24/10`, ISO dates, `14:30`, `2:30 CH`/`10:00 SA`, date-times. A first
+  group starting with 0 (`0.125`, `090.312.345`) is text, not grouping; `((1))` is text. `.` is not a date separator and en-US spellings such as
   `1,234.5` or `1.5` stay text, as in Excel with vi-VN settings. The API without `locale` is en-US.
 - **Formulas** (`FormulaLocale::Vi`): English function names (as Excel's Vietnamese version), `;`
   between arguments, decimal comma, `\` between array columns — the Spanish mechanism without the
   name table. Stored and saved as en-US (`SUM(A1,0.5)`).
-- **Functions:** `TEXT` reads its format text the locale's way (`TEXT(A1;"#.##0,00")` →
-  `1.234,50`; `numfmt::delocalize_code`), `VALUE` reads vi-VN text, `NUMBERVALUE` defaults to the
-  locale's separators (Microsoft's documentation of each). Their results depend on the locale, as
-  Excel's depend on the system; a workbook recalculates when the locale changes.
+- **Functions (follows Excel):** `TEXT`, `VALUE` and `NUMBERVALUE` evaluate in the workbook's
+  display locale, exactly as Excel's evaluate in the system's: in vi-VN `TEXT(A1;"#.##0,00")` →
+  `1.234,50` (the format text is read the vi-VN way: `,` decimal, `.` grouping; dates and times
+  keep their letters, only `ss,00` changes), `VALUE("1.234,5")` → 1234.5, and `NUMBERVALUE` with
+  its separators omitted uses the locale's. **Literal format codes inside formulas are therefore
+  locale-dependent, as in Excel:** `=TEXT(A1,"#,##0.00")` written in an en-US file shows
+  differently when the workbook is shown in vi-VN. The formula itself is stored unchanged (the
+  string literal is never rewritten; `numfmt::delocalize_code` runs only when `TEXT` evaluates),
+  so the file stays en-US; the cached result is the one last calculated. A workbook recalculates
+  when its locale changes and when it opens in a non-en-US locale, if a formula calls `TEXT` or
+  `…VALUE(`.
+- **Other entry points:** pasting text from another app (`edit.paste` `locale`), the custom
+  AutoFilter operand (`data.filterBy` stores it en-US), Scenario values, Solver constraint right
+  sides, Forecast Sheet dates, Data › From Text/CSV, Goal Seek's target and Advanced Filter
+  criteria cells read the regional format; what they store stays en-US.
+- **API (control channel, MCP, CLI):** locale-neutral by default — en-US input and output — and
+  every command that reads typed values takes an explicit `locale`. The control channel shows
+  en-US text even while the window shows vi-VN (`display::with_locale`); see
+  `docs/control-protocol.md`.
 - **CSV (decision):** Excel reads and writes CSV with the system's list separator and number
   format. In vi-VN, Save As CSV writes `;` between fields and the displayed values (`1.234,50;24/10/2026`;
   General numbers in full precision with a decimal comma); a file read from CSV keeps its own
   separator. Opening a CSV in vi-VN reads values the vi-VN way and takes `;` as the separator when
   it appears; a file whose commas only sit between digits is one column of decimal-comma numbers;
-  other comma files (en-US exports) still split at commas. Round trip in the same locale is
+  other comma files (en-US exports) still split at commas. In vi-VN `;` is the delimiter only
+  when every line has one (outside quotes); a file whose lines hold exactly one comma, between
+  digits, is one column of decimal-comma numbers; otherwise a consistent `,` or tab decides, as in
+  en-US. A CSV that was opened is saved back with its own delimiter. Round trip in the same locale is
   lossless (tested); en-US behaviour is unchanged. Opening a vi-VN CSV in en-US reads `1.234,50`
   as text, as Excel does across locales.
 - **Not yet:** a regional setting independent of the language; localized format codes in the
   Format Cells dialog (codes show en-US: `#,##0.00`); chart axis and data labels (en-US); conditions in `[<1000,5]` brackets of a
-  localized TEXT code; arithmetic coercion of text (`="1,5"+1`) stays en-US; data-validation
-  messages quote en-US numbers.
+  localized TEXT code; arithmetic coercion of text (`="1,5"+1`) and the criteria of COUNTIF-style
+  functions stay en-US; data-validation messages quote en-US numbers.
 
 ## Infrastructure (do first)
 

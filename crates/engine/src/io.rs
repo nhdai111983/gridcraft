@@ -225,7 +225,7 @@ pub fn save_bytes_as(wb: &Workbook, path: &str, kind: FileKind) -> Result<Vec<u8
         // (`;` in vi-VN, where `,` is the decimal separator).
         FileKind::Csv => wb
             .sheet(sheet)
-            .map(|sh| csv(wb, sh, wb.csv_delimiter.unwrap_or_else(|| u8::try_from(wb.locale.list_separator()).unwrap_or(b','))))
+            .map(|sh| csv(wb, sh, wb.csv_delimiter.unwrap_or_else(|| u8::try_from(crate::display::locale(wb).list_separator()).unwrap_or(b','))))
             .transpose()
             .map(Option::unwrap_or_default),
         FileKind::Tsv => wb.sheet(sheet).map(|sh| csv(wb, sh, b'\t')).transpose().map(Option::unwrap_or_default),
@@ -261,7 +261,7 @@ fn csv(wb: &Workbook, sh: &Sheet, delimiter: u8) -> Result<Vec<u8>> {
             && let gridcraft_core::Value::Number(number) = sh.value(c)
             && number.is_finite()
         {
-            wb.locale.localize_number(&number.to_string())
+            crate::display::locale(wb).localize_number(&number.to_string())
         } else {
             crate::display::value_text(wb, sh, c)
         }

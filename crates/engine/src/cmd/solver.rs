@@ -249,7 +249,7 @@ fn split_constraint(t: &str) -> Option<(String, Rel, String)> {
     None
 }
 
-fn parse_constraint(wb: &Workbook, sheet: usize, c: &Json) -> Result<Constraint> {
+fn parse_constraint(wb: &Workbook, sheet: usize, c: &Json, locale: gridcraft_core::Locale) -> Result<Constraint> {
     let (lhs_text, rel, rhs_json) = match c {
         Json::String(t) => {
             let (l, r, rhs) = split_constraint(t).ok_or_else(|| bad(CMD, format!("not a constraint: `{t}`")))?;
@@ -276,8 +276,9 @@ fn parse_constraint(wb: &Workbook, sheet: usize, c: &Json) -> Result<Constraint>
             }
             Json::String(t) => {
                 let t = t.trim().trim_start_matches('=').trim();
-                if let Some(v) = num_text(t) {
-                    (Rhs::Const(v), t.to_string())
+                // A number typed in the interface's regional format (`1,5`) is kept en-US.
+                if let Some(v) = gridcraft_core::parse::parse_number_text_locale(t, wb.date_system, locale).filter(|v| v.is_finite()) {
+                    (Rhs::Const(v), if locale == gridcraft_core::Locale::EnUs { t.to_string() } else { gridcraft_core::number_to_text(v) })
                 } else {
                     let (rsi, cells) = cells_of(wb, t, sheet, MAX_CONSTRAINTS)?;
                     if rsi != sheet {
@@ -298,6 +299,7 @@ fn parse_constraint(wb: &Workbook, sheet: usize, c: &Json) -> Result<Constraint>
 fn parse_model(s: &Session, p: &Json) -> Result<Model> {
     let d = s.doc()?;
     let wb = &d.wb;
+    let locale = super::edit::locale_param(CMD, p)?;
     let obj_text = str_param(p, "objective").or_else(|| str_param(p, "setObjective")).or_else(|| str_param(p, "set")).unwrap_or("");
     let (sheet, obj) = cells_of(wb, obj_text, wb.active_sheet, 1).map_err(|_| EngineError::Other("The objective must be a single cell.".into()))?;
     let objective = *obj.first().ok_or_else(|| EngineError::Other("The objective must be a single cell.".into()))?;
@@ -340,7 +342,7 @@ fn parse_model(s: &Session, p: &Json) -> Result<Model> {
             return Err(EngineError::Other(format!("Too many constraints (at most {MAX_CONSTRAINTS}).")));
         }
         for c in list {
-            let c = parse_constraint(wb, sheet, c)?;
+            let c = parse_constraint(wb, sheet, c, locale)?;
             scalar = scalar.saturating_add(c.lhs.len());
             if scalar > MAX_CONSTRAINTS {
                 return Err(EngineError::Other(format!("Too many constraints (at most {MAX_CONSTRAINTS} cells).")));

@@ -80,3 +80,15 @@ rejected without changing earlier settings. `ui.printSubmit` explicitly submits 
 print-ready PDF without opening a dialog; inspect `ui.printSettings` until `busy` becomes false
 and check `status`/`detail`. The browser keeps its own print hook. PDF export remains separate.
 GridCraft accepts the existing `file.print` sheet/pagination params on `ui.printSubmit`; the engine `file.print` command returns the PDF without spooling.
+
+## Regional format (NexusOffice)
+
+The window shows workbooks in the interface language's regional format (vi-VN: `1.234,5`,
+`24/10/2026`), but the control channel stays locale-neutral: `engine.execute` reads and shows
+en-US (`cell.get`'s `text`, copied text, CSV from `file.saveBytes`) unless the call names a
+regional format, either in the command's params (`{"command":"cell.set","params":{"cell":"A1",
+"input":"1.234,5","locale":"vi-VN"}}`) or on the request (`{"method":"engine.execute",
+"locale":"vi-VN",…}`). Commands that read typed values take `locale` (`cell.set`, `range.fill`,
+`edit.paste`, `data.filterBy`, `data.scenarioAdd`, `data.solver`, `data.forecastSheet`,
+`data.getData`, `data.textToColumns`); formulas are always en-US (`,` between arguments, `.` decimals). Files never
+change: XLSX stores en-US numbers, formulas and format codes.

@@ -9,6 +9,32 @@ use gridcraft_core::{CellRef, RangeRef, Value};
 use gridcraft_model::{Sheet, Workbook};
 use gridcraft_numfmt::{Formatted, NumberFormat, format_value_in};
 
+thread_local! {
+    /// A regional format that overrides the workbook's while [`with_locale`] runs.
+    static LOCALE: std::cell::Cell<Option<gridcraft_core::Locale>> = const { std::cell::Cell::new(None) };
+}
+
+/// The regional format text is shown in now: the workbook's ([`Workbook::locale`], which the
+/// interface sets), unless [`with_locale`] overrides it.
+pub fn locale(wb: &Workbook) -> gridcraft_core::Locale {
+    LOCALE.try_with(std::cell::Cell::get).ok().flatten().unwrap_or(wb.locale)
+}
+
+/// Runs `f` showing (and CSV-writing) every workbook in `locale` on this thread, then restores
+/// the previous override, even if `f` panics. The control channel runs the API this way so agents
+/// read en-US text whatever language the window shows (NexusOffice).
+pub fn with_locale<R>(locale: gridcraft_core::Locale, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<gridcraft_core::Locale>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let _ = LOCALE.try_with(|l| l.set(self.0));
+        }
+    }
+    let previous = LOCALE.try_with(|l| l.replace(Some(locale))).ok().flatten();
+    let _restore = Restore(previous);
+    f()
+}
+
 /// Parsed number formats are cached by code.
 fn parsed(code: &str) -> NumberFormat {
     static CACHE: std::sync::LazyLock<Mutex<HashMap<String, NumberFormat>>> = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -32,7 +58,7 @@ pub fn number_format(code: &str) -> NumberFormat {
 
 /// Formats a value with a format code, in the workbook's regional format.
 pub fn format(v: &Value, code: &str, wb: &Workbook) -> Formatted {
-    format_value_in(v, &parsed(code), wb.date_system, wb.locale)
+    format_value_in(v, &parsed(code), wb.date_system, locale(wb))
 }
 
 /// What the cell editor and the formula bar start from. Same as `Cell::input_text`, except that a
@@ -52,10 +78,10 @@ pub fn edit_text(wb: &Workbook, sheet: &Sheet, c: CellRef) -> String {
         return raw;
     }
     if !parsed(code).is_date() {
-        return wb.locale.localize_number(&raw);
+        return locale(wb).localize_number(&raw);
     }
     let reads_back =
-        |s: &str| matches!(gridcraft_core::parse::parse_input_in(s, wb.date_system, wb.locale).value, Value::Number(m) if (m - n).abs() < 1e-9);
+        |s: &str| matches!(gridcraft_core::parse::parse_input_in(s, wb.date_system, locale(wb)).value, Value::Number(m) if (m - n).abs() < 1e-9);
     let shown = format(&cell.value, code, wb).text;
     if reads_back(&shown) {
         return shown;
@@ -70,7 +96,7 @@ pub fn edit_text(wb: &Workbook, sheet: &Sheet, c: CellRef) -> String {
     } else {
         format!("{date} {time}")
     };
-    if reads_back(&iso) { iso } else { wb.locale.localize_number(&raw) }
+    if reads_back(&iso) { iso } else { locale(wb).localize_number(&raw) }
 }
 
 /// Whether `c` has a formula that must not be shown: its cell is formatted Hidden on a

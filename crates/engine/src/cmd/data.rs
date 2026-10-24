@@ -532,8 +532,13 @@ fn filter_by(s: &mut Session, p: &Json) -> Result<Json> {
             blanks: bool_param(p, "blanks").unwrap_or(false),
         })
     } else if let Some(c) = p.get("custom") {
-        let a = (c.get("op").and_then(Json::as_str).unwrap_or("=").to_string(), c.get("value").map(super::edit::json_to_input).unwrap_or_default());
-        let b = c.get("op2").and_then(Json::as_str).map(|o| (o.to_string(), c.get("value2").map(super::edit::json_to_input).unwrap_or_default()));
+        // A number typed in the interface's regional format (`locale`) is stored en-US.
+        let locale = super::edit::locale_param("data.filterBy", p)?;
+        let sys = s.doc()?.wb.date_system;
+        let operand =
+            |key: &str| c.get(key).map(super::edit::json_to_input).map(|t| super::edit::canonical_number_text(&t, sys, locale)).unwrap_or_default();
+        let a = (c.get("op").and_then(Json::as_str).unwrap_or("=").to_string(), operand("value"));
+        let b = c.get("op2").and_then(Json::as_str).map(|o| (o.to_string(), operand("value2")));
         Some(FilterCriterion::Custom { a, b, and: c.get("and").and_then(Json::as_bool).unwrap_or(true) })
     } else if let Some(t) = p.get("top") {
         Some(FilterCriterion::Top10 {
@@ -873,6 +878,8 @@ fn remove_duplicates(s: &mut Session, p: &Json) -> Result<Json> {
 }
 
 fn text_to_columns(s: &mut Session, p: &Json) -> Result<Json> {
+    // The parts are read as typed in the interface's regional format (`1,5` in vi-VN).
+    let locale = super::edit::locale_param("data.textToColumns", p)?;
     let r = target_range(s, p)?;
     let sheet = target_sheet(s, p)?;
     let mut delims: Vec<char> = p
@@ -910,7 +917,7 @@ fn text_to_columns(s: &mut Session, p: &Json) -> Result<Json> {
             }
         }
         for (c, t) in out {
-            let cell = super::edit::input_to_cell(&t, sheet, c, &mut cx.wb).unwrap_or(None);
+            let cell = super::edit::input_to_cell_in(&t, sheet, c, &mut cx.wb, locale).unwrap_or(None);
             let shm = cx.sheet_mut(sheet)?;
             match cell {
                 Some(x) => shm.set_cell(c, x),
