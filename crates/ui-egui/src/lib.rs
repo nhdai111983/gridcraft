@@ -1283,7 +1283,7 @@ impl SheetApp {
         // NexusOffice: workbooks show in the regional format (File › Options › Region, else the
         // interface language's; vi-VN: 1.234,5, dd/mm/yyyy); cheap when nothing changed, and an undone step that comes back with
         // another locale gets this one again.
-        self.session.set_locale(self.ui.regional_format());
+        self.session.set_locale(self.ui.language.regional_format());
         // NexusOffice: the user's accent colour (File › Options, `ui.accent`).
         theme::set_accent(ctx, self.ui.accent.as_deref().and_then(theme::parse_hex));
         self.effective_dark = ctx.theme() == egui::Theme::Dark;

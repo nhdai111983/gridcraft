@@ -275,7 +275,8 @@ pub struct Session {
 /// criterion, a cell holding the text `1,5`), and `TEXT`, `VALUE` and `NUMBERVALUE` read and write
 /// it, so almost any formula may depend on it. A cheap scan that stops at the first formula.
 fn locale_sensitive(wb: &Workbook) -> bool {
-    wb.sheets.iter().any(|sh| sh.cells.iter().any(|(_, c)| c.formula.is_some()))
+    let calls = |text: &str| text.contains("TEXT(") || text.contains("VALUE(");
+    wb.sheets.iter().any(|sh| sh.cells.iter().any(|(_, c)| c.formula.as_ref().is_some_and(|f| calls(&f.text))))
 }
 
 impl Session {

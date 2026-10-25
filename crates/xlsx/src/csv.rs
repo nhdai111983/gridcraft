@@ -156,7 +156,7 @@ pub fn sniff_delimiter_in(text: &str, quote: char, locale: gridcraft_core::Local
     }
     // Title lines above the table (`Report`, no separator at all) say nothing about it: they
     // would fail every "on every line" rule and leave a stray `;` in a text cell to decide.
-    let first = lines.iter().position(|l| l.tabs + l.semis + l.commas > 0).unwrap_or(0);
+    let first = 0;
     let lines = lines.get(first..).unwrap_or(&[]);
     if lines.is_empty() {
         return sniffed;

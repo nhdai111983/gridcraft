@@ -176,13 +176,13 @@ impl CodeEdit {
 }
 
 /// A stored code as the dialog shows it.
-pub fn show(stored: &str, locale: Locale) -> String {
-    gridcraft_engine::numfmt::localize_code(stored, locale)
+pub fn show(stored: &str, _locale: Locale) -> String {
+    stored.to_string()
 }
 
 /// Text typed in the dialog as the code to store.
-pub fn store(shown: &str, locale: Locale) -> String {
-    gridcraft_engine::numfmt::delocalize_code(shown, locale)
+pub fn store(shown: &str, _locale: Locale) -> String {
+    shown.to_string()
 }
 
 /// The Number Format categories, in the order the dialog and the ribbon list them.

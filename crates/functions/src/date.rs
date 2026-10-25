@@ -228,7 +228,7 @@ fn parsed_text(a: &[Arg], c: &mut dyn Ctx) -> R<(f64, &'static str)> {
     };
     // NexusOffice: read in the workbook's regional format (`25/10/2026` in vi-VN), as Excel reads
     // with the system's.
-    let p = gridcraft_core::parse::parse_input_in(&t, c.date_system(), c.locale());
+    let p = gridcraft_core::parse::parse_input(&t, c.date_system());
     match (p.value, p.format) {
         (Value::Number(n), Some(f)) if f.contains(['d', 'y', 'h']) => Ok((n, f)),
         _ => Err(CellError::Value),
