@@ -16,5 +16,5 @@ pub use collate::{
     starts_with_prefolded, text_eq, text_eq_prefolded, text_key,
 };
 pub use date::DateSystem;
-pub use locale::Locale;
+pub use locale::{Locale, coercion_locale, coercion_scope};
 pub use value::{Array, CellError, Value, compare, compare_numbers, compare_text, number_to_text, sort_compare};
