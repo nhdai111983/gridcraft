@@ -243,7 +243,10 @@ impl Value {
     pub fn to_text(&self) -> Result<String, CellError> {
         match self {
             Value::Empty => Ok(String::new()),
-            Value::Number(n) => Ok(crate::locale::coercion_locale().localize_number(&number_to_text(*n))),
+            Value::Number(n) => Ok(match crate::locale::coercion_locale() {
+                crate::Locale::EnUs => number_to_text(*n),
+                l => l.localize_number(&number_to_text(*n)),
+            }),
             Value::Bool(b) => Ok(if *b { "TRUE".into() } else { "FALSE".into() }),
             Value::Text(t) => Ok(t.to_string()),
             Value::Error(e) => Err(*e),
