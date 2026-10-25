@@ -22,7 +22,7 @@ fn find_column(db: &Array, label: &str) -> Option<usize> {
     (0..db.cols).find(|&c| match db.get(0, c) {
         Some(Value::Text(t)) => text_eq(t.trim(), label),
         // NexusOffice: a number label is spelled as `&` spells it, in the evaluation's regional format.
-        Some(Value::Number(n)) => Value::Number(*n).to_text().is_ok_and(|t| t == label),
+        Some(Value::Number(n)) => gridcraft_core::number_to_text(*n) == label,
         _ => false,
     })
 }

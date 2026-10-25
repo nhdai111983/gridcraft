@@ -79,7 +79,6 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
     }
     // NexusOffice: the workbook is calculated once, when it opens, in the session's regional
     // format — also a manual-calculation one, whose results would otherwise stay the file's.
-    wb.locale = s.locale;
     let mut doc = DocState::new(wb, path, title);
     if crate::io::FileKind::from_path(&name).is_none() && gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Xlsx {
         doc.content_kind = Some(crate::io::FileKind::Xlsx);
