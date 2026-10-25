@@ -24,6 +24,7 @@ pub mod icons;
 pub mod keymap;
 pub mod keytips;
 pub mod nexus;
+pub mod nexus_save_prompt;
 pub mod nexus_toolbar;
 pub mod nexus_wps;
 pub mod outline;
@@ -312,6 +313,9 @@ pub struct SheetApp {
     /// Hosted inside another program's window (a tab of the NexusOffice window): the app leaves the
     /// window's title alone and its top row doesn't move or maximise the window.
     pub embedded: bool,
+    /// NexusOffice: the rectangle the app was last drawn in (its tab, when [`embedded`](Self::embedded)),
+    /// which "Lưu thay đổi?" dims and centres on.
+    pub(crate) drawn_in: egui::Rect,
     /// The host's file dialog being shown ([`file_dialogs`]).
     pub(crate) file_dialog: Option<file_dialogs::PendingDialog>,
 }
@@ -361,6 +365,7 @@ impl SheetApp {
             toolbar: false,
             wps: false,
             embedded: false,
+            drawn_in: egui::Rect::NOTHING,
             file_dialog: None,
         }
     }
@@ -1324,6 +1329,7 @@ impl SheetApp {
     /// Lays out the whole window.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        self.drawn_in = ui.max_rect();
         self.keep_keyboard(&ctx);
         self.poll_printing(&ctx);
         if !self.fonts_ready || self.fonts_rebind {

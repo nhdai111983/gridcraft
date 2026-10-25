@@ -119,6 +119,8 @@ Cơ chế chính:
 | `crates/ui-egui/tests/nexus_embed.rs` | File mới (NX-UI.5): test hook host (mới, mở, lưu không chặn, lưu rồi đóng, huỷ) | — (file mới) |
 | `crates/ui-egui/examples/snapshot.rs` (thêm NX-UI.6) | Cờ `--wps`, `--embedded` | Có |
 | `apps/gridcraft/src/main.rs` (thêm NX-UI.6) | Bật `app.wps` thay `app.toolbar` (bố cục menu vẫn sau cờ) | Có — cờ giao diện |
+| `crates/ui-egui/src/nexus_save_prompt.rs` | File mới, giống hệt ở 4 fork: hộp «Lưu thay đổi?» chung của NexusOffice khi chạy nhúng (quyết định Tech Lead 2026-10-25) — tiêu đề «Lưu thay đổi?», câu «Lưu thay đổi của “<tên>” trước khi đóng?», nút Lưu (màu chủ đạo) · Không lưu · Hủy căn phải, Enter = Lưu (nút đang có tiêu điểm), Esc = Hủy, tiêu điểm bắt đầu ở Lưu, modal trên tab (làm mờ tab, chặn chuột/phím bên dưới); số đo theo DESIGN_SYSTEM.md §3 (bo góc hộp 12, nút 6, lề 20, nút tối thiểu 88×32, tiêu đề 22, chữ 13) | — (file mới) |
+| `crates/ui-egui/src/dialogs.rs`, `crates/ui-egui/src/lib.rs` (thêm) | NX-UI.12: khi `app.embedded`, hộp `saveChanges` vẽ bằng `nexus_save_prompt` (Lưu/Không lưu/Hủy làm đúng việc của Save/Don't Save/Cancel upstream, gồm ghi ô đang gõ trước khi lưu và chờ Lưu thành của chủ nhà); trường `SheetApp::drawn_in` (vùng tab). Không nhúng giữ nguyên hộp upstream. Test `crates/ui-egui/tests/nexus_save_prompt.rs` | Có — cờ nhúng |
 
 ### GUID WiX mới (Nexus Sheet riêng, không dùng chung với GridCraft hay app Nexus khác)
 
