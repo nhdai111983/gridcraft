@@ -193,15 +193,12 @@ pub fn show(ctx: &egui::Context, id: Id, over: Rect, prompt: &Prompt<'_>, look: 
                         (w + pad).max(BUTTON_SIZE.x)
                     });
                     let row = widths.iter().sum::<f32>() + 2.0 * BUTTON_GAP;
-                    ui.allocate_ui_with_layout(vec2(inner, BUTTON_SIZE.y), Layout::left_to_right(Align::Center), |ui| {
+                    ui.allocate_ui_with_layout(vec2(inner, BUTTON_SIZE.y), Layout::right_to_left(Align::Center), |ui| {
                         ui.spacing_mut().item_spacing.x = BUTTON_GAP;
-                        let lead = (inner - row).max(0.0);
-                        if lead > 0.0 {
-                            ui.add_space(lead);
-                        }
-                        let save = button(ui, words.save, true, look, &pal);
-                        let dont_save = button(ui, words.dont_save, false, look, &pal);
+                        let _ = (row, widths);
                         let cancel = button(ui, words.cancel, false, look, &pal);
+                        let dont_save = button(ui, words.dont_save, false, look, &pal);
+                        let save = button(ui, words.save, true, look, &pal);
                         [(save, Answer::Save), (dont_save, Answer::DontSave), (cancel, Answer::Cancel)]
                     })
                     .inner
