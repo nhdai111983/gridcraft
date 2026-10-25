@@ -1443,15 +1443,12 @@ fn embedded_save_prompt(app: &mut SheetApp, ctx: &egui::Context, d: Dialog) {
     let question = sp::question(vi, name);
     let prompt = sp::Prompt { words: sp::words(vi), question: &question, note: None, error: None };
     let look = sp::Look {
-        surface: t.ribbon,
-        border: t.ribbon_border,
-        text: t.text,
-        text_dim: t.text_dim,
-        error: ctx.global_style().visuals.error_fg_color,
+        dark: t.dark,
         accent: t.accent,
         on_accent: t.on_accent,
-        backdrop: egui::Color32::from_black_alpha(if t.dark { 110 } else { 56 }),
+        error: ctx.global_style().visuals.error_fg_color,
         title_font: egui::FontId::new(sp::TITLE_SIZE, egui::FontFamily::Name(crate::theme::UI_BOLD.into())),
+        title_fake_bold: false,
     };
     let answer = sp::show(ctx, egui::Id::new("nexus_save_prompt"), app.drawn_in, &prompt, &look);
     match answer {

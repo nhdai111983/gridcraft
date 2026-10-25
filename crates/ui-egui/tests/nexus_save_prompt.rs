@@ -48,17 +48,22 @@ fn asking(tag: &str, embedded: bool) -> (H, std::path::PathBuf) {
     (h, path)
 }
 
+/// The prompt: a dialog named by its title.
+fn card(h: &H) -> egui::Rect {
+    h.get_by_role_and_label(Role::Dialog, "Lưu thay đổi?").rect()
+}
+
 /// The prompt's button `label` (the tool row above may have a button of the same name).
 fn button(h: &H, label: &str) -> egui::Rect {
-    let title = h.get_by_label("Lưu thay đổi?").rect();
-    let found: Vec<_> = h.query_all_by_role_and_label(Role::Button, label).filter(|b| b.rect().min.y > title.max.y).collect();
+    let card = card(h);
+    let found: Vec<_> = h.query_all_by_role_and_label(Role::Button, label).filter(|b| card.contains_rect(b.rect())).collect();
     assert_eq!(found.len(), 1, "one {label} in the prompt");
     found[0].rect()
 }
 
 fn focused(h: &H, label: &str) -> bool {
-    let title = h.get_by_label("Lưu thay đổi?").rect();
-    h.query_all_by_role_and_label(Role::Button, label).any(|b| b.rect().min.y > title.max.y && b.is_focused())
+    let card = card(h);
+    h.query_all_by_role_and_label(Role::Button, label).any(|b| card.contains_rect(b.rect()) && b.is_focused())
 }
 
 #[test]
@@ -72,9 +77,9 @@ fn embedded_prompt_reads_like_every_nexus_app() {
     for b in [save, dont, cancel] {
         assert!(b.width() >= BUTTON_SIZE.x - 0.5 && b.height() >= BUTTON_SIZE.y - 0.5, "{b:?}");
     }
-    let title = h.get_by_label("Lưu thay đổi?").rect();
-    let inner = WIDTH - 2.0 * f32::from(PADDING);
-    assert!((cancel.max.x - (title.min.x + inner)).abs() < 1.5, "right-aligned: {cancel:?} {title:?}");
+    let card = card(&h);
+    assert!((card.width() - WIDTH).abs() < 3.0, "{card:?}");
+    assert!((cancel.max.x - (card.max.x - f32::from(PADDING))).abs() < 1.5, "right-aligned: {cancel:?} {card:?}");
     assert!(focused(&h, "Lưu"), "the keyboard starts on Lưu");
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
@@ -102,8 +107,8 @@ fn embedded_prompt_enter_saves_and_escape_cancels() {
 fn embedded_prompt_dont_save_closes_without_writing() {
     let (mut h, path) = asking("dont", true);
     let before = std::fs::read(&path).unwrap();
-    let title = h.get_by_label("Lưu thay đổi?").rect();
-    h.query_all_by_role_and_label(Role::Button, "Không lưu").find(|b| b.rect().min.y > title.max.y).unwrap().click();
+    let card = card(&h);
+    h.query_all_by_role_and_label(Role::Button, "Không lưu").find(|b| card.contains_rect(b.rect())).unwrap().click();
     h.run_steps(4);
     assert!(h.state().dialog.is_none());
     assert!(!h.state().session.documents().iter().any(|d| d.display_title() == NAME), "closed");
@@ -116,5 +121,21 @@ fn embedded_prompt_dont_save_closes_without_writing() {
 fn stand_alone_prompt_is_upstreams() {
     let (h, path) = asking("standalone", false);
     assert!(h.query_by_label_contains("trước khi đóng").is_none(), "upstream's question, not the NexusOffice one");
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+/// Tab and Shift+Tab go through the three buttons in the order they read (the dim and the card
+/// never take the focus): Lưu → Không lưu → Hủy → Không lưu.
+#[test]
+fn tab_cycles_the_buttons_in_reading_order() {
+    let (mut h, path) = asking("tab", true);
+    assert!(focused(&h, "Lưu"));
+    for (shift, want) in [(false, "Không lưu"), (false, "Hủy"), (true, "Không lưu")] {
+        let m = if shift { egui::Modifiers::SHIFT } else { egui::Modifiers::NONE };
+        h.key_press_modifiers(m, egui::Key::Tab);
+        h.run_steps(2);
+        assert!(focused(&h, want), "Tab shift={shift}: {want} has the focus");
+    }
+    assert!(h.state().dialog.is_some(), "still asking");
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
