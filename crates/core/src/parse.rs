@@ -2,9 +2,11 @@
 //!
 //! Recognises numbers with thousands separators, percentages, currency, scientific notation,
 //! fractions (`1 1/2`), dates (`3/4/2026`, `2026-03-04`, `4-Mar-2026`, `Mar 4, 2026`), times
-//! (`10:30`, `10:30:15 PM`) and date-times. Locale: en-US.
+//! (`10:30`, `10:30:15 PM`) and date-times. Locale: en-US; [`parse_input_in`] reads the other
+//! regional formats ([`Locale`]) for the interface.
 
 use crate::date::{DateSystem, MONTHS, serial_from_ymd, time_fraction};
+use crate::locale::{DONG, Locale};
 use crate::value::{CellError, Value};
 
 /// A parsed entry: its value and the number format Excel would apply automatically.
@@ -39,6 +41,104 @@ pub fn parse_input(s: &str, sys: DateSystem) -> Parsed {
     Parsed { value: Value::text(s), format: None }
 }
 
+/// [`parse_input`] for text typed in a regional format: `1.234,5`, `24/10/2026` and `1.234 ₫` in
+/// Vietnamese. The value is the same as the en-US spelling's; so is the automatic number format,
+/// which is stored en-US (`#,##0.00`, `m/d/yyyy`) and shown in the locale. en-US is
+/// [`parse_input`] itself. Formulas are not parsed here.
+pub fn parse_input_in(s: &str, sys: DateSystem, locale: Locale) -> Parsed {
+    if locale == Locale::EnUs {
+        return parse_input(s, sys);
+    }
+    if s.is_empty() {
+        return Parsed { value: Value::Empty, format: None };
+    }
+    if let Some(rest) = s.strip_prefix('\'') {
+        return Parsed { value: Value::text(rest), format: None };
+    }
+    let t = s.trim();
+    if t.eq_ignore_ascii_case("TRUE") {
+        return Parsed { value: Value::Bool(true), format: None };
+    }
+    if t.eq_ignore_ascii_case("FALSE") {
+        return Parsed { value: Value::Bool(false), format: None };
+    }
+    if let Some(e) = CellError::parse(t) {
+        return Parsed { value: Value::Error(e), format: None };
+    }
+    if let Some((n, f)) = parse_numeric_in(t, sys, locale) {
+        return Parsed { value: Value::number(n), format: f };
+    }
+    Parsed { value: Value::text(s), format: None }
+}
+
+/// [`parse_number_text_in`] in a regional format (`VALUE` reads text this way).
+pub fn parse_number_text_locale(s: &str, sys: DateSystem, locale: Locale) -> Option<f64> {
+    parse_numeric_in(s.trim(), sys, locale).map(|(n, _)| n)
+}
+
+/// The currency format a number typed with the đồng sign gets (vi-VN: sign after, no decimals).
+pub const VND_FORMAT: &str = "#,##0 [$₫-42A]";
+/// [`VND_FORMAT`] for an amount typed with decimals.
+pub const VND_FORMAT_DECIMALS: &str = "#,##0.00 [$₫-42A]";
+
+fn parse_numeric_in(t: &str, sys: DateSystem, locale: Locale) -> Option<(f64, Option<&'static str>)> {
+    if locale == Locale::EnUs {
+        return parse_numeric(t, sys);
+    }
+    if t.is_empty() {
+        return None;
+    }
+    if let Some(inner) = t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
+        // One pair only: `((1))` is text, as in Excel, and nesting can't grow the stack.
+        let inner = inner.trim();
+        if inner.starts_with('(') {
+            return None;
+        }
+        return parse_numeric_in(inner, sys, locale).map(|(n, f)| (-n, f));
+    }
+    // The đồng, after the amount as vi-VN writes it (`1.234 ₫`, `1.234đ`, `1.234 VNĐ`) or before it.
+    if let Some(body) = strip_dong(t) {
+        let body = body.trim();
+        if body.contains(['%', '$', 'e', 'E', DONG]) || strip_dong(body).is_some() || leading_zero_group(body, locale) {
+            return None;
+        }
+        let (n, _) = parse_plain(&locale.delocalize_number(body))?;
+        return Some((n, Some(if body.contains(locale.decimal_separator()) { VND_FORMAT_DECIMALS } else { VND_FORMAT })));
+    }
+    if !leading_zero_group(t, locale)
+        && let Some(r) = parse_plain(&locale.delocalize_number(t))
+    {
+        return Some(r);
+    }
+    if let Some(r) = parse_fraction(t) {
+        return Some((r, Some("# ?/?")));
+    }
+    parse_datetime_dmy(t, sys)
+}
+
+/// The amount of `1.234 ₫`, `1.234đ`, `1.234 VNĐ`, `1.234 VND` (case-insensitive) or `₫1.234`.
+/// Only the sign `₫` may lead: `Đ101` or `VND1` are codes, not amounts.
+fn strip_dong(t: &str) -> Option<&str> {
+    const TRAILING: [&str; 4] = ["₫", "vnđ", "vnd", "đ"];
+    if let Some(rest) = t.strip_prefix(DONG) {
+        return Some(rest);
+    }
+    let lower = t.to_lowercase();
+    // Lower-casing these letters keeps their byte lengths, so the slices line up.
+    if lower.len() != t.len() {
+        return None;
+    }
+    TRAILING.iter().find(|sign| lower.ends_with(**sign)).and_then(|sign| t.get(..t.len() - sign.len()))
+}
+
+/// `0.125` or `090.312.345` in a locale that groups with `.`: a first group starting with 0 isn't
+/// a grouped number (Excel keeps it as text), unlike en-US `0.125`.
+fn leading_zero_group(t: &str, locale: Locale) -> bool {
+    let body = t.trim_start_matches(['-', '+', ' ', DONG]);
+    let int = body.split(locale.decimal_separator()).next().unwrap_or("");
+    int.contains(locale.group_separator()) && int.starts_with('0')
+}
+
 /// Numeric text as arithmetic coerces it ("1,000", "50%", "$3", "1/2/2020", "10:00").
 pub fn parse_number_text(s: &str) -> Option<f64> {
     parse_number_text_in(s, DateSystem::D1900)
@@ -55,7 +155,12 @@ fn parse_numeric(t: &str, sys: DateSystem) -> Option<(f64, Option<&'static str>)
     }
     // Parenthesised negatives: (100) = -100.
     if let Some(inner) = t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
-        return parse_numeric(inner.trim(), sys).map(|(n, f)| (-n, f));
+        // One pair only: `((1))` is text, as in Excel, and nesting can't grow the stack.
+        let inner = inner.trim();
+        if inner.starts_with('(') {
+            return None;
+        }
+        return parse_numeric(inner, sys).map(|(n, f)| (-n, f));
     }
     if let Some(r) = parse_plain(t) {
         return Some(r);
@@ -293,17 +398,96 @@ pub fn current_year() -> i64 {
     2026
 }
 
+fn time_format(tf: f64, secs: bool, ampm: bool) -> &'static str {
+    match (secs, ampm) {
+        // 24 hours or more: elapsed hours, so 25:00 shows as 25:00:00, not 1:00.
+        _ if tf >= 1.0 => "[h]:mm:ss",
+        (false, false) => "h:mm",
+        (true, false) => "h:mm:ss",
+        (false, true) => "h:mm AM/PM",
+        (true, true) => "h:mm:ss AM/PM",
+    }
+}
+
+/// Day-first dates (`24/10/2026`, `24-10-26`, `24/10`), ISO dates, English month names, times
+/// and date-times, as the day-first regional formats type them. `.` is not a date separator
+/// there (it groups digits), so `1.5` is not a date.
+fn parse_datetime_dmy(t: &str, sys: DateSystem) -> Option<(f64, Option<&'static str>)> {
+    let t = &vi_am_pm(t);
+    if let Some((tf, secs, ampm)) = parse_time(t) {
+        return Some((tf, Some(time_format(tf, secs, ampm))));
+    }
+    if let Some((d, f)) = parse_date_dmy(t, sys) {
+        return Some((d, Some(f)));
+    }
+    for (i, _) in t.match_indices(' ') {
+        let (a, b) = (t.get(..i)?, t.get(i + 1..)?);
+        if let (Some((d, _)), Some((tf, _, _))) = (parse_date_dmy(a, sys), parse_time(b)) {
+            return Some((d + tf, Some("m/d/yyyy h:mm")));
+        }
+    }
+    None
+}
+
+/// `10:30 SA` / `2:30 CH` (sáng/chiều, vi-VN's AM/PM, as the formats show them) read as AM/PM.
+fn vi_am_pm(t: &str) -> String {
+    let trimmed = t.trim_end();
+    let lower = trimmed.to_ascii_lowercase();
+    for (vi, en) in [("sa", "AM"), ("ch", "PM")] {
+        if let Some(head) = lower.strip_suffix(vi)
+            && head.trim_end().ends_with(|c: char| c.is_ascii_digit())
+            && let Some(original) = trimmed.get(..head.len())
+        {
+            return format!("{original}{en}");
+        }
+    }
+    t.to_string()
+}
+
+fn parse_date_dmy(t: &str, sys: DateSystem) -> Option<(f64, &'static str)> {
+    let t = t.trim().trim_end_matches(',');
+    if t.contains('.') {
+        return None;
+    }
+    fn num(s: &str) -> Option<i64> {
+        let s = s.trim();
+        if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) { s.parse::<i64>().ok() } else { None }
+    }
+    /// Two-digit years: 00–29 are 2000s, 30–99 the 1900s (as the en-US forms).
+    fn expand(w: &str, y: i64) -> i64 {
+        if w.trim().len() <= 2 { if y < 30 { 2000 + y } else { 1900 + y } } else { y }
+    }
+    let parts: Vec<&str> = t.split(['/', '-']).collect();
+    if !parts.iter().all(|p| num(p).is_some()) {
+        // Month names (`24-Oct-2026`, `Oct 24, 2026`) read as en-US reads them.
+        return parse_date(t, sys);
+    }
+    match parts.as_slice() {
+        [a, b, c] => {
+            let (x, y, z) = (num(a)?, num(b)?, num(c)?);
+            if a.trim().len() == 4 {
+                return valid_ymd(sys, x, y, z).map(|s| (s, "yyyy-mm-dd"));
+            }
+            valid_ymd(sys, expand(c, z), y, x).map(|s| (s, "m/d/yyyy"))
+        }
+        [a, b] => {
+            let (x, y) = (num(a)?, num(b)?);
+            if (1..=31).contains(&x) && (1..=12).contains(&y) {
+                return valid_ymd(sys, current_year(), y, x).map(|s| (s, "d-mmm"));
+            }
+            // m/yyyy
+            if (1..=12).contains(&x) && b.trim().len() == 4 {
+                return valid_ymd(sys, y, x, 1).map(|s| (s, "mmm-yy"));
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
 fn parse_datetime(t: &str, sys: DateSystem) -> Option<(f64, Option<&'static str>)> {
     if let Some((tf, secs, ampm)) = parse_time(t) {
-        let f = match (secs, ampm) {
-            // 24 hours or more: elapsed hours, so 25:00 shows as 25:00:00, not 1:00.
-            _ if tf >= 1.0 => "[h]:mm:ss",
-            (false, false) => "h:mm",
-            (true, false) => "h:mm:ss",
-            (false, true) => "h:mm AM/PM",
-            (true, true) => "h:mm:ss AM/PM",
-        };
-        return Some((tf, Some(f)));
+        return Some((tf, Some(time_format(tf, secs, ampm))));
     }
     if let Some((d, f)) = parse_date(t, sys) {
         return Some((d, Some(f)));
@@ -382,6 +566,96 @@ mod tests {
         assert_eq!(p("25:00").value, Value::Number(25.0 / 24.0));
         assert_eq!(p("25:00").format, Some("[h]:mm:ss"));
         assert_eq!(p("23:59").format, Some("h:mm"));
+    }
+
+    fn vi(s: &str) -> Parsed {
+        parse_input_in(s, DateSystem::D1900, Locale::ViVn)
+    }
+
+    #[test]
+    fn vietnamese_numbers() {
+        // (typed, value, automatic format)
+        let cases: &[(&str, f64, Option<&str>)] = &[
+            ("1234,5", 1234.5, None),
+            ("1.234,5", 1234.5, Some("#,##0.00")),
+            ("1.234.567", 1_234_567.0, Some("#,##0")),
+            ("-1,5", -1.5, None),
+            ("(1.000)", -1000.0, Some("#,##0")),
+            ("12,5%", 0.125, Some("0.00%")),
+            ("1,5E+3", 1500.0, Some("0.00E+00")),
+            ("1.234.567 ₫", 1_234_567.0, Some(VND_FORMAT)),
+            ("1.234₫", 1234.0, Some(VND_FORMAT)),
+            ("₫ 50", 50.0, Some(VND_FORMAT)),
+            ("-1.234,5 ₫", -1234.5, Some(VND_FORMAT_DECIMALS)),
+            ("1 1/2", 1.5, Some("# ?/?")),
+        ];
+        for (s, v, f) in cases {
+            assert_eq!(vi(s).value, Value::Number(*v), "{s}");
+            assert_eq!(vi(s).format, *f, "{s}");
+        }
+        // en-US spellings that mean something else here stay text, as Excel's vi-VN does.
+        for s in ["1,234.5", "1.5", "1.23", "1,2,3", "₫", "1.234 ₫ ₫", "12%₫", "đồng", "Tiếng Việt", "1.2.3.4"] {
+            assert_eq!(vi(s).value, Value::text(s), "{s}");
+        }
+        assert_eq!(vi("1.234").value, Value::Number(1234.0));
+        assert_eq!(vi("'1,5").value, Value::text("1,5"));
+        // A first group starting with 0 isn't grouping (phone numbers, en-US decimals).
+        for s in ["0.125", "090.312.345", "-0.125", "0.125 ₫"] {
+            assert_eq!(vi(s).value, Value::text(s), "{s}");
+        }
+        assert_eq!(vi("0,125").value, Value::Number(0.125));
+        // The đồng in the ways people write it.
+        for s in ["1.234đ", "1.234 Đ", "1.234 VNĐ", "1.234 vnd", "₫1.234"] {
+            assert_eq!(vi(s).value, Value::Number(1234.0), "{s}");
+            assert_eq!(vi(s).format, Some(VND_FORMAT), "{s}");
+        }
+        for s in ["đ", "VNĐ", "đồng", "1.234 đđ", "Đ101", "VND 1.234", "đ1.234"] {
+            assert_eq!(vi(s).value, Value::text(s), "{s}");
+        }
+        assert_eq!(vi("TRUE").value, Value::Bool(true));
+        assert_eq!(vi("#N/A").value, Value::Error(CellError::NA));
+        assert_eq!(parse_number_text_locale(" 1.234,5 ", DateSystem::D1900, Locale::ViVn), Some(1234.5));
+        assert_eq!(parse_number_text_locale("1,234.5", DateSystem::D1900, Locale::ViVn), None);
+        // en-US is unchanged.
+        assert_eq!(parse_input_in("1,234.5", DateSystem::D1900, Locale::EnUs), p("1,234.5"));
+    }
+
+    /// Deeply nested parentheses never recurse: a 100,000-deep entry is text, not a stack overflow.
+    #[test]
+    fn nested_parentheses_are_bounded() {
+        let deep = format!("{}1{}", "(".repeat(100_000), ")".repeat(100_000));
+        for locale in Locale::ALL {
+            assert_eq!(parse_input_in(&deep, DateSystem::D1900, locale).value, Value::text(deep.as_str()));
+            assert_eq!(parse_input_in("((1))", DateSystem::D1900, locale).value, Value::text("((1))"));
+            assert_eq!(parse_input_in("(1)", DateSystem::D1900, locale).value, Value::Number(-1.0));
+        }
+        assert_eq!(parse_number_text(&deep), None);
+    }
+
+    #[test]
+    fn vietnamese_dates_and_times() {
+        assert_eq!(vi("24/10/2026").value, p("10/24/2026").value);
+        assert_eq!(vi("24/10/2026").format, Some("m/d/yyyy"));
+        assert_eq!(vi("7/10/2026").value, Value::Number(46302.0));
+        assert_eq!(vi("07-10-26").value, Value::Number(46302.0));
+        assert_eq!(vi("2026-10-07").value, Value::Number(46302.0));
+        assert_eq!(vi("7-Oct-2026").value, Value::Number(46302.0));
+        assert_eq!(vi("31/2/2026").value, Value::text("31/2/2026"));
+        assert_eq!(vi("13/13/2026").value, Value::text("13/13/2026"));
+        assert_eq!(vi("24/10/2026 14:30").value, Value::Number(p("10/24/2026").value.as_f64().unwrap_or(0.0) + 14.5 / 24.0));
+        assert_eq!(vi("24/10/2026 14:30").format, Some("m/d/yyyy h:mm"));
+        assert_eq!(vi("14:30").value, Value::Number(14.5 / 24.0));
+        assert_eq!(vi("14:30").format, Some("h:mm"));
+        assert_eq!(vi("2:30 CH").value, Value::Number(14.5 / 24.0));
+        assert_eq!(vi("2:30 CH").format, Some("h:mm AM/PM"));
+        assert_eq!(vi("10:00 sa").value, Value::Number(10.0 / 24.0));
+        assert_eq!(vi("sách").value, Value::text("sách"));
+        assert_eq!(vi("24/10").format, Some("d-mmm"));
+        assert_eq!(vi("10/2026").format, Some("mmm-yy"));
+        // Hostile input never panics.
+        for s in ["99999999999999999999/1/1", "1/1/99999999999999999999", "//", "-/-", "1/", "₫(1)", "((((1))))", "24/10/2026 99:99"] {
+            let _ = vi(s);
+        }
     }
 
     #[test]

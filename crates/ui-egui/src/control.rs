@@ -171,7 +171,17 @@ pub fn handle(app: &mut SheetApp, ctx: &egui::Context, method: &str, p: &Json) -
         "engine.execute" | "command" | "ui.menu.invoke" => {
             let Some(id) = s("command").or(s("id")) else { return err("missing `command`") };
             let params = p.get("params").cloned().unwrap_or(json!({}));
-            wrap(app.run(id, if params.is_null() { json!({}) } else { params }))
+            // NexusOffice: what the API reads back is en-US whatever regional format the window
+            // shows, unless the call names one (`locale` in the command's params or the request).
+            // Commands that change the workbook or write the user's file keep its own format.
+            let tag = params.get("locale").and_then(Json::as_str).or(s("locale"));
+            let locale = tag.and_then(gridcraft_engine::core::Locale::from_tag).unwrap_or_default();
+            let params = if params.is_null() { json!({}) } else { params };
+            if gridcraft_engine::cmd::returns_text_only(id) {
+                wrap(gridcraft_engine::display::with_locale(locale, || app.run(id, params)))
+            } else {
+                wrap(app.run(id, params))
+            }
         }
         "engine.commands" => {
             let mut v: Vec<Json> = app.session.commands().into_iter().map(|c| serde_json::to_value(c).unwrap_or_default()).collect();
@@ -205,7 +215,11 @@ pub fn handle(app: &mut SheetApp, ctx: &egui::Context, method: &str, p: &Json) -
             ok(Json::Array(filter_commands(v, s("search"))))
         }
         "engine.journal" => ok(json!(app.session.journal.iter().map(|(id, p)| json!({"command": id, "params": p})).collect::<Vec<_>>())),
-        "document.inspect" | "sheet.read" | "cell.get" | "selection.stats" => wrap(app.session.run(method, p.clone())),
+        "document.inspect" | "sheet.read" | "cell.get" | "selection.stats" => {
+            // Read back in en-US unless the request names a regional format (as engine.execute).
+            let locale = s("locale").and_then(gridcraft_engine::core::Locale::from_tag).unwrap_or_default();
+            wrap(gridcraft_engine::display::with_locale(locale, || app.session.run(method, p.clone())))
+        }
         "ui.inspect" => ok(inspect(app, ctx)),
         "ui.ribbon" => {
             app.ui.ribbon_tab = s("tab").unwrap_or("Home").to_string();

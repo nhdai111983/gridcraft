@@ -593,7 +593,7 @@ fn draw(app: &mut SheetApp, ui: &mut Ui, c: Cluster) {
                 ];
                 for n in names {
                     if ui.add(egui::Button::new(lang.tr(n)).frame(false).min_size(vec2(200.0, 22.0))).clicked() {
-                        act(app, "home.numberFormat", json!({"format": n}));
+                        act(app, "home.numberFormat", crate::ribbon::number_format_params(lang, n));
                         ui.close();
                     }
                 }

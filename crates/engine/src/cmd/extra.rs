@@ -158,18 +158,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "From Text/CSV",
             ["Data", "Get & Transform Data"],
             None,
-            "{path | text, delimiter?: \",\", sheet?: new sheet name} → imports into a new sheet as a table",
+            "{path | text, delimiter?: \",\", sheet?: new sheet name, locale?: \"vi-VN\" (values and, with no delimiter, the separator)} → imports into a new sheet as a table",
             has_doc,
-            from_csv
+            from_text_csv
         ),
         cmd!(
             "data.getData",
             "Get Data",
             ["Data", "Get & Transform Data"],
             None,
-            "{path | text} (CSV/TSV/JSON array of objects) → new sheet table",
+            "{path | text, locale?} (CSV/TSV/JSON array of objects) → new sheet table",
             has_doc,
-            from_csv
+            get_data
         ),
         cmd!(
             "data.fromTableRange",
@@ -854,7 +854,19 @@ fn table_resize(s: &mut Session, p: &Json) -> Result<Json> {
     })
 }
 
+fn from_text_csv(s: &mut Session, p: &Json) -> Result<Json> {
+    from_csv_as(s, p, "data.fromTextCsv")
+}
+
+fn get_data(s: &mut Session, p: &Json) -> Result<Json> {
+    from_csv_as(s, p, "data.getData")
+}
+
 fn from_csv(s: &mut Session, p: &Json) -> Result<Json> {
+    from_csv_as(s, p, "data.fromTableRange")
+}
+
+fn from_csv_as(s: &mut Session, p: &Json, cmd: &str) -> Result<Json> {
     let bytes = if let Some(t) = str_param(p, "text") {
         t.as_bytes().to_vec()
     } else if let Some(path) = str_param(p, "path") {
@@ -865,45 +877,54 @@ fn from_csv(s: &mut Session, p: &Json) -> Result<Json> {
     };
     let text = String::from_utf8_lossy(&bytes);
     // JSON array of objects → rows.
-    let rows: Vec<Vec<Json>> =
-        if text.trim_start().starts_with('[') {
-            let arr: Vec<Json> = serde_json::from_str(&text).map_err(|e| bad("data.getData", e.to_string()))?;
-            let mut keys: Vec<String> = Vec::new();
-            for o in &arr {
-                if let Some(m) = o.as_object() {
-                    for k in m.keys() {
-                        if !keys.contains(k) {
-                            keys.push(k.clone());
-                        }
+    let rows: Vec<Vec<Json>> = if text.trim_start().starts_with('[') {
+        let arr: Vec<Json> = serde_json::from_str(&text).map_err(|e| bad(cmd, e.to_string()))?;
+        let mut keys: Vec<String> = Vec::new();
+        for o in &arr {
+            if let Some(m) = o.as_object() {
+                for k in m.keys() {
+                    if !keys.contains(k) {
+                        keys.push(k.clone());
                     }
                 }
             }
-            let mut out = vec![keys.iter().map(|k| json!(k)).collect::<Vec<_>>()];
-            for o in &arr {
-                out.push(keys.iter().map(|k| o.get(k).cloned().unwrap_or(Json::Null)).collect());
+        }
+        let mut out = vec![keys.iter().map(|k| json!(k)).collect::<Vec<_>>()];
+        for o in &arr {
+            out.push(keys.iter().map(|k| o.get(k).cloned().unwrap_or(Json::Null)).collect());
+        }
+        out
+    } else {
+        // Values (and, with no `delimiter`, the separator) in the interface's regional format.
+        let locale = super::edit::locale_param(cmd, p)?;
+        let delim = match str_param(p, "delimiter").and_then(|d| d.chars().next()) {
+            Some(d) => u8::try_from(d).unwrap_or(b','),
+            None if locale != gridcraft_core::Locale::EnUs => 0,
+            None => {
+                if text.lines().next().is_some_and(|l| l.contains('\t')) {
+                    b'\t'
+                } else {
+                    b','
+                }
             }
-            out
-        } else {
-            let delim = str_param(p, "delimiter")
-                .and_then(|d| d.chars().next())
-                .unwrap_or(if text.lines().next().is_some_and(|l| l.contains('\t')) { '\t' } else { ',' });
-            let opts = gridcraft_xlsx::CsvOptions { delimiter: delim as u8, ..Default::default() };
-            let wb = gridcraft_xlsx::read_csv(&bytes, &opts).map_err(|e| EngineError::Other(e.to_string()))?;
-            let sh = wb.sheet(0).ok_or(EngineError::NoDocument)?;
-            let Some(u) = sh.used_range() else { return Err(EngineError::Other("The file is empty.".into())) };
-            (u.start.row..=u.end.row)
-                .map(|r| {
-                    (u.start.col..=u.end.col)
-                        .map(|c| match sh.value(CellRef::new(r, c)) {
-                            Value::Number(n) => json!(n),
-                            Value::Bool(b) => json!(b),
-                            Value::Empty => Json::Null,
-                            v => json!(v.display()),
-                        })
-                        .collect()
-                })
-                .collect()
         };
+        let opts = gridcraft_xlsx::CsvOptions { delimiter: delim, locale, ..Default::default() };
+        let wb = gridcraft_xlsx::read_csv(&bytes, &opts).map_err(|e| EngineError::Other(e.to_string()))?;
+        let sh = wb.sheet(0).ok_or(EngineError::NoDocument)?;
+        let Some(u) = sh.used_range() else { return Err(EngineError::Other("The file is empty.".into())) };
+        (u.start.row..=u.end.row)
+            .map(|r| {
+                (u.start.col..=u.end.col)
+                    .map(|c| match sh.value(CellRef::new(r, c)) {
+                        Value::Number(n) => json!(n),
+                        Value::Bool(b) => json!(b),
+                        Value::Empty => Json::Null,
+                        v => json!(v.display()),
+                    })
+                    .collect()
+            })
+            .collect()
+    };
     if rows.is_empty() || rows.len() > 1_048_576 {
         return Err(EngineError::Other("Nothing to import.".into()));
     }
@@ -925,7 +946,9 @@ fn from_table_range(s: &mut Session, p: &Json) -> Result<Json> {
     let sh = d.wb.active().ok_or(EngineError::NoDocument)?;
     let r = if r.is_single() { crate::selection::current_region(sh, r.start) } else { r };
     let text = crate::display::range_text(&d.wb, d.wb.active_sheet, r);
-    from_csv(s, &json!({"text": text, "delimiter": "\t", "sheet": format!("{} (2)", sh.name).chars().take(31).collect::<String>()}))
+    // The text is shown in the workbook's regional format: read it back in the same one.
+    let locale = crate::display::locale(&d.wb).tag();
+    from_csv(s, &json!({"text": text, "delimiter": "\t", "locale": locale, "sheet": format!("{} (2)", sh.name).chars().take(31).collect::<String>()}))
 }
 
 fn queries(s: &mut Session, _: &Json) -> Result<Json> {

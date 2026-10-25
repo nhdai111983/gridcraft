@@ -223,10 +223,12 @@ fn forecast_sheet(s: &mut Session, p: &Json) -> Result<Json> {
     if !rows.iter().any(|r| matches!(r.1, Value::Number(_))) {
         return Err(EngineError::Other("There are no values to forecast.".into()));
     }
+    // Dates typed in the interface's regional format (`24/10/2026` in vi-VN).
+    let locale = super::edit::locale_param(CMD, p)?;
     let time_param = |key: &str| -> Result<Option<f64>> {
         match p.get(key) {
             Some(Json::Number(n)) => Ok(n.as_f64()),
-            Some(Json::String(t)) if !t.trim().is_empty() => match gridcraft_core::parse::parse_input(t.trim(), sys).value {
+            Some(Json::String(t)) if !t.trim().is_empty() => match gridcraft_core::parse::parse_input_in(t.trim(), sys, locale).value {
                 Value::Number(x) => Ok(Some(x)),
                 _ => Err(bad(CMD, format!("`{key}` is not a number or a date: `{t}`"))),
             },

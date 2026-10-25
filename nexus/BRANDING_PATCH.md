@@ -145,6 +145,35 @@ Sinh bằng `python3 -c "import uuid; print(uuid.uuid4())"` ngày 2026-10-16.
 
 | File | Lý do | Thay được bằng white-label? |
 |---|---|---|
+| `crates/core/src/locale.rs` | File mới (NX-VI.1): `Locale` (`EnUs`, `ViVn`) — dấu thập phân/nhóm/danh sách, tên tháng/thứ CLDR `vi`, SA/CH | — (file mới; nên PR upstream) |
+| `crates/core/src/lib.rs` | NX-VI.1: `pub mod locale; pub use locale::Locale` | Nên PR upstream |
+| `crates/core/src/parse.rs` | NX-VI.1: `parse_input_in`/`parse_number_text_locale` — nhập `1.234,5`, `24/10/2026`, `1.234 ₫` theo vi-VN; `VND_FORMAT` | Nên PR upstream |
+| `crates/numfmt/src/lib.rs` | NX-VI.1: `format_value_in`, `format_general_fit_in`, `text_function_in`; định dạng hệ thống (14, 22, F800, F400) theo vùng | Nên PR upstream |
+| `crates/numfmt/src/render.rs` | NX-VI.1: dấu tách, tên tháng/thứ, SA/CH theo vùng khi vẽ số/ngày | Nên PR upstream |
+| `crates/numfmt/src/parse.rs` | NX-VI.1: `delocalize_code` (mã định dạng TEXT viết kiểu vi-VN) | Nên PR upstream |
+| `crates/model/src/workbook.rs` | NX-VI.1: `Workbook::locale` (`serde(skip)`, không lưu vào file) | Nên PR upstream |
+| `crates/formula/src/input.rs` | NX-VI.1: `FormulaLocale::Vi` — `;`, dấu phẩy thập phân, tên hàm tiếng Anh | Nên PR upstream |
+| `crates/functions/src/lib.rs` | NX-VI.1: `Ctx::locale` | Nên PR upstream |
+| `crates/functions/src/text.rs` | NX-VI.1: VALUE/NUMBERVALUE đọc theo vùng | Nên PR upstream |
+| `crates/calc/src/eval.rs` | NX-VI.1: TEXT và `Ctx::locale` theo vùng của workbook | Nên PR upstream |
+| `crates/xlsx/src/lib.rs` | NX-VI.1: `CsvOptions::locale` | Nên PR upstream |
+| `crates/xlsx/src/csv.rs` | NX-VI.1: đọc CSV theo vùng, `sniff_delimiter_in` (vi-VN: `;`) | Nên PR upstream |
+| `crates/engine/src/lib.rs` | NX-VI.1: `Session::locale`, `Session::set_locale` (tính lại, giữ trạng thái đã lưu), `add_document` nhận vùng | Nên PR upstream |
+| `crates/engine/src/display.rs` | NX-VI.1: hiển thị và chữ khi sửa ô theo vùng của workbook | Nên PR upstream |
+| `crates/engine/src/io.rs` | NX-VI.1: `OpenContext`/`open_bytes_in`; CSV vi-VN (`;`, dấu phẩy thập phân) | Nên PR upstream |
+| `crates/engine/src/cmd/edit.rs` | NX-VI.1: `cell.set`/`range.fill` nhận `locale` | Nên PR upstream |
+| `crates/engine/src/cmd/data.rs` | NX-VI.1: `check_validation_in` | Nên PR upstream |
+| `crates/engine/src/cmd/file.rs` | NX-VI.1: `file.open` đọc CSV theo vùng | Nên PR upstream |
+| `crates/engine/src/cmd/print.rs` | NX-VI.1: số General khi in theo vùng | Nên PR upstream |
+| `crates/ui-egui/src/i18n.rs` | NX-VI.1: `Language::regional_format`, `regional_format_of`, `FormulaLocale::Vi` cho tiếng Việt | Một phần nên PR upstream |
+| `crates/ui-egui/src/formula_locale.rs` | NX-VI.1: giá trị tiếng Việt chuyển nguyên cho engine đọc theo vi-VN | Nên PR upstream |
+| `crates/ui-egui/src/lib.rs` | NX-VI.1: đặt vùng mỗi khung hình; `cell.set` gửi `locale`; Enter sau chuỗi Tab về cột đầu (Excel, `TabReturn`); `keep_keyboard` huỷ việc egui chuyển focus khi lưới/ô sửa vừa nhận bàn phím | Nên PR upstream |
+| `crates/ui-egui/src/formula_bar.rs` | NX-VI.1: sửa lỗi gõ ký tự rồi Tab ở khung hình kế tiếp làm egui chuyển focus và mất phím; phím mũi tên kết thúc chuỗi Tab | Nên PR upstream (sửa lỗi) |
+| `crates/ui-egui/tests/interaction.rs` | NX-VI.1: test điều hướng bàn phím đổi kỳ vọng — Enter sau Tab về cột bắt đầu (B5, như Excel) thay vì đi thẳng xuống (C5) | Nên PR upstream cùng thay đổi |
+| `crates/ui-egui/tests/nexus_embed.rs` | NX-VI.1: test gõ một hàng bằng Tab/Enter kỳ vọng hàng sau bắt đầu ở cột A | — (test NexusOffice) |
+| `crates/ui-egui/src/grid.rs` | NX-VI.1: số General trong lưới theo vùng; nhớ id widget lưới (`focus_id`) cho `keep_keyboard` | Nên PR upstream |
+| `crates/ui-egui/src/ribbon.rs` | NX-VI.1: Currency trong danh sách Number Format = đồng khi tiếng Việt (`number_format_code`) | Có — tiền tệ mặc định theo vùng |
+| `crates/ui-egui/src/nexus_toolbar.rs` | NX-VI.1: Currency = đồng khi tiếng Việt | Có |
 
 ## Rà soát gọi mạng (guard §5)
 `rg -n -i "artcraft|storytold|storyteller|discord|telemetry|update|crash|sentry|posthog|https?://"`:

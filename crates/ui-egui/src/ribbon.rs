@@ -1137,6 +1137,23 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
 /// NexusOffice: the accounting format in Vietnamese đồng (vi-VN, no decimals), as Excel writes it.
 pub(crate) const VND_ACCOUNTING: &str = "_-* #,##0 [$₫-42A]_-;-* #,##0 [$₫-42A]_-;_-* \"-\" [$₫-42A]_-;_-@_-";
 
+/// NexusOffice: the code a Number Format list entry applies. In Vietnamese, Currency is đồng's
+/// (`1.234.567 ₫`: the sign after a space, no decimals), as Excel's is the system currency's.
+pub(crate) fn number_format_code(lang: crate::i18n::Language, name: &str) -> &str {
+    match name {
+        "Currency" if lang == crate::i18n::Language::Vi => gridcraft_engine::core::parse::VND_FORMAT,
+        other => gridcraft_engine::cmd::format::format_code_for(other),
+    }
+}
+
+/// [`number_format_code`] as `home.numberFormat`'s parameters.
+pub(crate) fn number_format_params(lang: crate::i18n::Language, name: &str) -> serde_json::Value {
+    match name {
+        "Currency" if lang == crate::i18n::Language::Vi => json!({"code": number_format_code(lang, name)}),
+        n => json!({"format": n}),
+    }
+}
+
 pub(crate) fn font_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     let name = st.font.name.clone();
     let resp = ui.add_sized([150.0, 24.0], egui::Button::new(egui::RichText::new(&name).font(theme::ui_font(12.5))));
@@ -1203,7 +1220,7 @@ fn number_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     let items: Vec<(&str, String)> = names
         .iter()
         .map(|n| {
-            let code = gridcraft_engine::cmd::format::format_code_for(n);
+            let code = number_format_code(lang, n);
             let preview = app.session.active().map(|d| gridcraft_engine::display::format(&sample, code, &d.wb).text).unwrap_or_default();
             (*n, format!("{:<12}   {preview}", lang.tr(n)))
         })
@@ -1212,7 +1229,7 @@ fn number_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     if let ComboResult::Picked(value) = editable_combo(ui, &resp, "number", &current, &items, forced) {
         match value.as_str() {
             "__more" => app.open_dialog("formatCells", json!({"tab": "Number"})),
-            n => act(app, "home.numberFormat", json!({"format": n})),
+            n => act(app, "home.numberFormat", number_format_params(lang, n)),
         }
     }
 }
