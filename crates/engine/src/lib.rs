@@ -142,6 +142,11 @@ impl DocState {
     pub fn is_dirty(&self) -> bool {
         !Arc::ptr_eq(&self.wb, &self.saved)
     }
+    /// A new workbook nobody has touched: no file, no changes, nothing to undo, every sheet empty.
+    /// Opening a file replaces it, as Excel replaces an untouched Book1.
+    pub fn is_untouched_blank(&self) -> bool {
+        self.path.is_none() && !self.is_dirty() && self.undo.is_empty() && self.wb.sheets.iter().all(|sh| sh.cells.is_empty())
+    }
     pub fn sheet_index(&self) -> usize {
         self.wb.active_sheet
     }
@@ -206,7 +211,7 @@ impl Default for Prefs {
         Prefs {
             enter_direction: "down".into(),
             autocomplete: true,
-            user_name: "Nexus Sheets User".into(),
+            user_name: "Nexus Sheet User".into(),
             default_font: gridcraft_model::DEFAULT_FONT.into(),
             default_font_size: gridcraft_model::DEFAULT_FONT_SIZE,
             sheets_in_new_workbook: 1,
@@ -256,6 +261,41 @@ pub struct Session {
     /// Review › Notes › Show All Notes: every note is displayed. An application display setting
     /// (like Excel's comment indicator option), so it's not saved in the file.
     pub show_all_notes: bool,
+    /// NexusOffice: what new sheets are called before their number, in the interface's language
+    /// ("Trang tính" → Trang tính1); empty is upstream's "Sheet". Set by the interface, not saved.
+    pub sheet_name_prefix: String,
+    /// NexusOffice: the interface's regional format, which every open workbook is shown in and
+    /// CSV files are read in ([`Session::set_locale`]). en-US by default; set by the interface,
+    /// not saved. Command parameters stay en-US unless a command takes a `locale`.
+    pub locale: gridcraft_core::Locale,
+}
+
+/// Whether a locale change can change a result of the workbook: whether it has a formula at all.
+/// Formulas coerce text and numbers in the workbook's regional format (`="1,5"+1`, `">"&B1` in a
+/// criterion, a cell holding the text `1,5`), and `TEXT`, `VALUE` and `NUMBERVALUE` read and write
+/// it, so almost any formula may depend on it. A cheap scan that stops at the first formula.
+fn locale_sensitive(wb: &Workbook) -> bool {
+    wb.sheets.iter().any(|sh| sh.cells.iter().any(|(_, c)| c.formula.is_some()))
+}
+
+/// NexusOffice: shows `d` in `locale`, recalculating it there when the locale changes (unless it
+/// calculates manually and has formulas to redo). A workbook with no unsaved changes stays saved:
+/// the locale is not part of the file. Used when a workbook joins the session, when the session's
+/// locale changes and when undo or redo brings back a snapshot taken in another locale.
+pub(crate) fn adopt_locale(d: &mut DocState, locale: gridcraft_core::Locale) {
+    if d.wb.locale == locale {
+        return;
+    }
+    let clean = !d.is_dirty();
+    let mut wb = (*d.wb).clone();
+    wb.locale = locale;
+    if wb.calc.mode != gridcraft_model::CalcMode::Manual && locale_sensitive(&wb) {
+        d.calc.recalc_all(&mut wb);
+    }
+    d.wb = Arc::new(wb);
+    if clean {
+        d.saved = d.wb.clone();
+    }
 }
 
 impl Session {
@@ -285,7 +325,11 @@ impl Session {
     pub fn doc_mut(&mut self) -> Result<&mut DocState> {
         self.active_mut().ok_or(EngineError::NoDocument)
     }
-    pub fn add_document(&mut self, d: DocState) -> usize {
+    pub fn add_document(&mut self, mut d: DocState) -> usize {
+        // A new or opened workbook takes the session's regional format at once, and is
+        // recalculated in it (coercion, criteria, `TEXT`, `VALUE`, `NUMBERVALUE` follow the
+        // locale; the file's cached results are en-US ones), without becoming unsaved.
+        adopt_locale(&mut d, self.locale);
         self.docs.push(d);
         self.active = self.docs.len() - 1;
         self.active
@@ -298,14 +342,33 @@ impl Session {
             }
         }
     }
+    /// Shows every open workbook in `locale` and recalculates the ones whose regional format
+    /// changes (coercion, criteria, `TEXT`, `VALUE` and `NUMBERVALUE` follow it), unless they
+    /// calculate manually. A workbook with no unsaved changes stays saved: the locale is not part
+    /// of the file.
+    pub fn set_locale(&mut self, locale: gridcraft_core::Locale) {
+        self.locale = locale;
+        for d in &mut self.docs {
+            adopt_locale(d, locale);
+        }
+    }
+
     /// A new blank workbook titled `BookN`.
     pub fn new_workbook(&mut self) -> usize {
         let n = (1..).find(|n| !self.docs.iter().any(|d| d.title == format!("Book{n}") && d.path.is_none())).unwrap_or(1);
         let mut wb = Workbook::new();
+        // NexusOffice: the first sheet is named in the interface's language too.
+        if !self.sheet_name_prefix.trim().is_empty()
+            && let Some(first) = wb.sheets.first_mut()
+        {
+            Arc::make_mut(first).name = format!("{}1", self.sheet_name_prefix);
+        }
         for _ in 1..self.prefs.sheets_in_new_workbook.clamp(1, 255) {
-            let name = wb.next_sheet_name();
+            let name = wb.next_sheet_name_with(&self.sheet_name_prefix);
             wb.sheets.push(Arc::new(gridcraft_model::Sheet::new(name)));
         }
+        // NexusOffice: calculated once, in the session's regional format (`add_document`).
+        wb.locale = self.locale;
         self.add_document(DocState::new(wb, None, format!("Book{n}")))
     }
 
@@ -322,7 +385,12 @@ impl Session {
         }
         let before = self.active().map(|d| (d.uid, d.wb.clone(), d.selection.clone()));
         let params = if params.is_null() { Json::Object(Default::default()) } else { params };
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (spec.run)(self, &params)));
+        // NexusOffice: sheets the command adds (Insert Sheet, PivotTable, Forecast, an import)
+        // are named in the interface's language.
+        let prefix = self.sheet_name_prefix.clone();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            gridcraft_model::workbook::with_sheet_prefix(&prefix, || (spec.run)(self, &params))
+        }));
         let result = match result {
             Ok(r) => r,
             Err(p) => {

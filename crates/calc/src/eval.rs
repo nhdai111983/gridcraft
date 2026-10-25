@@ -96,6 +96,9 @@ impl Ctx for FnCtx<'_, '_> {
     fn date_system(&self) -> gridcraft_core::DateSystem {
         self.ev.host.workbook().date_system
     }
+    fn locale(&self) -> gridcraft_core::Locale {
+        self.ev.host.workbook().locale
+    }
     fn now_serial(&self) -> f64 {
         self.ev.host.now_serial()
     }
@@ -205,6 +208,10 @@ impl<'h> Evaluator<'h> {
     }
 
     pub fn eval(&mut self, e: &Expr) -> Ev {
+        // NexusOffice: text ↔ number coercion and criteria follow the workbook's regional format
+        // while its formulas run (Excel uses the system's), set once at the outermost call. The
+        // scope is per thread: a parallel recalculation must enter it in each worker.
+        let _locale = (self.depth == 0).then(|| gridcraft_core::coercion_scope(self.host.workbook().locale));
         self.depth += 1;
         if self.depth > MAX_DEPTH {
             self.depth -= 1;
@@ -741,6 +748,7 @@ impl<'h> Evaluator<'h> {
                 let v = self.arg_val(args, 0).unwrap_or_default();
                 let f = self.arg_val(args, 1).unwrap_or_default();
                 let sys = self.host.workbook().date_system;
+                let locale = self.host.workbook().locale;
                 let one = |v: &Value, f: &Value| -> Value {
                     if let Value::Error(e) = v {
                         return Value::Error(*e);
@@ -749,7 +757,7 @@ impl<'h> Evaluator<'h> {
                         Ok(c) => c,
                         Err(e) => return Value::Error(e),
                     };
-                    match gridcraft_numfmt::text_function(v, &code, sys) {
+                    match gridcraft_numfmt::text_function_in(v, &code, sys, locale) {
                         Ok(s) => Value::text(s),
                         Err(e) => Value::Error(e),
                     }

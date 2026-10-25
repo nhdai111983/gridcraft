@@ -32,7 +32,9 @@ pub fn specs() -> Vec<CommandSpec> {
 fn new_workbook(s: &mut Session, p: &Json) -> Result<Json> {
     let i = match str_param(p, "sample") {
         Some(name) => {
-            let wb = crate::sample::build(name).ok_or_else(|| bad("file.new", format!("unknown sample `{name}`")))?;
+            let mut wb = crate::sample::build(name).ok_or_else(|| bad("file.new", format!("unknown sample `{name}`")))?;
+            // NexusOffice: calculated once, in the session's regional format.
+            wb.locale = s.locale;
             let title = crate::sample::title(name);
             s.add_document(DocState::new(wb, None, title))
         }
@@ -56,7 +58,8 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
         return ok();
     };
     let encrypted = gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Encrypted;
-    let (mut wb, warnings) = crate::io::open_bytes_with_password(&name, &bytes, str_param(p, "password"))?;
+    let context = crate::io::OpenContext { locale: s.locale };
+    let (mut wb, warnings) = crate::io::open_bytes_in(&name, &bytes, str_param(p, "password"), &context)?;
     wb.source_dir = str_param(p, "path").and_then(crate::io::source_dir);
     let imported =
         matches!(crate::io::FileKind::from_path(&name), Some(crate::io::FileKind::Ods | crate::io::FileKind::Xlsb | crate::io::FileKind::Xls))
@@ -71,11 +74,12 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
     // an unprotected copy.
     let path = str_param(p, "path").filter(|_| !imported && !encrypted).map(str::to_string);
     // Replace an untouched blank Book1 like Excel does.
-    if s.documents().len() == 1
-        && s.active().is_some_and(|d| d.path.is_none() && !d.is_dirty() && d.undo.is_empty() && d.wb.sheets.iter().all(|sh| sh.cells.is_empty()))
-    {
+    if s.documents().len() == 1 && s.active().is_some_and(DocState::is_untouched_blank) {
         s.close_document(0);
     }
+    // NexusOffice: the workbook is calculated once, when it opens, in the session's regional
+    // format — also a manual-calculation one, whose results would otherwise stay the file's.
+    wb.locale = s.locale;
     let mut doc = DocState::new(wb, path, title);
     if crate::io::FileKind::from_path(&name).is_none() && gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Xlsx {
         doc.content_kind = Some(crate::io::FileKind::Xlsx);
@@ -107,7 +111,9 @@ fn save(s: &mut Session, p: &Json) -> Result<Json> {
     // A PDF is a print of the sheet (Page Setup applies), not a copy of the workbook: the
     // document keeps its file and its unsaved changes.
     if std::path::Path::new(&path).extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("pdf")) {
-        return super::print::export_pdf(s, &json!({"path": path}));
+        // The user's file is written in the workbook's regional format, whoever asks.
+        let locale = s.doc()?.wb.locale;
+        return crate::display::with_locale(locale, || super::print::export_pdf(s, &json!({"path": path})));
     }
     let d = s.doc_mut()?;
     // The document's own file keeps the format its content had when opened; any other path
@@ -115,10 +121,12 @@ fn save(s: &mut Session, p: &Json) -> Result<Json> {
     let kind = crate::io::FileKind::from_path(&path).or(d.content_kind.filter(|_| d.path.as_deref() == Some(path.as_str())));
     let rebased = crate::io::source_dir(&path).and_then(|f| gridcraft_xlsx::rebase_links(&d.wb, &f));
     let wb = rebased.as_ref().unwrap_or(&d.wb);
-    let bytes = match kind {
-        Some(kind) => crate::io::save_bytes_as(wb, &path, kind)?,
-        None => crate::io::save_bytes(wb, &path)?,
-    };
+    // The user's file is written in the workbook's regional format (a vi-VN CSV stays `1,5;…`),
+    // whatever display locale an API caller reads in.
+    let bytes = crate::display::with_locale(wb.locale, || match kind {
+        Some(kind) => crate::io::save_bytes_as(wb, &path, kind),
+        None => crate::io::save_bytes(wb, &path),
+    })?;
     crate::io::write_file(&path, &bytes)?;
     // Only a full-fidelity format clears the dirty flag and becomes the document's file.
     if matches!(kind, Some(crate::io::FileKind::Xlsx | crate::io::FileKind::Json)) {
@@ -164,7 +172,7 @@ fn export(s: &mut Session, p: &Json, ext: &str) -> Result<Json> {
         wb.active_sheet = target_sheet(s, p)?;
     }
     let target = if path.ends_with(&format!(".{ext}")) { path.clone() } else { format!("{path}.{ext}") };
-    let bytes = crate::io::save_bytes(&wb, &target)?;
+    let bytes = crate::display::with_locale(wb.locale, || crate::io::save_bytes(&wb, &target))?;
     crate::io::write_file(&target, &bytes)?;
     Ok(json!({"path": target, "bytes": bytes.len()}))
 }

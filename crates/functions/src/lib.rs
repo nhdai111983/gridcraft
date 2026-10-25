@@ -102,6 +102,10 @@ impl Arg {
 /// Services a function may need from the host.
 pub trait Ctx {
     fn date_system(&self) -> DateSystem;
+    /// The regional format `VALUE` and `NUMBERVALUE` read text in (Excel uses the system's).
+    fn locale(&self) -> gridcraft_core::Locale {
+        gridcraft_core::Locale::EnUs
+    }
     /// Current local date-time serial.
     fn now_serial(&self) -> f64;
     /// Uniform in [0, 1).

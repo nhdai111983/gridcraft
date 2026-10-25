@@ -21,6 +21,8 @@ pub struct Tokens {
     pub accent: Color32,
     pub accent_dark: Color32,
     pub accent_soft: Color32,
+    /// Text and icons drawn on an `accent` fill (white in light mode, dark in dark mode).
+    pub on_accent: Color32,
     pub hover: Color32,
     pub pressed: Color32,
     pub separator: Color32,
@@ -53,37 +55,41 @@ pub struct Tokens {
 }
 
 impl Tokens {
+    /// Nexus Sheet light palette (NexusOffice design system): slate surfaces, Emerald app colour.
+    /// The accent is Emerald's ink shade #047857, so white text on it and accent text on the bars
+    /// reach WCAG 4.5:1 (Emerald #10B981 itself is 2.5:1 on white).
     pub fn light() -> Tokens {
         Tokens {
             dark: false,
-            window: Color32::from_rgb(0xF3, 0xF3, 0xF3),
-            ribbon: Color32::from_rgb(0xFF, 0xFF, 0xFF),
-            ribbon_border: Color32::from_rgb(0xE3, 0xE3, 0xE3),
-            text: Color32::from_rgb(0x24, 0x24, 0x24),
-            text_dim: Color32::from_rgb(0x61, 0x61, 0x61),
-            text_disabled: Color32::from_rgb(0xB0, 0xB0, 0xB0),
-            accent: Color32::from_rgb(0x10, 0x7C, 0x41),
-            accent_dark: Color32::from_rgb(0x0B, 0x5E, 0x31),
-            accent_soft: Color32::from_rgb(0xDF, 0xF1, 0xE6),
-            hover: Color32::from_rgb(0xEB, 0xEB, 0xEB),
-            pressed: Color32::from_rgb(0xDD, 0xDD, 0xDD),
-            separator: Color32::from_rgb(0xE0, 0xE0, 0xE0),
+            window: Color32::from_rgb(0xF1, 0xF5, 0xF9),
+            ribbon: Color32::from_rgb(0xF8, 0xFA, 0xFC),
+            ribbon_border: Color32::from_rgb(0xE2, 0xE8, 0xF0),
+            text: Color32::from_rgb(0x1E, 0x29, 0x3B),
+            text_dim: Color32::from_rgb(0x47, 0x55, 0x69),
+            text_disabled: Color32::from_rgb(0xA3, 0xAD, 0xBA),
+            accent: APP_INK,
+            accent_dark: Color32::from_rgb(0x06, 0x5F, 0x46),
+            accent_soft: Color32::from_rgb(0xD1, 0xFA, 0xE5),
+            on_accent: Color32::WHITE,
+            hover: Color32::from_rgb(0xE9, 0xED, 0xF2),
+            pressed: Color32::from_rgb(0xDC, 0xE3, 0xEA),
+            separator: Color32::from_rgb(0xE2, 0xE8, 0xF0),
             grid_bg: Color32::WHITE,
-            desk: Color32::from_rgb(0xDE, 0xDE, 0xDE),
-            gridline: Color32::from_rgb(0xE1, 0xE1, 0xE1),
-            header_bg: Color32::from_rgb(0xF8, 0xF8, 0xF8),
-            header_text: Color32::from_rgb(0x42, 0x42, 0x42),
-            header_line: Color32::from_rgb(0xD6, 0xD6, 0xD6),
-            header_sel_bg: Color32::from_rgb(0xE1, 0xE1, 0xE1),
-            header_sel_text: Color32::from_rgb(0x10, 0x7C, 0x41),
-            header_all_bg: Color32::from_rgb(0xC8, 0xE6, 0xD3),
-            sel_fill: Color32::from_rgba_unmultiplied(0x10, 0x7C, 0x41, 0x1C),
-            sel_border: Color32::from_rgb(0x10, 0x7C, 0x41),
+            desk: Color32::from_rgb(0xE9, 0xED, 0xF2),
+            gridline: Color32::from_rgb(0xE2, 0xE8, 0xF0),
+            header_bg: Color32::from_rgb(0xF8, 0xFA, 0xFC),
+            header_text: Color32::from_rgb(0x47, 0x55, 0x69),
+            header_line: Color32::from_rgb(0xCB, 0xD5, 0xE1),
+            header_sel_bg: Color32::from_rgb(0xE2, 0xE8, 0xF0),
+            header_sel_text: APP_INK,
+            header_all_bg: Color32::from_rgb(0xA7, 0xF3, 0xD0),
+            sel_fill: Color32::from_rgba_unmultiplied(0x10, 0xB9, 0x81, 0x1C),
+            sel_border: Color32::from_rgb(0x05, 0x96, 0x69),
             input_bg: Color32::WHITE,
-            input_border: Color32::from_rgb(0xD1, 0xD1, 0xD1),
-            tab_bar: Color32::from_rgb(0xF3, 0xF3, 0xF3),
+            input_border: Color32::from_rgb(0xCB, 0xD5, 0xE1),
+            tab_bar: Color32::from_rgb(0xF1, 0xF5, 0xF9),
             tab_active: Color32::WHITE,
-            status_bar: Color32::from_rgb(0xF3, 0xF3, 0xF3),
+            status_bar: Color32::from_rgb(0xF1, 0xF5, 0xF9),
             cell_text: Color32::BLACK,
             menu_bg: Color32::WHITE,
             shadow: Color32::from_black_alpha(40),
@@ -95,39 +101,42 @@ impl Tokens {
         }
     }
 
+    /// Nexus Sheet dark palette: Obsidian #0F172A and slate surfaces, Emerald 400 accent with dark
+    /// text on it (white on a light accent would be under 2:1). Cells stay white paper.
     pub fn dark() -> Tokens {
         Tokens {
             dark: true,
-            window: Color32::from_rgb(0x29, 0x29, 0x29),
-            ribbon: Color32::from_rgb(0x33, 0x33, 0x33),
-            ribbon_border: Color32::from_rgb(0x40, 0x40, 0x40),
-            text: Color32::from_rgb(0xEE, 0xEE, 0xEE),
-            text_dim: Color32::from_rgb(0xB0, 0xB0, 0xB0),
-            text_disabled: Color32::from_rgb(0x70, 0x70, 0x70),
-            accent: Color32::from_rgb(0x5C, 0xC5, 0x87),
-            accent_dark: Color32::from_rgb(0x3F, 0xA8, 0x6C),
-            accent_soft: Color32::from_rgb(0x23, 0x45, 0x31),
-            hover: Color32::from_rgb(0x42, 0x42, 0x42),
-            pressed: Color32::from_rgb(0x4D, 0x4D, 0x4D),
-            separator: Color32::from_rgb(0x48, 0x48, 0x48),
+            window: Color32::from_rgb(0x0F, 0x17, 0x2A),
+            ribbon: Color32::from_rgb(0x1E, 0x29, 0x3B),
+            ribbon_border: Color32::from_rgb(0x33, 0x41, 0x55),
+            text: Color32::from_rgb(0xF1, 0xF5, 0xF9),
+            text_dim: Color32::from_rgb(0xA8, 0xB4, 0xC4),
+            text_disabled: Color32::from_rgb(0x64, 0x74, 0x8B),
+            accent: Color32::from_rgb(0x34, 0xD3, 0x99),
+            accent_dark: Color32::from_rgb(0x6E, 0xE7, 0xB7),
+            accent_soft: Color32::from_rgb(0x06, 0x4E, 0x3B),
+            on_accent: Color32::from_rgb(0x02, 0x2C, 0x22),
+            hover: Color32::from_rgb(0x33, 0x41, 0x55),
+            pressed: Color32::from_rgb(0x47, 0x55, 0x69),
+            separator: Color32::from_rgb(0x33, 0x41, 0x55),
             grid_bg: Color32::WHITE,
-            desk: Color32::from_rgb(0x3A, 0x3A, 0x3A),
-            gridline: Color32::from_rgb(0xE1, 0xE1, 0xE1),
-            header_bg: Color32::from_rgb(0x30, 0x30, 0x30),
-            header_text: Color32::from_rgb(0xCC, 0xCC, 0xCC),
-            header_line: Color32::from_rgb(0x45, 0x45, 0x45),
-            header_sel_bg: Color32::from_rgb(0x45, 0x45, 0x45),
-            header_sel_text: Color32::from_rgb(0x5C, 0xC5, 0x87),
-            header_all_bg: Color32::from_rgb(0x2E, 0x55, 0x3E),
-            sel_fill: Color32::from_rgba_unmultiplied(0x10, 0x7C, 0x41, 0x24),
-            sel_border: Color32::from_rgb(0x10, 0x7C, 0x41),
-            input_bg: Color32::from_rgb(0x1F, 0x1F, 0x1F),
-            input_border: Color32::from_rgb(0x50, 0x50, 0x50),
-            tab_bar: Color32::from_rgb(0x29, 0x29, 0x29),
-            tab_active: Color32::from_rgb(0x3A, 0x3A, 0x3A),
-            status_bar: Color32::from_rgb(0x29, 0x29, 0x29),
+            desk: Color32::from_rgb(0x02, 0x06, 0x17),
+            gridline: Color32::from_rgb(0xE2, 0xE8, 0xF0),
+            header_bg: Color32::from_rgb(0x1E, 0x29, 0x3B),
+            header_text: Color32::from_rgb(0xCB, 0xD5, 0xE1),
+            header_line: Color32::from_rgb(0x33, 0x41, 0x55),
+            header_sel_bg: Color32::from_rgb(0x33, 0x41, 0x55),
+            header_sel_text: Color32::from_rgb(0x34, 0xD3, 0x99),
+            header_all_bg: Color32::from_rgb(0x06, 0x5F, 0x46),
+            sel_fill: Color32::from_rgba_unmultiplied(0x10, 0xB9, 0x81, 0x24),
+            sel_border: Color32::from_rgb(0x05, 0x96, 0x69),
+            input_bg: Color32::from_rgb(0x02, 0x06, 0x17),
+            input_border: Color32::from_rgb(0x47, 0x55, 0x69),
+            tab_bar: Color32::from_rgb(0x0F, 0x17, 0x2A),
+            tab_active: Color32::from_rgb(0x1E, 0x29, 0x3B),
+            status_bar: Color32::from_rgb(0x0F, 0x17, 0x2A),
             cell_text: Color32::BLACK,
-            menu_bg: Color32::from_rgb(0x30, 0x30, 0x30),
+            menu_bg: Color32::from_rgb(0x1E, 0x29, 0x3B),
             shadow: Color32::from_black_alpha(90),
             danger: Color32::from_rgb(0xF1, 0x70, 0x5F),
             notice_warn_bg: Color32::from_rgb(0x4A, 0x3F, 0x1E),
@@ -137,9 +146,147 @@ impl Tokens {
         }
     }
 
+    /// The palette in use: light or dark, with the user's accent colour ([`set_accent`]) if any.
     pub fn get(ctx: &egui::Context) -> Tokens {
-        if ctx.global_style().visuals.dark_mode { Tokens::dark() } else { Tokens::light() }
+        let dark = ctx.global_style().visuals.dark_mode;
+        let t = if dark { Tokens::dark() } else { Tokens::light() };
+        let Some(c) = accent(ctx) else { return t };
+        // Every widget asks for the palette each frame: the shaded one is kept per (colour, theme).
+        let cache = egui::Id::new("nexus_user_accent_tokens");
+        if let Some((cc, cd, ct)) = ctx.data(|d| d.get_temp::<(Color32, bool, Tokens)>(cache))
+            && cc == c
+            && cd == dark
+        {
+            return ct;
+        }
+        let t = with_accent(t, c);
+        ctx.data_mut(|d| d.insert_temp(cache, (c, dark, t)));
+        t
     }
+}
+
+/// Nexus Sheet's app colour, Emerald (NexusOffice design system), and its ink shade for text and
+/// filled controls (white on it reads at 5.5:1). Never Excel's green.
+pub const APP_COLOR: Color32 = Color32::from_rgb(0x10, 0xB9, 0x81);
+pub const APP_INK: Color32 = Color32::from_rgb(0x04, 0x78, 0x57);
+/// The SonnyTech brand gradient (indigo → cyan → emerald), a thin line under the menu bar.
+pub const BRAND_GRADIENT: [Color32; 3] =
+    [Color32::from_rgb(0x63, 0x66, 0xF1), Color32::from_rgb(0x06, 0xB6, 0xD4), Color32::from_rgb(0x10, 0xB9, 0x81)];
+
+/// Accent presets offered in File › Options (the NexusOffice palette); any other colour comes
+/// from the picker.
+pub const ACCENT_PRESETS: [(&str, Color32); 6] = [
+    ("Emerald", APP_COLOR),
+    ("Indigo", Color32::from_rgb(0x63, 0x66, 0xF1)),
+    ("Violet", Color32::from_rgb(0x8B, 0x5C, 0xF6)),
+    ("Sky", Color32::from_rgb(0x0E, 0xA5, 0xE9)),
+    ("Amber", Color32::from_rgb(0xF5, 0x9E, 0x0B)),
+    ("Coral", Color32::from_rgb(0xF4, 0x3F, 0x5E)),
+];
+
+/// Where the user's accent colour lives: the egui context's memory, so every widget reads it
+/// through [`Tokens::get`] and each window (and each test harness) has its own.
+fn accent_id() -> egui::Id {
+    egui::Id::new("nexus_user_accent")
+}
+
+/// The user's accent colour in this context, if any.
+pub fn accent(ctx: &egui::Context) -> Option<Color32> {
+    ctx.data(|d| d.get_temp::<Color32>(accent_id()))
+}
+
+/// Sets (or with `None` clears) the user's accent colour and re-installs the palettes. Returns
+/// whether it changed.
+pub fn set_accent(ctx: &egui::Context, c: Option<Color32>) -> bool {
+    if accent(ctx) == c {
+        return false;
+    }
+    ctx.data_mut(|d| {
+        if let Some(c) = c {
+            d.insert_temp(accent_id(), c);
+        } else {
+            d.remove::<Color32>(accent_id());
+        }
+    });
+    install_visuals(ctx);
+    ctx.request_repaint();
+    true
+}
+
+/// `#RRGGBB` or `RRGGBB` → colour; anything else `None`.
+pub fn parse_hex(s: &str) -> Option<Color32> {
+    let h = s.trim();
+    let h = h.strip_prefix('#').unwrap_or(h);
+    if h.len() != 6 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let byte = |i: usize| h.get(i..i + 2).and_then(|x| u8::from_str_radix(x, 16).ok());
+    Some(Color32::from_rgb(byte(0)?, byte(2)?, byte(4)?))
+}
+
+/// `#RRGGBB` for a colour.
+pub fn to_hex(c: Color32) -> String {
+    format!("#{:02X}{:02X}{:02X}", c.r(), c.g(), c.b())
+}
+
+fn luminance(c: Color32) -> f32 {
+    let ch = |v: u8| {
+        let s = f32::from(v) / 255.0;
+        if s <= 0.04045 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * ch(c.r()) + 0.7152 * ch(c.g()) + 0.0722 * ch(c.b())
+}
+
+/// WCAG contrast ratio of two opaque colours (1 to 21).
+pub fn contrast_ratio(a: Color32, b: Color32) -> f32 {
+    let (la, lb) = (luminance(a), luminance(b));
+    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+}
+
+/// `c` moved towards black (or white with `lighten`) in 2.5% steps until it reads against every
+/// colour in `against` at `ratio`. Black and white end the walk, so it always stops.
+fn shade_for(c: Color32, against: &[Color32], ratio: f32, lighten: bool) -> Color32 {
+    let target = if lighten { 255.0 } else { 0.0 };
+    let mix = |v: u8, t: f32| {
+        let v = f32::from(v);
+        (v + (target - v) * t).round().clamp(0.0, 255.0) as u8
+    };
+    for k in 0..=40u8 {
+        let t = f32::from(k) * 0.025;
+        let out = Color32::from_rgb(mix(c.r(), t), mix(c.g(), t), mix(c.b(), t));
+        if against.iter().all(|b| contrast_ratio(out, *b) >= ratio) {
+            return out;
+        }
+    }
+    if lighten { Color32::WHITE } else { Color32::BLACK }
+}
+
+/// `c` mixed with white (`k` = how much of `c` stays).
+fn tint(c: Color32, k: f32) -> Color32 {
+    let m = |v: u8| (255.0 - (255.0 - f32::from(v)) * k).round().clamp(0.0, 255.0) as u8;
+    Color32::from_rgb(m(c.r()), m(c.g()), m(c.b()))
+}
+
+/// `c` mixed with black (`k` = how much of `c` stays).
+fn shade(c: Color32, k: f32) -> Color32 {
+    let m = |v: u8| (f32::from(v) * k).round().clamp(0.0, 255.0) as u8;
+    Color32::from_rgb(m(c.r()), m(c.g()), m(c.b()))
+}
+
+/// The palette with the user's accent colour `c` in place of the app colour. Every colour drawn
+/// as text or under text is shaded until it reads at WCAG 4.5:1: the accent with its own text
+/// (`on_accent`) and as text on the bars, the dark accent on the soft tint, the selected-header
+/// text; the cell selection outline reads at 3:1 on the white cells.
+pub fn with_accent(mut t: Tokens, c: Color32) -> Tokens {
+    let lighten = t.dark;
+    t.accent = shade_for(c, &[t.on_accent, t.window, t.ribbon, t.tab_bar, t.status_bar, t.menu_bg], 4.5, lighten);
+    t.accent_soft = if t.dark { shade(c, 0.3) } else { tint(c, 0.16) };
+    t.accent_dark = shade_for(c, &[t.accent_soft], 4.5, lighten);
+    t.header_sel_text = shade_for(c, &[t.header_sel_bg], 4.5, lighten);
+    t.header_all_bg = if t.dark { shade(c, 0.4) } else { tint(c, 0.35) };
+    t.sel_border = shade_for(c, &[t.grid_bg], 3.0, false);
+    t.sel_fill = Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), if t.dark { 0x24 } else { 0x1C });
+    t
 }
 
 pub const UI: &str = "ui";
@@ -676,10 +823,32 @@ pub fn symbol_face_installed() -> bool {
 }
 
 pub fn apply(ctx: &egui::Context, dark: bool) {
-    // Install both palettes before System can switch between the style slots.
+    install_visuals(ctx);
+    ctx.options_mut(|o| o.fallback_theme = egui::Theme::Light);
+    ctx.set_theme(if dark { egui::Theme::Dark } else { egui::Theme::Light });
+    ctx.all_styles_mut(|s| {
+        s.spacing.item_spacing = egui::vec2(6.0, 4.0);
+        s.spacing.button_padding = egui::vec2(6.0, 3.0);
+        s.spacing.interact_size.y = 22.0;
+        s.text_styles.insert(egui::TextStyle::Body, ui_font(13.0));
+        s.text_styles.insert(egui::TextStyle::Button, ui_font(13.0));
+        s.text_styles.insert(egui::TextStyle::Small, ui_font(11.0));
+        s.text_styles.insert(egui::TextStyle::Heading, ui_bold(18.0));
+        s.text_styles.insert(egui::TextStyle::Monospace, FontId::new(12.0, FontFamily::Name(MONO.into())));
+    });
+}
+
+/// Installs both palettes (with the user's accent, if any) before System can switch between the
+/// style slots. Leaves the theme choice and the spacing alone.
+pub fn install_visuals(ctx: &egui::Context) {
+    let user = accent(ctx);
     for theme in [egui::Theme::Light, egui::Theme::Dark] {
         let dark = theme == egui::Theme::Dark;
         let t = if dark { Tokens::dark() } else { Tokens::light() };
+        let t = match user {
+            Some(c) => with_accent(t, c),
+            None => t,
+        };
         let mut v = if dark { Visuals::dark() } else { Visuals::light() };
         v.panel_fill = t.window;
         v.window_fill = t.menu_bg;
@@ -698,18 +867,6 @@ pub fn apply(ctx: &egui::Context, dark: bool) {
         v.popup_shadow = egui::epaint::Shadow { offset: [0, 4], blur: 16, spread: 0, color: t.shadow };
         ctx.set_visuals_of(theme, v);
     }
-    ctx.options_mut(|o| o.fallback_theme = egui::Theme::Light);
-    ctx.set_theme(if dark { egui::Theme::Dark } else { egui::Theme::Light });
-    ctx.all_styles_mut(|s| {
-        s.spacing.item_spacing = egui::vec2(6.0, 4.0);
-        s.spacing.button_padding = egui::vec2(6.0, 3.0);
-        s.spacing.interact_size.y = 22.0;
-        s.text_styles.insert(egui::TextStyle::Body, ui_font(13.0));
-        s.text_styles.insert(egui::TextStyle::Button, ui_font(13.0));
-        s.text_styles.insert(egui::TextStyle::Small, ui_font(11.0));
-        s.text_styles.insert(egui::TextStyle::Heading, ui_bold(18.0));
-        s.text_styles.insert(egui::TextStyle::Monospace, FontId::new(12.0, FontFamily::Name(MONO.into())));
-    });
 }
 
 /// Model colour → egui colour.
@@ -933,5 +1090,91 @@ mod tests {
         let loaded = try_load(&[(bad_s.as_str(), 0), (good_s.as_str(), 0)]);
         assert_eq!(loaded.map(|fd| fd.font.len()), Some(real.len()));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod nexus_accent_tests {
+    use super::*;
+
+    /// Every colour drawn as text or under text keeps 4.5:1 with any accent the user picks, in
+    /// both themes (and the selection outline 3:1 on the cells).
+    #[test]
+    fn user_accents_stay_readable() {
+        let mut picks: Vec<Color32> = ACCENT_PRESETS.iter().map(|p| p.1).collect();
+        picks.extend([Color32::WHITE, Color32::BLACK, Color32::YELLOW, Color32::from_rgb(0, 0, 0x40), Color32::from_rgb(0x80, 0x80, 0x80)]);
+        for r in (0..=255u16).step_by(51) {
+            for g in (0..=255u16).step_by(51) {
+                for b in (0..=255u16).step_by(51) {
+                    picks.push(Color32::from_rgb(r as u8, g as u8, b as u8));
+                }
+            }
+        }
+        for c in picks {
+            for base in [Tokens::light(), Tokens::dark()] {
+                let t = with_accent(base, c);
+                for (what, fg, bg) in [
+                    ("on_accent", t.on_accent, t.accent),
+                    ("accent on window", t.accent, t.window),
+                    ("accent on ribbon", t.accent, t.ribbon),
+                    ("accent on tab bar", t.accent, t.tab_bar),
+                    ("accent on menu", t.accent, t.menu_bg),
+                    ("accent_dark on accent_soft", t.accent_dark, t.accent_soft),
+                    ("header_sel_text", t.header_sel_text, t.header_sel_bg),
+                ] {
+                    let r = contrast_ratio(fg, bg);
+                    assert!(r >= 4.5, "{c:?} dark={}: {what} {r:.2}", t.dark);
+                }
+                assert!(contrast_ratio(t.sel_border, t.grid_bg) >= 3.0, "{c:?}: selection outline");
+            }
+        }
+    }
+
+    /// The built-in Nexus palettes meet the same bar, and the app colour is Emerald, never
+    /// Excel's green.
+    #[test]
+    fn nexus_palettes_are_readable_and_emerald() {
+        for t in [Tokens::light(), Tokens::dark()] {
+            assert!(contrast_ratio(t.on_accent, t.accent) >= 4.5, "dark={}", t.dark);
+            assert!(contrast_ratio(t.accent, t.window) >= 4.5, "dark={}", t.dark);
+            assert!(contrast_ratio(t.accent, t.ribbon) >= 4.5, "dark={}", t.dark);
+            assert!(contrast_ratio(t.text, t.window) >= 4.5 && contrast_ratio(t.text_dim, t.ribbon) >= 4.5, "dark={}", t.dark);
+            for c in [t.accent, t.accent_dark, t.sel_border, t.header_sel_text] {
+                assert_ne!(c, Color32::from_rgb(0x21, 0x73, 0x46));
+                assert_ne!(c, Color32::from_rgb(0x10, 0x7C, 0x41));
+            }
+        }
+        assert_eq!(Tokens::light().accent, APP_INK);
+        assert_eq!(to_hex(APP_COLOR), "#10B981");
+    }
+
+    #[test]
+    fn hex_colours_parse_strictly() {
+        assert_eq!(parse_hex("#10b981"), Some(Color32::from_rgb(0x10, 0xB9, 0x81)));
+        assert_eq!(parse_hex(" F43F5E "), Some(Color32::from_rgb(0xF4, 0x3F, 0x5E)));
+        for junk in ["", "#", "#12345", "#1234567", "zzzzzz", "#ÿÿÿ", "+12345", "#-12345", "##123456"] {
+            assert_eq!(parse_hex(junk), None, "{junk:?}");
+        }
+        assert_eq!(to_hex(Color32::from_rgb(1, 2, 255)), "#0102FF");
+    }
+
+    /// The accent lives in the context: setting it changes the palette widgets read and the
+    /// installed visuals; clearing it goes back to the app's own colour.
+    #[test]
+    fn the_accent_is_per_context() {
+        let ctx = egui::Context::default();
+        apply(&ctx, false);
+        let other = egui::Context::default();
+        apply(&other, false);
+        let coral = Color32::from_rgb(0xF4, 0x3F, 0x5E);
+        assert!(set_accent(&ctx, Some(coral)));
+        assert!(!set_accent(&ctx, Some(coral)), "no change");
+        let t = Tokens::get(&ctx);
+        assert_eq!(t, with_accent(Tokens::light(), coral));
+        assert_eq!(Tokens::get(&ctx), t, "the cached palette");
+        assert_eq!(ctx.global_style().visuals.selection.bg_fill, t.accent_soft);
+        assert_eq!(Tokens::get(&other), Tokens::light(), "another window keeps its own");
+        assert!(set_accent(&ctx, None));
+        assert_eq!(Tokens::get(&ctx), Tokens::light());
     }
 }

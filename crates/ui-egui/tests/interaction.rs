@@ -177,7 +177,8 @@ fn keyboard_navigation_does_not_replay_the_last_pointer_click() {
         (Key::Enter, Modifiers::NONE, "B5"),
         (Key::Enter, Modifiers::SHIFT, "B4"),
         (Key::Tab, Modifiers::NONE, "C4"),
-        (Key::Enter, Modifiers::NONE, "C5"),
+        // NexusOffice: Enter after a Tab goes back to the column the Tabs started in (Excel).
+        (Key::Enter, Modifiers::NONE, "B5"),
     ] {
         key(&mut h, key_code, modifiers);
         let selection = &h.state().session.active().unwrap().selection;

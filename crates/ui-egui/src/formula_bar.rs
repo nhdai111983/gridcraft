@@ -74,7 +74,7 @@ fn active_input(app: &SheetApp) -> String {
             return String::new();
         }
         return if let Some(f) = &c.formula {
-            let shown = crate::formula_locale::display(&c.input_text(), app.ui.language.formula_locale(), &d.wb, d.wb.active_sheet);
+            let shown = crate::formula_locale::display(&c.input_text(), app.ui.formula_locale(), &d.wb, d.wb.active_sheet);
             // A legacy array formula shows in braces (`{=A1:A2*2}`), as `Cell::bar_text` does.
             if f.array.is_some() { format!("{{{shown}}}") } else { shown }
         } else {
@@ -89,7 +89,7 @@ fn active_input(app: &SheetApp) -> String {
             if gridcraft_engine::display::formula_hidden(&d.wb, sh, *anchor) {
                 return String::new();
             }
-            return crate::formula_locale::display(&format!("={}", f.text), app.ui.language.formula_locale(), &d.wb, d.wb.active_sheet);
+            return crate::formula_locale::display(&format!("={}", f.text), app.ui.formula_locale(), &d.wb, d.wb.active_sheet);
         }
     }
     String::new()
@@ -153,6 +153,10 @@ fn name_box(app: &mut SheetApp, ui: &mut egui::Ui, t: &Tokens) {
         }
     });
 }
+
+/// Keys the cell editor and the formula bar keep from egui's focus navigation: Tab, arrows and
+/// Escape commit, move or cancel the edit.
+const EDITOR_KEYS: egui::EventFilter = egui::EventFilter { tab: true, horizontal_arrows: true, vertical_arrows: true, escape: true };
 
 /// The text editor used in the cell and in the formula bar (they share `app.editor`).
 pub fn editor_widget(app: &mut SheetApp, ui: &mut egui::Ui, id: egui::Id, font: FontId, multiline: bool, width: f32) {
@@ -248,6 +252,9 @@ pub fn editor_widget(app: &mut SheetApp, ui: &mut egui::Ui, id: egui::Id, font: 
                 });
                 crate::grid::point_move(app, &mut ed, dr, dc, ashift);
             } else {
+                // An arrow commits and moves as itself: it ends a run of Tabs (Enter returns
+                // to the run's first column, an arrow doesn't).
+                app.tab_return = None;
                 action = Some((dr, dc, false, false));
             }
         }
@@ -255,6 +262,14 @@ pub fn editor_widget(app: &mut SheetApp, ui: &mut egui::Ui, id: egui::Id, font: 
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::F4)) {
             cycle_anchor(&mut ed);
         }
+    }
+    if has_focus && mine {
+        // The editor owns Tab, the arrows and Escape (`EDITOR_KEYS`), but egui learns that only
+        // from a TextEdit that drew with the focus in the previous frame. In the frame right
+        // after the focus was given (typing `a` and pressing Tab at once) egui reads Tab as "move
+        // the focus on": the edit commits and egui hands the keyboard to the next widget drawn,
+        // so the keys typed next never reach the grid. Cancel that move: the key was ours.
+        ui.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
     }
     // The text widget.
     let refs = formula_refs(&ed.text);
@@ -287,7 +302,7 @@ pub fn editor_widget(app: &mut SheetApp, ui: &mut egui::Ui, id: egui::Id, font: 
         .desired_width(width)
         .layouter(&mut layouter)
         .lock_focus(true)
-        .event_filter(egui::EventFilter { tab: true, horizontal_arrows: true, vertical_arrows: true, escape: true })
+        .event_filter(EDITOR_KEYS)
         .show(ui);
     let resp = output.response.clone();
     let synced = mine && (ed.request_focus || ed.sync_caret);

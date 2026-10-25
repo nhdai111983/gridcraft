@@ -9,7 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 
-// NexusOffices: product names shown in the interface (`tr` brands what it returns).
+// NexusOffice: product names shown in the interface (`tr` brands what it returns).
 mod brand;
 pub use brand::{brand, nexus_text};
 mod cs;
@@ -20,6 +20,8 @@ mod ko;
 mod pt;
 mod ru;
 mod sr;
+// NexusOffice: Vietnamese.
+mod vi;
 mod zh;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,10 +40,13 @@ pub enum Language {
     Cs,
     Fr,
     Sr,
+    /// NexusOffice: Vietnamese, the suite's own interface language.
+    Vi,
 }
 
 impl Language {
-    pub const ALL: [Self; 11] = [Self::En, Self::Es, Self::Zh, Self::Ja, Self::Ko, Self::Ru, Self::PtBr, Self::De, Self::Cs, Self::Fr, Self::Sr];
+    pub const ALL: [Self; 12] =
+        [Self::En, Self::Es, Self::Zh, Self::Ja, Self::Ko, Self::Ru, Self::PtBr, Self::De, Self::Cs, Self::Fr, Self::Sr, Self::Vi];
 
     /// The language's own name, shown in the switcher.
     pub fn name(self) -> &'static str {
@@ -57,6 +62,7 @@ impl Language {
             Self::Cs => "Čeština",
             Self::Fr => "Français",
             Self::Sr => "Srpski",
+            Self::Vi => "Tiếng Việt",
         }
     }
 
@@ -74,6 +80,7 @@ impl Language {
             Self::Cs => "cs",
             Self::Fr => "fr",
             Self::Sr => "sr",
+            Self::Vi => "vi",
         }
     }
 
@@ -94,6 +101,7 @@ impl Language {
             "cs" => Some(Self::Cs),
             "fr" => Some(Self::Fr),
             "sr" => Some(Self::Sr),
+            "vi" => Some(Self::Vi),
             _ => None,
         }
     }
@@ -112,7 +120,19 @@ impl Language {
     }
 
     pub fn formula_locale(self) -> gridcraft_engine::formula::FormulaLocale {
-        if self == Self::Es { gridcraft_engine::formula::FormulaLocale::Es } else { gridcraft_engine::formula::FormulaLocale::En }
+        match self {
+            Self::Es => gridcraft_engine::formula::FormulaLocale::Es,
+            Self::Vi => gridcraft_engine::formula::FormulaLocale::Vi,
+            _ => gridcraft_engine::formula::FormulaLocale::En,
+        }
+    }
+
+    /// NexusOffice: the regional format (number, date and currency display and entry) that goes
+    /// with the interface language. Vietnamese is vi-VN; every other language keeps en-US until
+    /// it has a regional format of its own. The app has no separate regional setting: the
+    /// language decides it.
+    pub fn regional_format(self) -> gridcraft_engine::core::Locale {
+        regional_format_of(self.formula_locale())
     }
 
     /// Translates an interface label; untranslated labels fall back to English.
@@ -120,7 +140,7 @@ impl Language {
     /// A label that needs two translations (Home's text "Orientation" vs Page Layout's print
     /// "Orientation") is keyed `context|label`: English shows only the part after the `|`.
     ///
-    /// Invariant (NexusOffices): never pass workbook or other user text (sheet names, cell
+    /// Invariant (NexusOffice): never pass workbook or other user text (sheet names, cell
     /// values, file names, data-validation titles) to `tr`: what it returns goes through
     /// [`brand`], which renames the product in interface labels only.
     pub fn tr(self, text: &str) -> &str {
@@ -136,9 +156,19 @@ impl Language {
             Self::Cs => cs::translate(text),
             Self::Fr => fr::translate(text),
             Self::Sr => sr::translate(text),
+            Self::Vi => vi::translate(text),
         };
-        // NexusOffices: the product names shown are Nexus Sheets / NexusOffices (`brand`).
+        // NexusOffice: the product names shown are Nexus Sheet / NexusOffice (`brand`).
         brand::branded(translated.unwrap_or_else(|| text.rsplit_once('|').map_or(text, |(_, label)| label)))
+    }
+}
+
+/// The regional format an edit's formula syntax goes with (captured when the edit starts, so a
+/// language switch mid-edit doesn't reread the typed value).
+pub fn regional_format_of(locale: gridcraft_engine::formula::FormulaLocale) -> gridcraft_engine::core::Locale {
+    match locale {
+        gridcraft_engine::formula::FormulaLocale::Vi => gridcraft_engine::core::Locale::ViVn,
+        _ => gridcraft_engine::core::Locale::EnUs,
     }
 }
 
@@ -619,6 +649,7 @@ mod tests {
             assert!(cs::translate(english).is_some_and(|text| !text.is_empty()), "missing Czech: {english}");
             assert!(fr::translate(english).is_some_and(|text| !text.is_empty()), "missing French: {english}");
             assert!(sr::translate(english).is_some_and(|text| !text.is_empty()), "missing Serbian: {english}");
+            assert!(vi::translate(english).is_some_and(|text| !text.is_empty()), "missing Vietnamese: {english}");
         }
         assert_eq!(Language::Ja.tr("Data"), "データ");
         assert_eq!(Language::Zh.tr("Data"), "数据");
@@ -652,6 +683,11 @@ mod tests {
         assert_eq!(Language::Sr.tr("Sheet1!A1"), "Sheet1!A1");
         assert_eq!(Language::Sr.tr("Page Layout|Orientation"), "Orijentacija");
         assert_eq!(Language::Sr.tr("Orientation"), "Orijentacija");
+        assert_eq!(Language::Vi.tr("Data"), "Dữ liệu");
+        assert_eq!(Language::Vi.tr("File"), "Tệp");
+        assert_eq!(Language::Vi.tr("Sheet1!A1"), "Sheet1!A1");
+        assert_eq!(Language::Vi.tr("Page Layout|Orientation"), "Hướng giấy");
+        assert_eq!(Language::Vi.tr("About GridCraft"), "Giới thiệu về Nexus Sheet", "branded in Vietnamese too");
         assert_eq!(Language::parse("xx"), None);
     }
 
@@ -693,6 +729,8 @@ mod tests {
         assert_eq!(Language::from_tag("sr-Latn-RS"), Some(Language::Sr));
         assert_eq!(Language::from_tag("sr-RS"), Some(Language::Sr));
         assert_eq!(Language::parse("sr"), Some(Language::Sr));
+        assert_eq!(Language::from_tag("vi-VN"), Some(Language::Vi));
+        assert_eq!(Language::from_tag("vi_VN.UTF-8"), Some(Language::Vi));
     }
 
     #[test]

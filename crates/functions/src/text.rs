@@ -1,7 +1,7 @@
 //! Text functions.
 
 use gridcraft_core::parse::parse_number_text_in;
-use gridcraft_core::{CellError, Value, canonical, number_to_text};
+use gridcraft_core::{CellError, Value, canonical};
 
 use crate::criteria::wildcard_find;
 use crate::util::{
@@ -301,15 +301,16 @@ fn value(a: &[Arg], c: &mut dyn Ctx) -> R<Value> {
         Value::Number(n) => num_val(n),
         Value::Empty => num_val(0.0),
         Value::Error(e) => Err(e),
-        Value::Text(t) => parse_number_text_in(&t, c.date_system()).ok_or(CellError::Value).and_then(num_val),
+        Value::Text(t) => gridcraft_core::parse::parse_number_text_locale(&t, c.date_system(), c.locale()).ok_or(CellError::Value).and_then(num_val),
         _ => Err(CellError::Value),
     }
 }
 
 fn numbervalue(a: &[Arg], c: &mut dyn Ctx) -> R<Value> {
     let s = text(a, 0)?;
-    let dec = if a.len() > 1 { text(a, 1)?.chars().next().ok_or(CellError::Value)? } else { '.' };
-    let grp = if a.len() > 2 { text(a, 2)?.chars().next().ok_or(CellError::Value)? } else { ',' };
+    // Omitted separators are the current locale's (Microsoft's NUMBERVALUE documentation).
+    let dec = if a.len() > 1 { text(a, 1)?.chars().next().ok_or(CellError::Value)? } else { c.locale().decimal_separator() };
+    let grp = if a.len() > 2 { text(a, 2)?.chars().next().ok_or(CellError::Value)? } else { c.locale().group_separator() };
     if dec == grp {
         return Err(CellError::Value);
     }
@@ -629,7 +630,7 @@ fn value_text(v: &Value, strict: bool) -> String {
         Value::Text(t) if strict => format!("\"{}\"", t.replace('"', "\"\"")),
         Value::Text(t) => t.to_string(),
         Value::Error(e) => e.as_str().to_string(),
-        Value::Number(n) => number_to_text(*n),
+        // NexusOffice: spelled in the evaluation's regional format, as `&` spells it (`1,5`).
         other => other.to_text().unwrap_or_default(),
     }
 }
@@ -654,12 +655,16 @@ fn arraytotext(a: &[Arg], _c: &mut dyn Ctx) -> R<Value> {
     if strict {
         out.push('{');
     }
+    // NexusOffice: where the decimal separator is `,` (vi-VN) the numbers are `1,5`, so the
+    // separators are the formula syntax's (`{1,5\2;3\4}`) and the list separator (`1,5; 2`).
+    let comma_decimal = gridcraft_core::coercion_locale().decimal_separator() == ',';
+    let (col_sep, row_sep, plain_sep) = if comma_decimal { ("\\", ";", "; ") } else { (",", ";", ", ") };
     for r in 0..arr.rows {
         for c in 0..arr.cols {
             if r > 0 && c == 0 {
-                out.push_str(if strict { ";" } else { ", " });
+                out.push_str(if strict { row_sep } else { plain_sep });
             } else if c > 0 {
-                out.push_str(if strict { "," } else { ", " });
+                out.push_str(if strict { col_sep } else { plain_sep });
             }
             push_capped(&mut out, &value_text(arr.get(r, c).unwrap_or(&Value::Empty), strict))?;
         }
@@ -1084,6 +1089,24 @@ mod tests {
                 Err(err) => is_err(ev("VALUE", vec![arg]), err),
             }
         }
+    }
+
+    /// NexusOffice: VALUE reads text in the regional format, NUMBERVALUE's omitted separators are
+    /// the locale's (Microsoft's documentation of both).
+    #[test]
+    fn vietnamese_numbers_from_text() {
+        use crate::util::testutil::ev_in;
+        use gridcraft_core::Locale::ViVn;
+        close(ev_in("VALUE", vec![t("1.234,5")], ViVn), 1234.5);
+        close(ev_in("VALUE", vec![t("12,5%")], ViVn), 0.125);
+        close(ev_in("VALUE", vec![t("1.234 ₫")], ViVn), 1234.0);
+        close(ev_in("VALUE", vec![t("24/10/2026")], ViVn), 46319.0);
+        is_err(ev_in("VALUE", vec![t("1,234.5")], ViVn), CellError::Value);
+        close(ev_in("NUMBERVALUE", vec![t("2.500,27")], ViVn), 2500.27);
+        close(ev_in("NUMBERVALUE", vec![t("2,500.27"), t("."), t(",")], ViVn), 2500.27);
+        is_err(ev_in("NUMBERVALUE", vec![t("2,500.27")], ViVn), CellError::Value);
+        // en-US still reads its own spellings.
+        close(ev("NUMBERVALUE", vec![t("2,500.27")]), 2500.27);
     }
 
     #[test]

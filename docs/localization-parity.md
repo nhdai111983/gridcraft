@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-12 · **Change:** minor (Format Cells dialog looks its labels up in the catalog) · **Target:** Microsoft Excel (Microsoft 365), Excel for Mac 16.113.4
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-25 · **Change:** minor (NexusOffice: vi-VN criteria and coercion, Format Cells codes, chart labels, a Region setting apart from the language, CSV title lines) · **Target:** Microsoft Excel (Microsoft 365), Excel for Mac 16.113.4
 
 Per-language status against Excel, which ships its UI in dozens of languages (Windows language
 packs cover 100+), with localized function names, argument separators, number and date formats,
@@ -54,13 +54,118 @@ separators, number/date formats, machine translation with agent review, and scri
 | Japanese | ja | 268 (~12%) | no | CJK system-font fallback; IME unverified; no furigana display | no | menus only | 8–12 h |
 | German | de | 266 (~12%) | no | Latin: yes | no | menus only | 4–8 h |
 | Korean | ko | 266 (~12%) | no | Hangul via the CJK fallback; IME unverified | no | menus only | 6–10 h |
-| Vietnamese | vi | 0 (0%) | no | Latin with stacked diacritics: unverified | no | none | 6–10 h |
+| Vietnamese | vi | 960 (NexusOffice catalog `i18n/vi.rs`) | dialogs partly | Latin with stacked diacritics: unverified | no | menus, dialogs; **vi-VN regional format** (below) | 3–6 h |
 
 Other shipped languages: Russian (ru) and German (de), 266 labels each (~12%), menus only.
 
 **Total:** catalog work 10–20 h + languages 92–144 h ≈ **100–165 h**. Parallelizes almost fully
 once the catalog covers dialogs and commands. **Needs a human:** native-speaker review of every
 language (none so far) and of localized function names.
+
+## Regional formats (NexusOffice: vi-VN)
+
+A regional format (`gridcraft_core::Locale`: `EnUs`, `ViVn`) changes only what people see and
+type. Files, stored formulas, number-format codes and the command API stay en-US.
+
+- **Which one:** File › Options › General › **Region (numbers and dates)** / *Vùng (số và ngày)*:
+  *Same as interface language*, *Tiếng Việt (Việt Nam)* or *English (United States)* (command
+  `ui.region` `{value: "vi-VN" | "en-US" | ""}`, saved in `ui.json` as `region`; junk reads as
+  unset). Unset, it follows the interface language (Vietnamese → vi-VN, every other language →
+  en-US), so English menus with vi-VN numbers and Vietnamese menus with en-US numbers both work,
+  as Windows keeps the two apart for Excel. The formula syntax goes with the region (vi-VN: `;`
+  and decimal comma) except Spanish, which keeps its own names and separators; so do Currency and
+  the accounting button (đồng in vi-VN). `UiState::regional_format` (`nexus_region.rs`) is pushed
+  every frame with `Session::set_locale`, which recalculates workbooks whose locale changes and
+  keeps a saved workbook saved (`Workbook::locale` is `#[serde(skip)]`).
+- **Display** (`numfmt::format_value_in`): decimal `,`, grouping `.` (`1.234.567,89`), General
+  `1234,5`; CLDR `vi` month and day names (`tháng 10`/`thg 10`/`10`, `Thứ Hai`…`Chủ Nhật`/`Th 2`…`CN`),
+  `SA`/`CH` for AM/PM, fractional seconds `ss,00`. The system formats follow the locale as in
+  Excel: built-in 14 `m/d/yyyy` shows `dd/mm/yyyy`, 22 `dd/mm/yyyy h:mm`, `[$-F800]`/`[$-x-sysdate]`
+  `dddd, d mmmm, yyyy`, `[$-F400]`/`[$-x-systime]` `h:mm:ss` (24 h). Explicit codes keep their shape.
+  Calendar weeks start on Monday (`Locale::first_weekday`, no date picker uses it yet).
+- **Currency:** đồng after the amount with a space, no decimals: `#,##0 [$₫-42A]` → `1.234.567 ₫`.
+  The Number Format list's Currency and the accounting button apply đồng's formats in Vietnamese.
+- **Entry** (`core::parse::parse_input_in`, `cell.set`/`range.fill` `locale: "vi-VN"`): `1.234,5`,
+  `1234,5`, `12,5%`, `1.234 ₫`/`1.234đ`/`1.234 VNĐ`/`1.234 VND`/`₫1.234` (currency format; only `₫` may lead, so
+  `Đ101` or `VND1` stay text),
+  `24/10/2026`, `24-10-26`, `24/10`, ISO dates, `14:30`, `2:30 CH`/`10:00 SA`, date-times. A first
+  group starting with 0 (`0.125`, `090.312.345`) is text, not grouping; `((1))` is text. `.` is not a date separator and en-US spellings such as
+  `1,234.5` or `1.5` stay text, as in Excel with vi-VN settings. The API without `locale` is en-US.
+- **Formulas** (`FormulaLocale::Vi`): English function names (as Excel's Vietnamese version), `;`
+  between arguments, decimal comma, `\` between array columns — the Spanish mechanism without the
+  name table. Stored and saved as en-US (`SUM(A1,0.5)`).
+- **Functions (follows Excel):** `TEXT`, `VALUE` and `NUMBERVALUE` evaluate in the workbook's
+  display locale, exactly as Excel's evaluate in the system's: in vi-VN `TEXT(A1;"#.##0,00")` →
+  `1.234,50` (the format text is read the vi-VN way: `,` decimal, `.` grouping; dates and times
+  keep their letters, only `ss,00` changes), `VALUE("1.234,5")` → 1234.5, and `NUMBERVALUE` with
+  its separators omitted uses the locale's. **Literal format codes inside formulas are therefore
+  locale-dependent, as in Excel:** `=TEXT(A1,"#,##0.00")` written in an en-US file shows
+  differently when the workbook is shown in vi-VN. The formula itself is stored unchanged (the
+  string literal is never rewritten; `numfmt::delocalize_code` runs only when `TEXT` evaluates),
+  so the file stays en-US; the cached result is the one last calculated. A workbook recalculates
+  when its locale changes and when it opens in a non-en-US locale, if a formula calls `TEXT` or
+  `…VALUE(`.
+- **Criteria and coercion (follows Excel):** while a workbook's formulas evaluate, text ↔ number
+  coercion uses its regional format (`core::coercion_scope`, set by the evaluator; en-US
+  everywhere else). In vi-VN the criteria of COUNTIF, COUNTIFS, SUMIF, SUMIFS, AVERAGEIF,
+  AVERAGEIFS, MAXIFS, MINIFS and the database functions read `">1,5"` as 1.5 and `"25/10/2026"`
+  as that date (an en-US `">1.5"` is a text criterion, as in Excel with vi-VN settings);
+  `="1,5"+1` is 2.5, `SQRT("2,25")` 1.5, `DATEVALUE("25/10/2026")` that date, and a number joined into text is spelled the vi-VN way
+  (`=1.5&""` → `1,5`, `LEFT(1234.5;6)` → `1234,5`, `VALUETOTEXT`, `ARRAYTOTEXT` with the formula
+  syntax's separators `{1,5\2;3\4}` / `1,5; 2`, number field labels of the D-functions), so
+  `">"&B1` keeps working. Like a format
+  code inside `TEXT`, **a criterion or number written as a string literal is read in the
+  workbook's locale**: the formula text is stored unchanged. Because almost any formula can
+  depend on this, a locale change recalculates every workbook that has a formula (manual
+  calculation excepted). A workbook is calculated once when it opens, already in the session's
+  locale (manual-calculation ones too). Undo and redo bring back a snapshot in the current locale
+  and recalculate it if it was taken in another. The scope is per thread: a future parallel
+  recalculation must enter it in each worker. `"$3"` still coerces to 3 in vi-VN (the en-US
+  currency sign is accepted, as when typing since #13); whether Excel with vi-VN settings accepts
+  it is not verified.
+- **Format Cells:** the Number tab shows and edits codes in the regional format: `#.##0,00`,
+  `0,00%`, `#.##0 [$₫-42A]` (Currency is đồng's in vi-VN), the system short date as `dd/mm/yyyy`,
+  presets spelled the same way; what is stored is the en-US code (`numfmt::localize_code` /
+  `delocalize_code`; a code shown and left unchanged is kept as it was, so `m/d/yyyy` stays the
+  system date, and typing the locale's short date `dd/mm/yyyy` back stores built-in 14/22).
+  Number conditions in brackets are respelled too (`[<1000,5]`), also in `TEXT` codes; both
+  separators trade places everywhere, so every code round-trips byte for byte (`[>=1,000]0` shows
+  `[>=1.000]0` and is stored back unchanged).
+- **Charts:** axis tick labels, data labels, number and date categories and numeric series names
+  are spelled in the workbook's regional format (`1.234,50`, `24/10/2026`, `2,5`;
+  `ChartData::locale`, set by `chart::resolve`); histogram bins separate their bounds with the
+  list separator (`[1,5; 2,5]`, not checked against Excel). PDF export draws the same labels.
+- **Other entry points:** pasting text from another app (`edit.paste` `locale`), the custom
+  AutoFilter operand (`data.filterBy` stores it en-US), Scenario values, Solver constraint right
+  sides, Forecast Sheet dates, Data › From Text/CSV, Goal Seek's target and Advanced Filter
+  criteria cells read the regional format; what they store stays en-US.
+- **API (control channel, MCP, CLI):** locale-neutral by default — en-US input and output — and
+  every command that reads typed values takes an explicit `locale`. What the control channel
+  returns (queries such as `cell.get`, `sheet.read`, `document.inspect`, `selection.stats`,
+  `file.saveBytes`, and copies) is en-US even while the window shows vi-VN, unless the call names
+  a `locale` (`display::with_locale`). The override changes only that returned text: commands that
+  change the workbook, filters (AutoFilter, Advanced Filter) and the files written for the user
+  (`file.save`, exports, PDF) evaluate and write in the workbook's own regional format. See
+  `docs/control-protocol.md`.
+- **CSV (decision):** Excel reads and writes CSV with the system's list separator and number
+  format. In vi-VN, Save As CSV writes `;` between fields and the displayed values (`1.234,50;24/10/2026`;
+  General numbers in full precision with a decimal comma); a file read from CSV keeps its own
+  separator. Opening a CSV in vi-VN reads values the vi-VN way and takes `;` as the separator when
+  it appears; a file whose commas only sit between digits is one column of decimal-comma numbers;
+  other comma files (en-US exports) still split at commas. Rules, on the first 20 lines outside
+  quotes, after any title lines that hold no tab, `;` or `,` (`Report` above the table): a tab on every line → tab; a `;` on every line → `;`; at most one comma per line, each
+  between digits (a decimal-comma column, possibly with a header or whole numbers) → `;`; a comma
+  on every line → `,` (`1,2,3` splits in three); otherwise `;` if one appears anywhere (a title
+  line with a comma above a `;` table). So `Report\nName,Note\nA,x; y` splits at the commas and a
+  tab file with a stray `;` at the tabs. **An en-US `1,5\n2,7` file opened in vi-VN therefore reads as one column
+  of 1.5 and 2.7, as Excel with vi-VN settings reads it.** A CSV that was opened is saved back with
+  its own delimiter, in the workbook's regional format — also when an API caller saves it. Round trip in the same locale is
+  lossless (tested); en-US behaviour is unchanged. Opening a vi-VN CSV in en-US reads `1.234,50`
+  as text, as Excel does across locales.
+- **Not yet:** data-validation messages quote en-US numbers; `FIXED` and `DOLLAR` spell
+  numbers en-US; trendline equations and the chart data table are
+  en-US; the Format Cells category samples beyond the code field (Date/Time type lists) are not
+  localized; regional formats other than vi-VN and en-US.
 
 ## Infrastructure (do first)
 
@@ -78,6 +183,9 @@ language (none so far) and of localized function names.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-25 | minor | Review of #15: open calculates once in the session's locale (manual-calculation workbooks too); undo/redo keep the current locale; format-code respelling is an involution (conditions round-trip); `dd/mm/yyyy` typed back is built-in 14; VALUETOTEXT/ARRAYTOTEXT and D-function labels follow the locale |
+| 2026-10-25 | minor | NexusOffice vi-VN: criteria (COUNTIF/SUMIFS/… and D-functions) and text ↔ number coercion in the workbook's locale (`core::coercion_scope`); every formula recalculates on a locale change; Format Cells shows codes in the region (`numfmt::localize_code`); chart labels in the workbook's locale; Region setting apart from the language (`ui.region`, File › Options); CSV sniffer skips separator-less title lines |
+| 2026-10-24 | minor | NexusOffice vi-VN regional format: display, entry, đồng currency, system date formats, `FormulaLocale::Vi`, TEXT/VALUE/NUMBERVALUE per locale, CSV `;` with decimal comma (decision recorded above) |
 | 2026-10-12 | minor | Format Cells looks up its tabs, labels, options and note through `Language::tr` (Fill tab keyed `Format Cells\|Fill`); dialog titles and OK/Cancel too. Labels already in a table (Number, Currency, Fill…) show translated; the rest fall back to English until the tables add them |
 | 2026-10-12 | minor | Brazilian Portuguese catalog (`i18n/pt.rs`) grows from 377 to 923 entries: every key the other catalogs translate, including the dialog strings #669 starts looking up (~42%) |
 | 2026-10-11 | minor | German ribbon catalog (`i18n/de.rs`, 266 labels, ~12%); `de` locale tags (de-DE, de-AT, de-CH…) resolve to German. PR #163 (localized German formulas/numbers) still open |

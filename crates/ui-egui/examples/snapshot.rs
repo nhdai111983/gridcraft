@@ -2,7 +2,15 @@
 //!
 //! `cargo run --release -p gridcraft-ui-egui --example snapshot -- [--sample sales] [--in file.xlsx]
 //!  [--size 1440x900] [--scale 2] [--cmd 'id={json}']... [--tab Insert] [--dark] [--language en|zh|ja|ko|ru|pt|cs]
-//!  [--dialog 'name={json}'] [--hf-edit header|footer] out.png`
+//!  [--dialog 'name={json}'] [--hf-edit header|footer] [--toolbar] [--wps] [--embedded] [--accent '#RRGGBB'] out.png`
+//!
+//! `--toolbar`: the NexusOffice layout (menu bar and one tool row); `--wps`: the NexusOffice layout in
+//! the style of WPS Office (no title bar, one row of tabs, a flat command strip); `--embedded`: as
+//! hosted in the NexusOffice window; `--accent`: a user accent colour.
+//! `--select B5` selects a cell (or range) before drawing; `--region vi-VN|en-US` sets the regional
+//! format apart from the language (NexusOffice, File › Options › Region).
+//! `--ui-cmd 'id={json}'` runs an app command (`ui.backstage`…) before drawing; `--click LABEL` and
+//! `--hover LABEL` act on the widget so named (in order) before the shot, to show an open menu.
 
 use gridcraft_engine::Session;
 use gridcraft_ui_egui::SheetApp;
@@ -22,6 +30,14 @@ fn main() {
     let mut dialog: Option<String> = None;
     let mut language: Option<String> = None;
     let mut hf_edit: Option<String> = None;
+    let mut toolbar = false;
+    let mut wps = false;
+    let mut embedded = false;
+    let mut accent: Option<String> = None;
+    let mut ui_cmds: Vec<String> = vec![];
+    let mut select: Option<String> = None;
+    let mut region: Option<String> = None;
+    let mut pointer: Vec<(bool, String)> = vec![];
     let mut out = "snapshot.png".to_string();
     let mut i = 0;
     while i < args.len() {
@@ -55,6 +71,34 @@ fn main() {
                 tab = args.get(i).cloned();
             }
             "--dark" => dark = true,
+            "--toolbar" => toolbar = true,
+            "--wps" => wps = true,
+            "--embedded" => embedded = true,
+            "--ui-cmd" => {
+                i += 1;
+                if let Some(c) = args.get(i) {
+                    ui_cmds.push(c.clone());
+                }
+            }
+            "--click" | "--hover" => {
+                let click = args[i] == "--click";
+                i += 1;
+                if let Some(c) = args.get(i) {
+                    pointer.push((click, c.clone()));
+                }
+            }
+            "--select" => {
+                i += 1;
+                select = args.get(i).cloned();
+            }
+            "--region" => {
+                i += 1;
+                region = args.get(i).cloned();
+            }
+            "--accent" => {
+                i += 1;
+                accent = args.get(i).cloned();
+            }
             "--pane" => {
                 i += 1;
                 pane = args.get(i).cloned();
@@ -93,8 +137,13 @@ fn main() {
             eprintln!("{id}: {e}");
         }
     }
+    if let Some(r) = &select
+        && let Err(e) = session.execute("selection.set", json!({"range": r}))
+    {
+        eprintln!("--select {r}: {e}");
+    }
     let mut harness =
-        egui_kittest::Harness::builder().with_size(egui::vec2(size.0, size.1)).with_pixels_per_point(scale).with_max_steps(12).wgpu().build_ui_state(
+        egui_kittest::Harness::builder().with_size(egui::vec2(size.0, size.1)).with_pixels_per_point(scale).with_max_steps(32).wgpu().build_ui_state(
             move |ui, app: &mut SheetApp| {
                 let ctx = ui.ctx().clone();
                 app.logic(&ctx);
@@ -103,10 +152,28 @@ fn main() {
             {
                 let mut app = SheetApp::new(session, Default::default());
                 app.ui.dark = dark;
+                app.toolbar = toolbar;
+                app.wps = wps;
+                app.embedded = embedded;
+                app.ui.accent = accent;
+                for c in &ui_cmds {
+                    let (id, p) = c
+                        .split_once('=')
+                        .map(|(a, b)| (a.to_string(), serde_json::from_str(b).unwrap_or(json!({}))))
+                        .unwrap_or((c.clone(), json!({})));
+                    if let Err(e) = app.run(&id, p) {
+                        eprintln!("{id}: {e}");
+                    }
+                }
                 if let Some(code) = &language
                     && let Some(l) = gridcraft_ui_egui::i18n::Language::parse(code)
                 {
                     app.ui.language = l;
+                }
+                if let Some(r) = &region
+                    && let Err(e) = app.run("ui.region", json!({"value": r}))
+                {
+                    eprintln!("--region {r}: {e}");
                 }
                 if let Some(t) = tab {
                     app.ui.ribbon_tab = t;
@@ -127,7 +194,17 @@ fn main() {
                 app
             },
         );
-    harness.run_steps(8);
+    // The WPS strip settles its stacks' rows and folds its groups over a few frames.
+    harness.run_steps(if wps { 24 } else { 8 });
+    for (click, label) in &pointer {
+        use egui_kittest::kittest::Queryable;
+        match harness.query_by_label(label) {
+            Some(n) if *click => n.click(),
+            Some(n) => n.hover(),
+            None => eprintln!("no widget named {label:?}"),
+        }
+        harness.run_steps(if wps { 12 } else { 4 });
+    }
     let img = harness.render().expect("render");
     img.save(&out).expect("save png");
     eprintln!("wrote {out} ({}x{})", img.width(), img.height());

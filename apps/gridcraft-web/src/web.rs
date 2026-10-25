@@ -48,6 +48,9 @@ pub fn start() {
                         bridge.connect(&mut services, inbox.clone(), cc.egui_ctx.clone());
                     }
                     let mut app = SheetApp::new(session, services);
+                    // NexusOffice layout in the style of WPS Office (no title bar, one row of tabs, a flat
+                    // command strip); `app.toolbar` keeps the menu bar layout behind its flag.
+                    app.wps = true;
                     app.ui.system_theme = true;
                     // Follow the browser's language, except a CJK one: the web build has no system
                     // CJK fonts (none are bundled), so that interface would render as tofu.
@@ -75,9 +78,7 @@ pub fn start() {
         if let Some(el) = document.get_element_by_id(LOADING_ID) {
             match result {
                 Ok(()) => el.remove(),
-                Err(e) => {
-                    el.set_inner_html(&format!("<p>Nexus Sheets failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>"))
-                }
+                Err(e) => el.set_inner_html(&format!("<p>Nexus Sheet failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>")),
             }
         }
     });

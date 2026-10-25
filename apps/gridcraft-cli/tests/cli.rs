@@ -26,8 +26,8 @@ fn tmpdir(name: &str) -> PathBuf {
 
 #[test]
 fn version_and_usage() {
-    assert_eq!(ok(&["--version"]).trim(), format!("nexus-sheets-cli {}", env!("CARGO_PKG_VERSION")));
-    assert_eq!(ok(&["version"]).trim(), format!("nexus-sheets-cli {}", env!("CARGO_PKG_VERSION")));
+    assert_eq!(ok(&["--version"]).trim(), format!("nexus-sheet-cli {}", env!("CARGO_PKG_VERSION")));
+    assert_eq!(ok(&["version"]).trim(), format!("nexus-sheet-cli {}", env!("CARGO_PKG_VERSION")));
     let o = run(&["frobnicate"]);
     assert!(!o.status.success());
     assert!(String::from_utf8_lossy(&o.stderr).contains("unknown subcommand"));

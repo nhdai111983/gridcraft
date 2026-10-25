@@ -21,7 +21,8 @@ fn find_column(db: &Array, label: &str) -> Option<usize> {
     let label = label.trim();
     (0..db.cols).find(|&c| match db.get(0, c) {
         Some(Value::Text(t)) => text_eq(t.trim(), label),
-        Some(Value::Number(n)) => gridcraft_core::number_to_text(*n) == label,
+        // NexusOffice: a number label is spelled as `&` spells it, in the evaluation's regional format.
+        Some(Value::Number(n)) => Value::Number(*n).to_text().is_ok_and(|t| t == label),
         _ => false,
     })
 }
@@ -77,7 +78,7 @@ fn matching_records(db: &Array, crit: &Array, ctx: &mut dyn Ctx) -> Vec<usize> {
             let Some(cr) = cell_criterion(cell) else { continue };
             let col = match crit.get(0, c) {
                 Some(Value::Text(t)) => find_column(db, t),
-                Some(Value::Number(n)) => find_column(db, &gridcraft_core::number_to_text(*n)),
+                Some(Value::Number(n)) => find_column(db, &Value::Number(*n).to_text().unwrap_or_default()),
                 _ => None,
             };
             conds.push((c, col, cr));

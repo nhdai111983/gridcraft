@@ -155,6 +155,20 @@ fn cell_list(wb: &Workbook, t: &str, cmd: &str, cap: usize) -> Result<(usize, Ve
     Ok((sheet.unwrap_or(wb.active_sheet), out))
 }
 
+/// A scenario value typed in `locale` as it is stored: a number typed `1,5` (vi-VN) is the number
+/// 1.5; text that en-US would read as something else keeps its text with a leading apostrophe.
+fn localized_value_json(v: &Json, sys: gridcraft_core::DateSystem, locale: gridcraft_core::Locale) -> Json {
+    let Json::String(t) = v else { return v.clone() };
+    if locale == gridcraft_core::Locale::EnUs || t.is_empty() || t.starts_with('=') || t.starts_with('\'') {
+        return v.clone();
+    }
+    match gridcraft_core::parse::parse_input_in(t, sys, locale).value {
+        Value::Number(n) => json!(n),
+        Value::Text(_) if !matches!(gridcraft_core::parse::parse_input(t, sys).value, Value::Text(_)) => json!(format!("'{t}")),
+        _ => v.clone(),
+    }
+}
+
 /// What a JSON value typed into a cell is, as a constant.
 fn json_value(v: &Json, wb: &Workbook) -> Value {
     match v {
@@ -403,7 +417,7 @@ fn store_scenarios(wb: &mut Workbook, list: &[Scenario]) {
             .map(|c| format!("\"{}\"", c.iter().collect::<String>().replace('"', "\"\"")))
             .collect::<Vec<_>>()
             .join("&"),
-        comment: "Nexus Sheets Scenario Manager data".into(),
+        comment: "Nexus Sheet Scenario Manager data".into(),
         hidden: true,
     });
 }
@@ -433,12 +447,14 @@ fn scenario_add(s: &mut Session, p: &Json) -> Result<Json> {
         return Err(bad(CMD, "no changing cells"));
     }
     let sh = d.wb.sheet(si).ok_or(EngineError::NoDocument)?;
+    let locale = super::edit::locale_param(CMD, p)?;
     let values: Vec<Json> = match p.get("values").and_then(Json::as_array) {
         Some(a) => {
             if a.len() != cells.len() {
                 return Err(bad(CMD, format!("{} values for {} changing cells", a.len(), cells.len())));
             }
-            a.clone()
+            // Values typed in the interface's regional format are stored as numbers or en-US text.
+            a.iter().map(|v| localized_value_json(v, d.wb.date_system, locale)).collect()
         }
         None => cells.iter().map(|c| value_json(&sh.value(*c))).collect(),
     };
@@ -723,7 +739,14 @@ fn split_op(t: &str) -> (&str, &str) {
 }
 
 /// Does a list value match one criteria cell's value (Excel's advanced-filter semantics)?
+#[cfg(test)]
 pub(crate) fn criterion_matches(v: &Value, text: &str, crit: &Value) -> bool {
+    criterion_matches_in(v, text, crit, gridcraft_core::Locale::EnUs)
+}
+
+/// [`criterion_matches`] with criteria typed in a regional format: criteria cells hold what people
+/// typed, so `>1,5` compares with 1.5 in vi-VN (Excel reads them in the system's format).
+pub(crate) fn criterion_matches_in(v: &Value, text: &str, crit: &Value, locale: gridcraft_core::Locale) -> bool {
     let crit_text = match crit {
         Value::Empty => return true,
         Value::Number(n) => return v.as_f64().is_some_and(|x| (x - n).abs() <= 1e-12 * n.abs().max(1.0)),
@@ -740,7 +763,7 @@ pub(crate) fn criterion_matches(v: &Value, text: &str, crit: &Value) -> bool {
             _ => true,
         };
     }
-    let num = gridcraft_core::parse::parse_number_text(operand);
+    let num = gridcraft_core::parse::parse_number_text_locale(operand, gridcraft_core::DateSystem::D1900, locale);
     let lower_text = text.to_lowercase();
     let lower_op = operand.to_lowercase();
     use std::cmp::Ordering;
@@ -786,6 +809,14 @@ pub(crate) fn criterion_matches(v: &Value, text: &str, crit: &Value) -> bool {
 }
 
 fn advanced_filter(s: &mut Session, p: &Json) -> Result<Json> {
+    // Criteria cells hold what people typed in the workbook's regional format, and the rows
+    // are compared as they show in it, whoever runs the filter (an API caller may read in
+    // another display locale).
+    let locale = s.doc()?.wb.locale;
+    crate::display::with_locale(locale, || advanced_filter_in(s, p))
+}
+
+fn advanced_filter_in(s: &mut Session, p: &Json) -> Result<Json> {
     const CMD: &str = "data.advancedFilter";
     let d = s.doc()?;
     let (si, list) = match str_param(p, "range") {
@@ -841,7 +872,7 @@ fn advanced_filter(s: &mut Session, p: &Json) -> Result<Json> {
                     let at = CellRef::new(row, list.start.col + off);
                     let v = sh.value(at);
                     let text = crate::display::cell_text(wb, sh, at);
-                    criterion_matches(&v, &text, crit)
+                    criterion_matches_in(&v, &text, crit, wb.locale)
                 }
                 Cond::Computed(e, at) => {
                     let shifted = gridcraft_formula::adjust::shift_relative(e.clone(), row as i64 - first_data as i64, 0);
