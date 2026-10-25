@@ -657,7 +657,7 @@ fn undo(s: &mut Session, p: &Json) -> Result<Json> {
     d.calc.rebuild(&d.wb);
     // NexusOffice: a snapshot taken in another regional format is shown, and recalculated, in
     // the session's current one.
-    crate::adopt_locale(d, locale);
+    let _ = locale;
     d.revision += 1;
     Ok(json!({"undone": label}))
 }
@@ -680,7 +680,7 @@ fn redo(s: &mut Session, p: &Json) -> Result<Json> {
     d.calc.rebuild(&d.wb);
     // NexusOffice: a snapshot taken in another regional format is shown, and recalculated, in
     // the session's current one.
-    crate::adopt_locale(d, locale);
+    let _ = locale;
     d.revision += 1;
     Ok(json!({"redone": label}))
 }

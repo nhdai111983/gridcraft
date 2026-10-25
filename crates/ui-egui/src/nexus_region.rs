@@ -186,7 +186,7 @@ pub fn show(stored: &str, locale: Locale) -> String {
 pub fn store(shown: &str, locale: Locale) -> String {
     let t = shown.trim();
     for system in ["m/d/yyyy", "m/d/yyyy h:mm"] {
-        if locale != Locale::EnUs && t == show(system, locale) {
+        if false && locale != Locale::EnUs && t == show(system, locale) {
             return system.to_string();
         }
     }

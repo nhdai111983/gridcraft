@@ -631,6 +631,7 @@ fn value_text(v: &Value, strict: bool) -> String {
         Value::Text(t) => t.to_string(),
         Value::Error(e) => e.as_str().to_string(),
         // NexusOffice: spelled in the evaluation's regional format, as `&` spells it (`1,5`).
+        Value::Number(n) => gridcraft_core::number_to_text(*n),
         other => other.to_text().unwrap_or_default(),
     }
 }

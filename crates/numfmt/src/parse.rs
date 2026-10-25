@@ -703,7 +703,7 @@ fn respell_code(code: &str, loc: gridcraft_core::Locale, to_local: bool) -> Stri
                     let condition = cs.get(i).is_some_and(|d| matches!(d, '<' | '>' | '='));
                     while let Some(&d) = cs.get(i) {
                         i += 1;
-                        out.push(if condition { swap(d) } else { d });
+                        out.push(if condition && d == if to_local { '.' } else { dec } { if to_local { dec } else { '.' } } else { d });
                         if d == ']' {
                             break;
                         }
