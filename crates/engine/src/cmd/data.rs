@@ -532,8 +532,13 @@ fn filter_by(s: &mut Session, p: &Json) -> Result<Json> {
             blanks: bool_param(p, "blanks").unwrap_or(false),
         })
     } else if let Some(c) = p.get("custom") {
-        let a = (c.get("op").and_then(Json::as_str).unwrap_or("=").to_string(), c.get("value").map(super::edit::json_to_input).unwrap_or_default());
-        let b = c.get("op2").and_then(Json::as_str).map(|o| (o.to_string(), c.get("value2").map(super::edit::json_to_input).unwrap_or_default()));
+        // A number typed in the interface's regional format (`locale`) is stored en-US.
+        let locale = super::edit::locale_param("data.filterBy", p)?;
+        let sys = s.doc()?.wb.date_system;
+        let operand =
+            |key: &str| c.get(key).map(super::edit::json_to_input).map(|t| super::edit::canonical_number_text(&t, sys, locale)).unwrap_or_default();
+        let a = (c.get("op").and_then(Json::as_str).unwrap_or("=").to_string(), operand("value"));
+        let b = c.get("op2").and_then(Json::as_str).map(|o| (o.to_string(), operand("value2")));
         Some(FilterCriterion::Custom { a, b, and: c.get("and").and_then(Json::as_bool).unwrap_or(true) })
     } else if let Some(t) = p.get("top") {
         Some(FilterCriterion::Top10 {
@@ -606,6 +611,12 @@ fn custom_ok(v: &Value, text: &str, op: &str, crit: &str, folded: &str) -> bool 
 
 /// Hides rows of the autofilter range that fail any criterion.
 pub(crate) fn apply_filter(wb: &mut Workbook, sheet: usize) {
+    // Rows are compared as they show in the workbook's regional format, whoever filters.
+    let locale = wb.locale;
+    crate::display::with_locale(locale, || apply_filter_in(wb, sheet));
+}
+
+fn apply_filter_in(wb: &mut Workbook, sheet: usize) {
     let Some(sh) = wb.sheet(sheet) else { return };
     let Some(af) = sh.autofilter.clone() else { return };
     let r = af.range;
@@ -873,6 +884,8 @@ fn remove_duplicates(s: &mut Session, p: &Json) -> Result<Json> {
 }
 
 fn text_to_columns(s: &mut Session, p: &Json) -> Result<Json> {
+    // The parts are read as typed in the interface's regional format (`1,5` in vi-VN).
+    let locale = super::edit::locale_param("data.textToColumns", p)?;
     let r = target_range(s, p)?;
     let sheet = target_sheet(s, p)?;
     let mut delims: Vec<char> = p
@@ -910,7 +923,7 @@ fn text_to_columns(s: &mut Session, p: &Json) -> Result<Json> {
             }
         }
         for (c, t) in out {
-            let cell = super::edit::input_to_cell(&t, sheet, c, &mut cx.wb).unwrap_or(None);
+            let cell = super::edit::input_to_cell_in(&t, sheet, c, &mut cx.wb, locale).unwrap_or(None);
             let shm = cx.sheet_mut(sheet)?;
             match cell {
                 Some(x) => shm.set_cell(c, x),
@@ -1071,6 +1084,11 @@ pub fn list_items(wb: &Workbook, sheet: usize, dv: &Validation) -> Vec<String> {
 
 /// Checks typed input against the validation of a cell. `Ok(None)` = valid.
 pub fn check_validation(wb: &Workbook, sheet: usize, at: CellRef, input: &str) -> Option<(Validation, String)> {
+    check_validation_in(wb, sheet, at, input, gridcraft_core::Locale::EnUs)
+}
+
+/// [`check_validation`] for a value typed in a regional format (`cell.set`'s `locale`).
+pub fn check_validation_in(wb: &Workbook, sheet: usize, at: CellRef, input: &str, locale: gridcraft_core::Locale) -> Option<(Validation, String)> {
     let sh = wb.sheet(sheet)?;
     let dv = sh.validations.iter().find(|d| d.ranges.iter().any(|r| r.contains(at)))?;
     if dv.kind == ValidationKind::Any || !dv.show_error {
@@ -1079,7 +1097,7 @@ pub fn check_validation(wb: &Workbook, sheet: usize, at: CellRef, input: &str) -
     if input.is_empty() && dv.allow_blank {
         return None;
     }
-    let v = gridcraft_core::parse::parse_input(input, wb.date_system).value;
+    let v = gridcraft_core::parse::parse_input_in(input, wb.date_system, locale).value;
     // The formulas are written for the first cell of the range and see the value being entered,
     // as in Excel (a custom `=A1>10` on A1:A9 checks A5's new value at A5).
     let first = dv.ranges.first().map(|r| r.start).unwrap_or(at);

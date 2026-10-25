@@ -120,6 +120,12 @@ pub struct Workbook {
     /// `preserved` are relative to. Saving into another folder rewrites them from there. Not in JSON.
     #[serde(skip)]
     pub source_dir: Option<std::path::PathBuf>,
+    /// NexusOffice: the regional format the interface shows this workbook in (separators, date
+    /// and day names) and that `TEXT`, `VALUE` and `NUMBERVALUE` follow, as Excel's follow the
+    /// system's. Set by the interface ([`gridcraft_core::Locale::EnUs`] for the API), never
+    /// saved: files stay en-US.
+    #[serde(skip)]
+    pub locale: gridcraft_core::Locale,
 }
 
 impl Default for Workbook {
@@ -148,6 +154,7 @@ impl Workbook {
             csv_delimiter: None,
             preserved: None,
             source_dir: None,
+            locale: gridcraft_core::Locale::EnUs,
         }
     }
     pub fn sheet(&self, i: usize) -> Option<&Sheet> {
@@ -163,8 +170,15 @@ impl Workbook {
         self.sheet(self.active_sheet)
     }
     /// A fresh sheet name `SheetN` not in use.
+    /// The first free `SheetN` — or, while [`with_sheet_prefix`] runs, `{prefix}N`.
     pub fn next_sheet_name(&self) -> String {
-        (1..).map(|n| format!("Sheet{n}")).find(|n| self.sheet_index(n).is_none()).unwrap_or_else(|| "Sheet".into())
+        self.next_sheet_name_with(&sheet_prefix())
+    }
+    /// The first free name `{prefix}N` (NexusOffice: the interface language's word for a sheet,
+    /// "Trang tính" in Vietnamese); an empty prefix is "Sheet".
+    pub fn next_sheet_name_with(&self, prefix: &str) -> String {
+        let prefix = if prefix.trim().is_empty() { "Sheet" } else { prefix };
+        (1..).map(|n| format!("{prefix}{n}")).find(|n| self.sheet_index(n).is_none()).unwrap_or_else(|| prefix.into())
     }
     /// Validates a sheet name like Excel: 1–31 chars, none of `: \ / ? * [ ]`, not starting or
     /// ending with `'`, unique (case-insensitive) unless it is `except`'s own name.
@@ -306,4 +320,35 @@ mod tests {
         assert!(wb.check_sheet_name(&"x".repeat(32), None).is_err());
         assert!(wb.check_sheet_name("Budget 2026", None).is_ok());
     }
+}
+
+// NexusOffice: what new sheets are called before their number, in the interface's language.
+thread_local! {
+    static SHEET_PREFIX: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
+/// The prefix [`Workbook::next_sheet_name`] uses now; empty is "Sheet".
+pub fn sheet_prefix() -> String {
+    SHEET_PREFIX.with(|p| p.try_borrow().map(|p| p.clone()).unwrap_or_default())
+}
+
+/// Runs `f` with sheets that `f` creates or imports without a usable name called `{prefix}N`
+/// ("Trang tính" → Trang tính1) on this thread, then puts the previous prefix back (even if `f`
+/// panics).
+pub fn with_sheet_prefix<R>(prefix: &str, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<String>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            if let Some(old) = self.0.take() {
+                SHEET_PREFIX.with(|p| {
+                    if let Ok(mut p) = p.try_borrow_mut() {
+                        *p = old;
+                    }
+                });
+            }
+        }
+    }
+    let old = SHEET_PREFIX.with(|p| p.try_borrow_mut().map(|mut p| std::mem::replace(&mut *p, prefix.to_string())).ok());
+    let _restore = Restore(old);
+    f()
 }

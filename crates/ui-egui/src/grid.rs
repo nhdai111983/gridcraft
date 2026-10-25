@@ -102,6 +102,8 @@ pub enum Drag {
 
 #[derive(Default)]
 pub struct GridState {
+    /// The grid's widget id, last frame (see `SheetApp::keep_keyboard`).
+    pub(crate) focus_id: Option<egui::Id>,
     pub drag: Drag,
     pub ensure_visible: bool,
     /// With `ensure_visible`: scroll to the moving end of the selection instead of the active cell
@@ -543,7 +545,7 @@ fn display_text(
         && let Value::Number(n) = v
     {
         let max_chars = ((width_px - 4.0) / char_w).floor().max(1.0) as usize;
-        return match gridcraft_engine::numfmt::format_general_fit(*n, max_chars.min(11)) {
+        return match gridcraft_engine::numfmt::format_general_fit_in(*n, max_chars.min(11), wb.locale) {
             Some(t) => (t, None, true, None),
             None => ("#".repeat(max_chars.max(1)), None, true, None),
         };
@@ -565,6 +567,7 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
     };
     let resp = ui.allocate_rect(rect, Sense::click_and_drag());
     app.grid.rect = Some(rect);
+    app.grid.focus_id = Some(resp.id);
     let Some(d) = app.session.active() else { return };
     let wb: Arc<Workbook> = d.wb.clone();
     let si = wb.active_sheet;
@@ -1133,13 +1136,8 @@ pub(crate) fn paint_quadrant(
             let s = (11.0 * z * 1.2).clamp(8.0, 24.0);
             let b = Rect::from_center_size(rect.center(), vec2(s, s));
             let on = v == Value::Bool(true);
-            p.rect_filled(b, 2.0, if on { Color32::from_rgb(0x10, 0x7C, 0x41) } else { Color32::WHITE });
-            p.rect_stroke(
-                b,
-                2.0,
-                Stroke::new(1.0, if on { Color32::from_rgb(0x10, 0x7C, 0x41) } else { Color32::from_gray(110) }),
-                StrokeKind::Inside,
-            );
+            p.rect_filled(b, 2.0, if on { crate::theme::APP_INK } else { Color32::WHITE });
+            p.rect_stroke(b, 2.0, Stroke::new(1.0, if on { crate::theme::APP_INK } else { Color32::from_gray(110) }), StrokeKind::Inside);
             if on {
                 crate::icons::paint(p, b.shrink(1.5), crate::icons::Icon::Check, Color32::WHITE);
             }

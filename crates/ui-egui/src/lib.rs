@@ -14,6 +14,7 @@ pub mod control;
 pub mod credits;
 pub mod dialogs;
 pub mod editor;
+pub mod file_dialogs;
 pub mod fonts;
 pub mod formula_bar;
 mod formula_locale;
@@ -23,6 +24,9 @@ pub mod icons;
 pub mod keymap;
 pub mod keytips;
 pub mod nexus;
+pub mod nexus_save_prompt;
+pub mod nexus_toolbar;
+pub mod nexus_wps;
 pub mod outline;
 pub mod panes;
 pub mod paper_view;
@@ -77,6 +81,15 @@ pub struct UiState {
     /// [`INTERFACE_SCALE_MIN`]..=[`INTERFACE_SCALE_MAX`]; a malformed saved value reads as 100.
     #[serde(deserialize_with = "lenient_interface_scale")]
     pub interface_scale: u16,
+    /// NexusOffice: the accent colour the user picked (`#RRGGBB`, File › Options); `None` is the
+    /// app's own Emerald. A value that isn't a colour reads as `None`.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient_accent")]
+    pub accent: Option<String>,
+}
+
+fn lenient_accent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    let v = Json::deserialize(d)?;
+    Ok(v.as_str().and_then(theme::parse_hex).map(theme::to_hex))
 }
 
 pub const INTERFACE_SCALE_MIN: u16 = 75;
@@ -108,6 +121,7 @@ impl Default for UiState {
             keytip_invoke: None,
             language: i18n::Language::En,
             interface_scale: 100,
+            accent: None,
         }
     }
 }
@@ -162,6 +176,8 @@ pub struct Notice {
     pub action: Option<(String, String)>,
 }
 
+pub use file_dialogs::{FileDialogAnswer, FileDialogRequest};
+
 /// Host services the platform shell provides (file pickers, opening URLs).
 #[derive(Default)]
 pub struct Services {
@@ -197,6 +213,16 @@ pub struct Services {
     /// Web: hand PDF bytes to the browser's print flow directly (no download,
     /// no intermediate file) — opens the system print dialog on that PDF.
     pub print: Option<Box<dyn Fn(&[u8])>>,
+    /// NexusOffice: Open and Save As dialogs the host shows without blocking (its answer comes
+    /// later on the channel; see [`file_dialogs`]). Wins over `pick_open` / `pick_save`.
+    pub file_dialog: Option<Box<dyn Fn(FileDialogRequest) -> std::sync::mpsc::Receiver<FileDialogAnswer>>>,
+    /// NexusOffice: a host with tabs takes File › New, Ctrl+N and the sample workbooks (the
+    /// `file.new` params) and opens a new tab; this workbook stays as it is.
+    pub new_document: Option<Box<dyn Fn(Json)>>,
+    /// NexusOffice: a host with tabs opens a picked workbook in a tab of its own (or brings its tab
+    /// forward). Not asked when this window holds only an untouched blank workbook, which the
+    /// opened one replaces as upstream does.
+    pub open_document: Option<Box<dyn Fn(&str)>>,
 }
 
 /// Shared queue of files read asynchronously (browser file picker, drag and drop).
@@ -210,11 +236,23 @@ pub struct Perf {
     last: f64,
 }
 
+/// A run of Tab presses: where it started and the cell it reached (see `move_after_enter`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TabReturn {
+    doc: u64,
+    sheet: usize,
+    start_col: u32,
+    reached: gridcraft_engine::core::CellRef,
+}
+
 pub struct SheetApp {
     pub session: Session,
     pub ui: UiState,
     pub views: HashMap<(u64, usize), SheetView>,
     pub editor: Option<editor::EditState>,
+    /// Where a run of Tab presses started, so Enter at its end goes to the next row at that
+    /// column (Excel's AutoReturn); `None` once anything else moves the selection.
+    pub(crate) tab_return: Option<TabReturn>,
     pub text_box_editor: Option<text_box::EditState>,
     pub dialog: Option<dialogs::Dialog>,
     /// The File tab's Backstage view, when open (UI-only; replaces the ribbon, grid and tabs).
@@ -264,6 +302,22 @@ pub struct SheetApp {
     /// holding other text. Once the cut has been pasted, Paste leaves this text alone.
     cut_text: Option<String>,
     pub started: f64,
+    /// NexusOffice layout: a menu bar and one tool row instead of the ribbon ([`nexus_toolbar`]).
+    /// The Nexus apps turn it on; off (the default) keeps upstream's ribbon.
+    pub toolbar: bool,
+    /// NexusOffice layout in the style of WPS Office ([`nexus_wps`]): no title bar; one row with
+    /// File, the Quick Access Toolbar, the ribbon tabs, the save state, Search, Comments and Share;
+    /// under it the current tab's groups as one flat strip whose trailing groups fold into a "…"
+    /// panel. Wins over [`toolbar`](Self::toolbar). Off keeps upstream's title bar and ribbon.
+    pub wps: bool,
+    /// Hosted inside another program's window (a tab of the NexusOffice window): the app leaves the
+    /// window's title alone and its top row doesn't move or maximise the window.
+    pub embedded: bool,
+    /// NexusOffice: the rectangle the app was last drawn in (its tab, when [`embedded`](Self::embedded)),
+    /// which "Lưu thay đổi?" dims and centres on.
+    pub(crate) drawn_in: egui::Rect,
+    /// The host's file dialog being shown ([`file_dialogs`]).
+    pub(crate) file_dialog: Option<file_dialogs::PendingDialog>,
 }
 
 impl SheetApp {
@@ -273,6 +327,7 @@ impl SheetApp {
             ui: UiState::default(),
             views: HashMap::new(),
             editor: None,
+            tab_return: None,
             text_box_editor: None,
             dialog: None,
             backstage: None,
@@ -307,6 +362,11 @@ impl SheetApp {
             clipboard_text_at_copy: None,
             cut_text: None,
             started: now_ms(),
+            toolbar: false,
+            wps: false,
+            embedded: false,
+            drawn_in: egui::Rect::NOTHING,
+            file_dialog: None,
         }
     }
 
@@ -323,6 +383,61 @@ impl SheetApp {
     pub fn setup_context_for_language(ctx: &egui::Context, dark: bool, language: i18n::Language) {
         ctx.set_fonts(theme::font_definitions_for_language(language));
         theme::apply(ctx, dark);
+    }
+
+    /// NexusOffice: text being typed that would change the workbook when entered — a cell edit
+    /// that changed the cell's text, or a text box whose text changed. An edit opened with F2 (or a
+    /// double-click) and left as it was is not a change.
+    pub fn has_unsaved_edit(&self) -> bool {
+        self.editor.as_ref().is_some_and(editor::EditState::changed) || self.text_box_editor.as_ref().is_some_and(text_box::EditState::changed)
+    }
+
+    /// NexusOffice: put a draft being typed into the workbook before the host closes it: a changed
+    /// cell edit is entered, an unchanged one just ends (no change is recorded), a text box is
+    /// committed. `false` when the draft can't be entered (the app shows why).
+    pub fn commit_drafts(&mut self) -> bool {
+        match self.editor.as_ref().map(editor::EditState::changed) {
+            Some(false) => self.cancel_edit(),
+            Some(true) if !self.commit_edit(0, 0, false, false) => return false,
+            _ => {}
+        }
+        if let Err(e) = self.commit_text_box_edit() {
+            self.message = Some((nexus::APP_NAME.into(), clean_error(&e)));
+            return false;
+        }
+        true
+    }
+
+    /// NexusOffice: install the fonts and the look again on the next frame (painting nothing on
+    /// this one). A host window with other editors calls it when this app's tab comes forward,
+    /// since another editor may have replaced the window's fonts and visuals meanwhile.
+    pub fn restyle(&mut self) {
+        self.fonts_ready = false;
+        self.fonts_set = false;
+    }
+
+    /// Whether the window's fonts have this app's interface family (another editor in a host
+    /// window may have replaced them).
+    fn fonts_installed(&self, ctx: &egui::Context) -> bool {
+        let ui = egui::FontFamily::Name(theme::UI.into());
+        ctx.fonts(|f| f.definitions().families.contains_key(&ui))
+    }
+
+    /// Installs `defs`. Embedded, the window's other families (another editor's, the host's own
+    /// proportional and monospace faces) are kept and this app's named families added, so the
+    /// editors in a host window's tabs don't take each other's fonts away.
+    fn set_fonts(&self, ctx: &egui::Context, defs: egui::FontDefinitions) {
+        if !self.embedded {
+            return ctx.set_fonts(defs);
+        }
+        let mut merged = ctx.fonts(|f| f.definitions().clone());
+        merged.font_data.extend(defs.font_data);
+        for (family, chain) in defs.families {
+            if matches!(family, egui::FontFamily::Name(_)) {
+                merged.families.insert(family, chain);
+            }
+        }
+        ctx.set_fonts(merged);
     }
 
     /// The font names the active workbook uses: every style's font plus the theme's heading/body
@@ -377,6 +492,14 @@ impl SheetApp {
             )
         {
             self.commit_text_box_edit()?;
+        }
+        // NexusOffice: the host's tabs take new workbooks; this one stays as it is.
+        if id == "file.new"
+            && let Some(new) = &self.services.new_document
+        {
+            new(params);
+            self.backstage = None;
+            return Ok(json!({"host": "file.new"}));
         }
         if let Some(r) = self.run_ui_command(id, &params) {
             return r;
@@ -437,9 +560,12 @@ impl SheetApp {
             self.cut_text = None;
         }
         let html = self.services.paste_html.as_mut().and_then(|read| read());
+        // Text from another app is read in the interface's regional format (1.234,5 in vi-VN),
+        // as typing it would be.
+        let locale = self.ui.language.regional_format().tag();
         let params = match html {
-            Some(html) => json!({"text": text, "html": html}),
-            None => json!({"text": text}),
+            Some(html) => json!({"text": text, "html": html, "locale": locale}),
+            None => json!({"text": text, "locale": locale}),
         };
         self.run_or_alert("edit.paste", params);
     }
@@ -503,7 +629,10 @@ impl SheetApp {
         }
         // Menu-style Export as PDF with no file named: ask where to save, like Save As does.
         // Programmatic callers use `run` and keep getting the PDF bytes back.
-        if id == "file.exportPdf" && self.services.pick_save.is_some() && params.get("path").and_then(Json::as_str).is_none_or(str::is_empty) {
+        if id == "file.exportPdf"
+            && (self.services.pick_save.is_some() || self.services.file_dialog.is_some())
+            && params.get("path").and_then(Json::as_str).is_none_or(str::is_empty)
+        {
             return self.export_pdf_with_picker(params);
         }
         if let Err(e) = self.run(id, params) {
@@ -519,6 +648,12 @@ impl SheetApp {
         }
         let title = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
         let stem = std::path::Path::new(&title).file_stem().and_then(|s| s.to_str()).unwrap_or("Book1").to_string();
+        if self.ask_file(
+            FileDialogRequest::Save { name: format!("{stem}.pdf"), types: vec!["pdf".into()] },
+            file_dialogs::AfterPick::ExportPdf(params.clone()),
+        ) {
+            return;
+        }
         let Some(pick) = &self.services.pick_save else { return };
         let Some(path) = pick(&format!("{stem}.pdf")) else { return };
         // The picker may suggest a workbook extension; the export writes a PDF.
@@ -659,6 +794,24 @@ impl SheetApp {
                 }
                 Ok(json!({"page": self.backstage.as_ref().map(|b| b.page.id())}))
             }
+            "ui.accent" => {
+                // NexusOffice: `{"value": "#RRGGBB"}` sets the accent colour, `""` or `null` goes
+                // back to the app's own; no value reads it. Applied on the next frame (`logic`).
+                if let Some(v) = p.get("value") {
+                    match v.as_str().map(str::trim).filter(|h| !h.is_empty()) {
+                        None if v.is_null() || v.as_str().is_some() => self.ui.accent = None,
+                        None => return Some(Err("the accent colour is a string: \"#RRGGBB\", or \"\" for the app's own".into())),
+                        Some(hex) => match theme::parse_hex(hex) {
+                            Some(c) => self.ui.accent = Some(theme::to_hex(c)),
+                            None => {
+                                let shown: String = hex.chars().take(24).collect();
+                                return Some(Err(format!("unknown colour {shown:?}; use \"#RRGGBB\"")));
+                            }
+                        },
+                    }
+                }
+                Ok(json!({"accent": self.ui.accent}))
+            }
             "ui.dialog" => {
                 let name = p.get("name").and_then(Json::as_str).unwrap_or("");
                 self.open_dialog(name, p.clone());
@@ -715,6 +868,7 @@ impl SheetApp {
             return;
         }
         match name {
+            "open" if self.ask_file(FileDialogRequest::Open { purpose: "workbook".into() }, file_dialogs::AfterPick::OpenWorkbook) => {}
             "open" => {
                 if let Some(start) = &self.services.open_async {
                     start();
@@ -726,9 +880,13 @@ impl SheetApp {
             }
             "saveAs" => {
                 let suggested = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
-                if let Some(pick) = &self.services.pick_save {
+                let name = if std::path::Path::new(&suggested).extension().is_none() { format!("{suggested}.xlsx") } else { suggested.clone() };
+                // Save As writes the workbook: only workbook types (a CSV or PDF is a copy, made by Export).
+                if self.ask_file(FileDialogRequest::Save { name, types: vec!["xlsx".into()] }, file_dialogs::AfterPick::Save { then_close: false }) {
+                    // The host shows the dialog; the save happens when its answer comes.
+                } else if let Some(pick) = &self.services.pick_save {
                     if let Some(path) = pick(&suggested) {
-                        let path = if std::path::Path::new(&path).extension().is_none() { format!("{path}.xlsx") } else { path };
+                        let path = file_dialogs::with_workbook_extension(path, false);
                         self.run_or_alert("file.save", json!({"path": path}));
                     }
                 } else if self.services.download.is_some()
@@ -763,6 +921,16 @@ impl SheetApp {
     }
 
     pub fn open_path(&mut self, path: &str) {
+        // NexusOffice: a host with tabs opens it in a tab of its own, unless this window holds only
+        // an untouched blank workbook (which the opened one replaces) or has it open already.
+        if let Some(open) = &self.services.open_document
+            && !self.session.documents().iter().any(|d| d.path.as_deref() == Some(path))
+            && !(self.session.documents().len() == 1 && self.session.active().is_some_and(gridcraft_engine::DocState::is_untouched_blank))
+        {
+            open(path);
+            self.backstage = None;
+            return;
+        }
         match self.run("file.open", json!({"path": path})) {
             Ok(r) => self.after_open(Some(path), &r),
             // A password-protected workbook: ask for the password; the dialog opens it.
@@ -801,16 +969,22 @@ impl SheetApp {
         }
         let vba: Vec<&str> = msgs.iter().copied().filter(|m| m.to_lowercase().contains("macro") || m.contains("VBA")).collect();
         if !vba.is_empty() {
+            let lang = self.ui.language;
             self.notice = Some(Notice {
-                text: "This workbook contains VBA macros. Nexus Sheets keeps them intact when you save, but does not run them.".into(),
+                text: lang.tr("This workbook contains VBA macros. Nexus Sheet keeps them intact when you save, but does not run them.").into(),
                 kind: NoticeKind::Warning,
-                action: Some(("What this means".into(), "macros".into())),
+                action: Some((lang.tr("What this means").into(), "macros".into())),
             });
         } else {
+            let first = msgs.first().copied().unwrap_or_default();
             let text = if msgs.len() == 1 {
-                msgs[0].to_string()
+                first.to_string()
             } else {
-                format!("{} items in this file were handled differently. First: {}", msgs.len(), msgs[0])
+                self.ui
+                    .language
+                    .tr("{count} items in this file were handled differently. First: {first}")
+                    .replace("{count}", &msgs.len().to_string())
+                    .replace("{first}", first)
             };
             self.notice = Some(Notice { text, kind: NoticeKind::Info, action: None });
         }
@@ -892,6 +1066,7 @@ impl SheetApp {
         };
         let mut ed = editor::EditState::new(d.wb.active_sheet, at, text, replace, from_formula_bar);
         ed.locale = locale;
+        ed.original = current;
         if replace && self.ui.autocomplete && !ed.is_formula() {
             ed.completion = editor::column_completion(sh, at, &ed.text);
         }
@@ -919,7 +1094,8 @@ impl SheetApp {
         };
         // Data validation.
         if let Some(d) = self.session.active()
-            && let Some((dv, msg)) = gridcraft_engine::cmd::data::check_validation(&d.wb, ed.sheet, ed.cell, &text)
+            && let Some((dv, msg)) =
+                gridcraft_engine::cmd::data::check_validation_in(&d.wb, ed.sheet, ed.cell, &text, i18n::regional_format_of(ed.locale))
         {
             if dv.error_style == gridcraft_engine::model::ErrorStyle::Stop {
                 let title = if dv.error_title.is_empty() { nexus::APP_NAME.to_string() } else { dv.error_title.clone() };
@@ -930,10 +1106,13 @@ impl SheetApp {
             }
             self.toast = Some((msg, now_ms()));
         }
+        // A value typed in a regional format (1.234,5, 24/10/2026) is read in it; formulas were
+        // made canonical above.
+        let locale = i18n::regional_format_of(ed.locale);
         let r = if fill_selection {
-            self.session.run("range.fill", json!({"input": text}))
+            self.session.run("range.fill", json!({"input": text, "locale": locale.tag()}))
         } else {
-            self.session.run("cell.set", json!({"cell": ed.cell.a1(), "input": text, "array": array}))
+            self.session.run("cell.set", json!({"cell": ed.cell.a1(), "input": text, "array": array, "locale": locale.tag()}))
         };
         match r {
             Ok(_) => {
@@ -957,14 +1136,52 @@ impl SheetApp {
         self.session.mode = gridcraft_engine::Mode::Ready;
     }
 
+    /// The grid and the cell editor own Tab, the arrows and Escape, but egui learns that only from
+    /// a widget that held the focus in the previous frame (`set_focus_lock_filter`). In the frame
+    /// right after one of them took the focus (a character typed starts the editor; committing
+    /// gives the keyboard back to the grid) egui reads those keys as "move the focus": Tab right
+    /// after a character, or right after Enter/Tab committed an entry, sent egui's focus to
+    /// another widget and the keys typed next never reached the grid. Cancel that move before
+    /// any widget is drawn: the key is ours.
+    fn keep_keyboard(&self, ctx: &egui::Context) {
+        let ours = [Some(egui::Id::new("gridcraft.cell_editor")), Some(egui::Id::new("gridcraft.formula_bar")), self.grid.focus_id];
+        if self.dialog.is_none() && self.message.is_none() && ctx.memory(|m| m.focused()).is_some_and(|f| ours.contains(&Some(f))) {
+            ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+        }
+    }
+
     /// Enter/Tab move inside a multi-cell selection, otherwise to the next cell.
+    ///
+    /// Excel: "If you press Tab to enter data in several cells in a row and then press Enter at
+    /// the end of that row, the selection moves to the beginning of the next row." A Tab
+    /// remembers the column its run started in; Enter (one row down) from the cell that run
+    /// reached goes to the next row at that column. Anything else ends the run.
     pub fn move_after_enter(&mut self, dr: i64, dc: i64) {
         let multi = self.session.active().is_some_and(|d| !d.selection.is_single_cell());
+        let run = self.tab_return.take();
         if multi {
             let fwd = dr > 0 || dc > 0;
             let _ = self.session.run("selection.next", json!({"forward": fwd, "byRow": dc != 0}));
         } else {
-            let _ = self.session.run("selection.move", json!({"dr": dr, "dc": dc}));
+            let here = self.session.active().map(|d| (d.uid, d.wb.active_sheet, d.selection.active));
+            let run = run.filter(|r| here == Some((r.doc, r.sheet, r.reached)));
+            match (dr, dc, here) {
+                (1, 0, Some((_, _, at))) if run.is_some() => {
+                    let col = run.map_or(at.col, |r| r.start_col);
+                    let next = gridcraft_engine::core::CellRef::new(at.row.saturating_add(1).min(gridcraft_engine::core::MAX_ROWS - 1), col);
+                    let _ = self.session.run("selection.set", json!({"cell": next.a1()}));
+                }
+                (0, _, Some((doc, sheet, at))) if dc != 0 => {
+                    let start_col = run.map_or(at.col, |r| r.start_col);
+                    let _ = self.session.run("selection.move", json!({"dr": dr, "dc": dc}));
+                    let reached = self.session.active().map(|d| d.selection.active);
+                    // Shift+Tab back past the start (or a Tab that couldn't move) ends the run.
+                    self.tab_return = reached.filter(|r| *r != at && r.col >= start_col).map(|reached| TabReturn { doc, sheet, start_col, reached });
+                }
+                _ => {
+                    let _ = self.session.run("selection.move", json!({"dr": dr, "dc": dc}));
+                }
+            }
         }
         self.grid.ensure_visible = true;
     }
@@ -998,12 +1215,18 @@ impl SheetApp {
             self.fonts_ready = false;
             self.fonts_set = false;
         }
+        // NexusOffice: another editor in the host window (Nexus Docs) installed its own fonts,
+        // without this app's families: install them again (and skip the frame, as at startup).
+        if self.embedded && self.fonts_ready && !self.fonts_rebind && !self.fonts_installed(ctx) {
+            self.restyle();
+        }
         if !self.fonts_ready {
             // New fonts apply from the next frame on: paint nothing until then.
             if self.fonts_set {
                 self.fonts_ready = true;
             } else {
-                SheetApp::setup_context_for_language(ctx, self.ui.dark, self.ui.language);
+                self.set_fonts(ctx, theme::font_definitions_for_language(self.ui.language));
+                theme::apply(ctx, self.ui.dark);
                 self.fonts_set = true;
                 // The rebuilt set has no workbook fonts yet: bind them again once it is active.
                 self.fonts_bound.clear();
@@ -1023,7 +1246,7 @@ impl SheetApp {
                 let used = self.used_fonts();
                 self.fonts_seen = seen;
                 if used != self.fonts_bound {
-                    ctx.set_fonts(theme::font_definitions_with(self.ui.language, &used));
+                    self.set_fonts(ctx, theme::font_definitions_with(self.ui.language, &used));
                     self.fonts_bound = used;
                     self.fonts_rebind = true;
                     ctx.request_repaint();
@@ -1045,6 +1268,17 @@ impl SheetApp {
             ctx.set_theme(preference);
             ctx.request_repaint();
         }
+        // NexusOffice: new sheets are named in the interface's language (Trang tính1).
+        let prefix = if self.ui.language == i18n::Language::Vi { "Trang tính" } else { "" };
+        if self.session.sheet_name_prefix != prefix {
+            self.session.sheet_name_prefix = prefix.to_string();
+        }
+        // NexusOffice: workbooks show in the interface language's regional format (vi-VN:
+        // 1.234,5, dd/mm/yyyy); cheap when nothing changed, and an undone step that comes back with
+        // another locale gets this one again.
+        self.session.set_locale(self.ui.language.regional_format());
+        // NexusOffice: the user's accent colour (File › Options, `ui.accent`).
+        theme::set_accent(ctx, self.ui.accent.as_deref().and_then(theme::parse_hex));
         self.effective_dark = ctx.theme() == egui::Theme::Dark;
         // Interface size: the preference owns the zoom factor, so egui's own Ctrl/Cmd +/-/0 zoom
         // keys stay off (they would also swallow GridCraft's shortcuts).
@@ -1057,6 +1291,7 @@ impl SheetApp {
             ctx.request_repaint();
         }
         control::poll(self, ctx);
+        self.poll_file_dialog();
         // Files read asynchronously (web file picker, dropped files).
         let arrived: Vec<(String, Vec<u8>)> = self
             .services
@@ -1094,8 +1329,19 @@ impl SheetApp {
     /// Lays out the whole window.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        self.drawn_in = ui.max_rect();
+        self.keep_keyboard(&ctx);
         self.poll_printing(&ctx);
         if !self.fonts_ready || self.fonts_rebind {
+            ctx.request_repaint();
+            return;
+        }
+        // NexusOffice: a host window that brings this tab forward in the middle of a frame (a
+        // click on its tab strip) draws it before `logic` has seen another editor's fonts: paint
+        // nothing this frame and install ours again, instead of drawing with families egui no
+        // longer has (which panics).
+        if self.embedded && !self.fonts_installed(&ctx) {
+            self.restyle();
             ctx.request_repaint();
             return;
         }
@@ -1107,12 +1353,20 @@ impl SheetApp {
         if self.backstage.is_none() {
             self.ribbon_keys(&ctx);
         }
-        ribbon::title_bar(self, ui);
+        if !self.wps {
+            ribbon::title_bar(self, ui);
+        }
         if self.backstage.is_some() {
             // File tab: the Backstage view replaces everything below the title bar.
             backstage::show(self, ui);
         } else {
-            ribbon::show(self, ui);
+            if self.wps {
+                nexus_wps::show(self, ui);
+            } else if self.toolbar {
+                nexus_toolbar::show(self, ui);
+            } else {
+                ribbon::show(self, ui);
+            }
             widgets::notice_bar(self, ui);
             if self.session.prefs.formula_bar {
                 formula_bar::show(self, ui);
@@ -1157,8 +1411,10 @@ impl SheetApp {
             self.store_view_state();
             let _ = self.session.run("file.save", json!({}));
         }
-        // Window title.
-        if let Some(d) = self.session.active() {
+        // Window title (a hosted app leaves the host window's title alone).
+        if !self.embedded
+            && let Some(d) = self.session.active()
+        {
             let title = format!("{}{}", d.display_title(), if d.is_dirty() { " — Edited" } else { "" });
             if self.grid.last_title.as_deref() != Some(title.as_str()) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));

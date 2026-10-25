@@ -495,6 +495,9 @@ impl Dialog {
                 if let Some(v) = values.as_object_mut() {
                     v.insert("newOp".into(), json!("<="));
                 }
+                // The saved model's numbers are en-US; the dialog shows and sends them the way
+                // the interface types them (`locale` goes with the command).
+                localize_solver_numbers(&mut values, app.ui.language.regional_format());
                 let mut d = Dialog::custom("solver", "Solver Parameters", values);
                 d.command = Some("data.solver");
                 d
@@ -938,6 +941,43 @@ fn data_validation_form(ui: &mut egui::Ui, d: &mut Dialog, confirm: &mut bool, o
     ok_cancel(ui, confirm, open);
 }
 
+/// Commands whose typed values a dialog sends in the interface's regional format (`locale`).
+const LOCALE_COMMANDS: &[&str] = &[
+    "data.textToColumns",
+    "data.forecastSheet",
+    "data.solver",
+    "data.scenarioAdd",
+    "data.getData",
+    "data.fromTextCsv",
+    "data.filterBy",
+    "cell.set",
+    "range.fill",
+];
+
+/// The solver dialog's saved numbers (Value Of, constraint right sides) in `locale`'s spelling.
+fn localize_solver_numbers(values: &mut Json, locale: gridcraft_engine::core::Locale) {
+    if locale == gridcraft_engine::core::Locale::EnUs {
+        return;
+    }
+    if let Some(v) = values.get_mut("value")
+        && let Some(t) = v.as_str().map(str::trim).filter(|t| t.parse::<f64>().is_ok()).map(str::to_string)
+    {
+        *v = json!(locale.localize_number(&t));
+    }
+    if let Some(Json::Array(list)) = values.get_mut("constraints") {
+        for c in list.iter_mut() {
+            let shown = c
+                .as_str()
+                .and_then(|t| t.rsplit_once(' '))
+                .filter(|(_, tail)| tail.parse::<f64>().is_ok())
+                .map(|(head, tail)| format!("{head} {}", locale.localize_number(tail)));
+            if let Some(shown) = shown {
+                *c = json!(shown);
+            }
+        }
+    }
+}
+
 /// Builds the command params from form values for dialogs that need translation.
 fn build_params(d: &Dialog) -> Json {
     let mut v = Json::Object(d.values.clone());
@@ -1020,6 +1060,11 @@ fn build_params(d: &Dialog) -> Json {
 
 pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
     let Some(mut d) = app.dialog.take() else { return };
+    // NexusOffice: as a tab of the NexusOffice window, the prompt every Nexus app shows.
+    if app.embedded && d.name == "saveChanges" {
+        embedded_save_prompt(app, ctx, d);
+        return;
+    }
     if d.name == "pasteSpecial" {
         paste_special_shortcuts(&mut d, ctx);
     }
@@ -1063,9 +1108,9 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                 "solverResults" => solver_results(app, ui, &mut d, &mut open),
                 "spelling" => spelling(app, ui, &mut d, &mut open),
                 "agents" => {
-                    ui.label("Nexus Sheets is fully drivable by agents. Every menu item, button and gesture is a command:");
+                    ui.label("Nexus Sheet is fully drivable by agents. Every menu item, button and gesture is a command:");
                     ui.add_space(4.0);
-                    ui.monospace("nexus-sheets --control 7979           # JSON-lines control channel\nnexus-sheets-cli mcp --connect 7979   # MCP bridged to this window\nnexus-sheets-cli mcp                  # headless MCP server");
+                    ui.monospace("nexus-sheet --control 7979           # JSON-lines control channel\nnexus-sheet-cli mcp --connect 7979   # MCP bridged to this window\nnexus-sheet-cli mcp                  # headless MCP server");
                     ui.add_space(4.0);
                     ui.label(format!("{} engine commands are available. See docs/mcp.md and docs/control-protocol.md.", gridcraft_engine::command_specs().len()));
                 }
@@ -1170,32 +1215,49 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                     d.values.insert("path".into(), json!(path.clone()));
                     ok_cancel(ui, &mut confirm, &mut open);
                     if confirm {
-                        let target = if path.is_empty() { app.services.pick_save.as_ref().and_then(|f| f(&format!("Copy.{fmt}"))) } else { Some(path) };
+                        let id = match fmt.as_str() {
+                            "csv" => "file.exportCsv",
+                            "html" => "file.exportHtml",
+                            _ => "file.saveAs",
+                        };
+                        // NexusOffice: the host's dialog answers later; the copy is written then.
+                        let asked = path.is_empty()
+                            && app.ask_file(
+                                crate::FileDialogRequest::Save { name: format!("Copy.{fmt}"), types: vec![fmt.clone()] },
+                                crate::file_dialogs::AfterPick::SaveCopy { command: id.into(), ext: fmt.clone() },
+                            );
+                        let target = if asked {
+                            None
+                        } else if path.is_empty() {
+                            app.services.pick_save.as_ref().and_then(|f| f(&format!("Copy.{fmt}")))
+                        } else {
+                            Some(path)
+                        };
                         if let Some(t) = target {
-                            let id = match fmt.as_str() {
-                                "csv" => "file.exportCsv",
-                                "html" => "file.exportHtml",
-                                _ => "file.saveAs",
-                            };
                             app.run_or_alert(id, json!({"path": t}));
                         }
                     }
                 }
                 "saveChanges" => {
-                    ui.label(format!("Do you want to save the changes you made to {}?", d.values.get("title").and_then(Json::as_str).unwrap_or("this workbook")));
+                    let lang = app.ui.language;
+                    let title = d.values.get("title").and_then(Json::as_str).unwrap_or("this workbook");
+                    ui.label(lang.tr("Do you want to save the changes you made to {title}?").replace("{title}", title));
                     ui.horizontal(|ui| {
-                        if ui.button("Don't Save").clicked() {
+                        if ui.button(lang.tr("Don't Save")).clicked() {
                             app.run_or_alert("file.close", json!({"force": true}));
                             open = false;
                         }
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(lang.tr("Cancel")).clicked() {
                             open = false;
                         }
                         // File operations must include the cell the user is still editing (as the File > Save menu item already does).
-                        if ui.button("Save").clicked() && app.commit_edit(0, 0, false, false) {
+                        if ui.button(lang.tr("Save")).clicked() && app.commit_edit(0, 0, false, false) {
                             app.run_or_alert("file.save", json!({}));
                             if app.session.active().is_some_and(|x| !x.is_dirty()) {
                                 app.run_or_alert("file.close", json!({"force": true}));
+                            } else {
+                                // NexusOffice: a workbook with no file waits for the host's Save As.
+                                app.close_after_pending_save();
                             }
                             open = false;
                         }
@@ -1257,7 +1319,13 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
         confirm = false;
     }
     if confirm && let Some(cmd) = d.command {
-        let params = build_params(&d);
+        let mut params = build_params(&d);
+        // Numbers and dates typed in these dialogs are in the interface's regional format.
+        if LOCALE_COMMANDS.contains(&cmd)
+            && let Some(m) = params.as_object_mut()
+        {
+            m.insert("locale".into(), json!(app.ui.language.regional_format().tag()));
+        }
         match app.run(cmd, params) {
             Ok(r) => {
                 open = false;
@@ -1365,12 +1433,51 @@ fn paste_special_shortcuts(d: &mut Dialog, ctx: &egui::Context) {
     });
 }
 
+/// NexusOffice: "Lưu thay đổi?" over the tab (`nexus_save_prompt`). Lưu, Không lưu and Hủy do
+/// what the stand-alone prompt's Save, Don't Save and Cancel do.
+fn embedded_save_prompt(app: &mut SheetApp, ctx: &egui::Context, d: Dialog) {
+    use crate::nexus_save_prompt as sp;
+    let t = theme::Tokens::get(ctx);
+    let vi = app.ui.language == crate::i18n::Language::Vi;
+    let name = d.values.get("title").and_then(Json::as_str).unwrap_or_default();
+    let question = sp::question(vi, name);
+    let prompt = sp::Prompt { words: sp::words(vi), question: &question, note: None, error: None };
+    let look = sp::Look {
+        dark: t.dark,
+        accent: t.accent,
+        on_accent: t.on_accent,
+        error: ctx.global_style().visuals.error_fg_color,
+        title_font: egui::FontId::new(sp::TITLE_SIZE, egui::FontFamily::Name(crate::theme::UI_BOLD.into())),
+        title_fake_bold: false,
+    };
+    let answer = sp::show(ctx, egui::Id::new("nexus_save_prompt"), app.drawn_in, &prompt, &look);
+    match answer {
+        None => app.dialog = Some(d),
+        Some(sp::Answer::Cancel) => {}
+        Some(sp::Answer::DontSave) => app.run_or_alert("file.close", json!({"force": true})),
+        Some(sp::Answer::Save) => {
+            // File operations include the cell the user is still editing.
+            if !app.commit_edit(0, 0, false, false) {
+                app.dialog = Some(d);
+                return;
+            }
+            app.run_or_alert("file.save", json!({}));
+            if app.session.active().is_some_and(|x| !x.is_dirty()) {
+                app.run_or_alert("file.close", json!({"force": true}));
+            } else {
+                // A workbook with no file waits for the host's Save As.
+                app.close_after_pending_save();
+            }
+        }
+    }
+}
+
 fn ok_cancel(ui: &mut egui::Ui, confirm: &mut bool, open: &mut bool) {
     ui.add_space(8.0);
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         let lang = crate::i18n::current(ui.ctx());
         let ok = ui.add(
-            egui::Button::new(egui::RichText::new(format!("   {}   ", lang.tr("OK"))).color(Color32::WHITE))
+            egui::Button::new(egui::RichText::new(format!("   {}   ", lang.tr("OK"))).color(crate::theme::Tokens::get(ui.ctx()).on_accent))
                 .fill(crate::theme::Tokens::get(ui.ctx()).accent),
         );
         if ok.clicked() || ui.input(|i| i.key_pressed(Key::Enter)) {
@@ -1482,7 +1589,7 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog) {
     match d.tab.as_str() {
         "Contributors" => crate::credits::contributors_ui(ui),
         "Models" => crate::credits::models_ui(ui),
-        // NexusOffices: About is the fork's own (no ArtCraft logo or links; attribution in text).
+        // NexusOffice: About is the fork's own (no ArtCraft logo or links; attribution in text).
         _ => crate::nexus::about_ui(ui, crate::i18n::current(ui.ctx())),
     }
 }
@@ -1491,7 +1598,7 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog) {
 /// preserved VBA project. Mirrors Excel's Developer ▸ Macros list, but is honest that VBA is
 /// preserved and not executed.
 fn macros(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.label("Automation in this workbook. Nexus Sheets runs its own scripts; a file's VBA project is preserved but not executed.");
+    ui.label("Automation in this workbook. Nexus Sheet runs its own scripts; a file's VBA project is preserved but not executed.");
     ui.add_space(6.0);
     let items: Vec<Json> = d.result.as_ref().and_then(Json::as_array).cloned().unwrap_or_default();
     if items.is_empty() {
@@ -2291,7 +2398,13 @@ fn goal_seek(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: &mu
     let mut open = true;
     ok_cancel(ui, confirm, &mut open);
     if *confirm {
-        match app.run("data.goalSeek", json!({"set": set, "to": to.parse::<f64>().unwrap_or(0.0), "changing": changing})) {
+        // The target is typed in the interface's regional format (`1,5` in vi-VN).
+        let target = gridcraft_engine::core::parse::parse_number_text_locale(
+            &to,
+            gridcraft_engine::core::DateSystem::D1900,
+            app.ui.language.regional_format(),
+        );
+        match app.run("data.goalSeek", json!({"set": set, "to": target.unwrap_or(0.0), "changing": changing})) {
             Ok(r) => app.toast = Some((format!("Goal Seeking found a solution: {}", r["value"]), crate::now_ms())),
             Err(e) => app.message = Some(("Goal Seek".into(), crate::clean_error(&e))),
         }
@@ -2544,8 +2657,10 @@ fn solver(ui: &mut egui::Ui, d: &mut Dialog, confirm: &mut bool, open: &mut bool
     );
     ui.add_space(8.0);
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        let solve =
-            ui.add(egui::Button::new(egui::RichText::new("  Solve  ").color(Color32::WHITE)).fill(crate::theme::Tokens::get(ui.ctx()).accent));
+        let solve = ui.add(
+            egui::Button::new(egui::RichText::new("  Solve  ").color(crate::theme::Tokens::get(ui.ctx()).on_accent))
+                .fill(crate::theme::Tokens::get(ui.ctx()).accent),
+        );
         if solve.clicked() && !text(d, "objective").trim().is_empty() {
             *confirm = true;
         }

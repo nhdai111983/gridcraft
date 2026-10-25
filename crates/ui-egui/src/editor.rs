@@ -41,12 +41,16 @@ pub struct EditState {
     pub completion: Option<String>,
     /// Move the caret to the end on the next frame.
     pub caret_to_end: bool,
+    /// NexusOffice: the cell's text when the edit began, so a host can tell an edit that changed
+    /// nothing (F2 or a double-click, then leaving) from one that would change the cell.
+    pub original: String,
 }
 
 impl EditState {
     pub fn new(sheet: usize, cell: CellRef, text: String, enter_mode: bool, from_formula_bar: bool) -> EditState {
         let caret = text.chars().count();
         EditState {
+            original: text.clone(),
             sheet,
             locale: Default::default(),
             cell,
@@ -63,6 +67,11 @@ impl EditState {
             caret_to_end: true,
             completion: None,
         }
+    }
+
+    /// The edit would change the cell (typed text, or text edited away from what the cell held).
+    pub fn changed(&self) -> bool {
+        self.text != self.original || self.completion.is_some()
     }
 
     pub fn is_formula(&self) -> bool {

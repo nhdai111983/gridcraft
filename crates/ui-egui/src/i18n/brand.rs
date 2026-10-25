@@ -1,9 +1,9 @@
-//! NexusOffices: the product names the interface shows.
+//! NexusOffice: the product names the interface shows.
 //!
 //! Upstream's English labels (the catalog keys) and some translations say "GridCraft" and
 //! "ArtCraft". Rather than rewrite keys in eleven catalogs, [`super::Language::tr`] passes the
 //! label it looked up through [`branded`] once, so every language, English included, shows
-//! Nexus Sheets / NexusOffices. Keys, command ids, file keys and `GRIDCRAFT_*` variables are
+//! Nexus Sheet / NexusOffice. Keys, command ids, file keys and `GRIDCRAFT_*` variables are
 //! untouched: only `GridCraft` and `ArtCraft` spelled exactly so are replaced, and only in what
 //! `tr` returns (interface labels; `tr` is never given workbook text, see its doc comment).
 //!
@@ -14,16 +14,16 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-/// Upstream name → the name NexusOffices shows, in the order they are replaced.
-const NAMES: [(&str, &str); 2] = [("GridCraft", "Nexus Sheets"), ("ArtCraft", "NexusOffices")];
+/// Upstream name → the name NexusOffice shows, in the order they are replaced.
+const NAMES: [(&str, &str); 2] = [("GridCraft", "Nexus Sheet"), ("ArtCraft", "NexusOffice")];
 
 /// At most this many distinct branded strings are kept ([`branded`]). Interface labels that name
 /// the product number a handful; the cap only bounds memory if something unexpected were ever
 /// passed through the lookup, which then simply comes back unbranded.
 const MAX_INTERNED: usize = 1024;
 
-/// `s` with the upstream product names replaced (`GridCraft` → `Nexus Sheets`, `ArtCraft` →
-/// `NexusOffices`). Strings without them come back borrowed, without allocating.
+/// `s` with the upstream product names replaced (`GridCraft` → `Nexus Sheet`, `ArtCraft` →
+/// `NexusOffice`). Strings without them come back borrowed, without allocating.
 pub fn brand(s: &str) -> Cow<'_, str> {
     if !NAMES.iter().any(|(from, _)| s.contains(from)) {
         return Cow::Borrowed(s);
@@ -58,7 +58,7 @@ pub(super) fn branded(s: &str) -> &str {
     leaked
 }
 
-/// Text NexusOffices adds to the interface (the About page), written in English and Vietnamese:
+/// Text NexusOffice adds to the interface (the About page), written in English and Vietnamese:
 /// Vietnamese when the interface language is Vietnamese (once the fork adds it), English
 /// otherwise. Deliberately not a catalog key, so neither branded nor asked of upstream's catalogs
 /// (the complete-catalog check in `i18n.rs`).
@@ -73,9 +73,9 @@ mod tests {
 
     #[test]
     fn brand_substitutes_product_names() {
-        assert_eq!(brand("About GridCraft"), "About Nexus Sheets");
-        assert_eq!(brand("Join the ArtCraft Discord"), "Join the NexusOffices Discord");
-        assert_eq!(brand("Giới thiệu về GridCraft"), "Giới thiệu về Nexus Sheets");
+        assert_eq!(brand("About GridCraft"), "About Nexus Sheet");
+        assert_eq!(brand("Join the ArtCraft Discord"), "Join the NexusOffice Discord");
+        assert_eq!(brand("Giới thiệu về GridCraft"), "Giới thiệu về Nexus Sheet");
         assert!(matches!(brand("Giới thiệu"), Cow::Borrowed("Giới thiệu")));
         // Identifiers and variables keep upstream's spelling.
         assert!(matches!(brand("gridcraft:// GRIDCRAFT_NO_PREFS gridcraft-cli"), Cow::Borrowed(_)));
@@ -85,7 +85,7 @@ mod tests {
     fn branded_lookups_are_stable_and_borrow_when_unbranded() {
         let a = branded("How agents drive GridCraft (MCP / control channel)");
         let b = branded("How agents drive GridCraft (MCP / control channel)");
-        assert_eq!(a, "How agents drive Nexus Sheets (MCP / control channel)");
+        assert_eq!(a, "How agents drive Nexus Sheet (MCP / control channel)");
         assert!(std::ptr::eq(a, b), "the branded string is made once");
         let plain = String::from("Close");
         assert!(std::ptr::eq(branded(&plain), plain.as_str()));
@@ -94,11 +94,11 @@ mod tests {
     /// `tr` brands in every language, English included, and still falls back to the label.
     #[test]
     fn interface_lookups_show_nexus_names_in_every_language() {
-        assert_eq!(Language::En.tr("About\nGridCraft"), "About\nNexus Sheets");
-        assert_eq!(Language::En.tr("About GridCraft"), "About Nexus Sheets");
-        assert_eq!(Language::En.tr("GridCraft"), "Nexus Sheets");
-        assert_eq!(Language::Ja.tr("About\nGridCraft"), "Nexus Sheets について");
-        assert_eq!(Language::PtBr.tr("About GridCraft"), "Sobre o Nexus Sheets");
+        assert_eq!(Language::En.tr("About\nGridCraft"), "About\nNexus Sheet");
+        assert_eq!(Language::En.tr("About GridCraft"), "About Nexus Sheet");
+        assert_eq!(Language::En.tr("GridCraft"), "Nexus Sheet");
+        assert_eq!(Language::Ja.tr("About\nGridCraft"), "Nexus Sheet について");
+        assert_eq!(Language::PtBr.tr("About GridCraft"), "Sobre o Nexus Sheet");
         for language in Language::ALL {
             for key in ["About\nGridCraft", "About GridCraft", "How agents drive GridCraft (MCP / control channel)", "GridCraft"] {
                 let shown = language.tr(key);

@@ -59,7 +59,7 @@
 //!
 //! The tables are generated from the Unicode Character Database 17.0 (via ICU4X
 //! `icu_normalizer` =2.3.0, data generated with CLDR 48.2.1 / ICU 78.1) and verified against it
-//! by the test `tables_match_icu_normalizer` upstream; Nexus Sheets does not carry that test-only
+//! by the test `tables_match_icu_normalizer` upstream; Nexus Sheet does not carry that test-only
 //! dependency, so the test is not in this build. Canonical decompositions are frozen by Unicode's
 //! normalization stability policy, so later Unicode versions do not change them.
 //!
@@ -1096,7 +1096,7 @@ mod tables {
         assert!(text_eq_prefolded("ma\u{341}", &fold_key("má")));
         assert!(text_eq_prefolded("má", &fold_key("ma\u{341}")));
         assert_eq!(TextSet::new(["má", "ma\u{341}", "MA\u{301}", "mà", "ma\u{340}"]).len(), 2);
-        // Nexus Sheets has no ICU oracle: each of these marks must decompose to other marks.
+        // Nexus Sheet has no ICU oracle: each of these marks must decompose to other marks.
         for m in MARKS_THAT_DECOMPOSE {
             let d = canonical(&m.to_string());
             assert!(!d.is_empty() && !d.contains(m), "U+{:04X}", m as u32);
@@ -1105,7 +1105,7 @@ mod tables {
 
     #[test]
     fn fold_key_gives_nfc_and_nfd_the_same_key_for_every_covered_letter() {
-        // Nexus Sheets: no ICU oracle in this build, so the decomposition comes from `canonical`
+        // Nexus Sheet: no ICU oracle in this build, so the decomposition comes from `canonical`
         // itself (upstream checks it against `icu_normalizer` in `tables_match_icu_normalizer`).
         for c in covered().chain(['\u{212a}', '\u{212b}']) {
             let s = c.to_string();
