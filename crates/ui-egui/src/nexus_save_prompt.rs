@@ -156,7 +156,7 @@ pub fn show(ctx: &egui::Context, id: Id, over: Rect, prompt: &Prompt<'_>, look: 
     ctx.memory_mut(|m| m.set_modal_layer(area.layer()));
     let words = prompt.words;
     // Clicks and drags, but never the keyboard focus: Tab goes only through the three buttons.
-    let blocks = Sense::CLICK | Sense::DRAG;
+    let blocks = Sense::click_and_drag();
     let shown = area.show(ctx, |ui| {
         // The dim over the tab, taking the clicks that would reach the document.
         let _ = ui.allocate_rect(over, blocks);
