@@ -161,8 +161,8 @@ impl CodeEdit {
     }
 
     /// The code to store for `shown` as now edited: the original when the text is still what it
-    /// was shown as (so opening the dialog never rewrites a code, the system date included), and
-    /// otherwise the text read the regional format's way.
+    /// was shown as (so opening the dialog never rewrites a code), and otherwise the text read the
+    /// regional format's way ([`store`]).
     pub fn edited(&mut self, locale: Locale) {
         if self.shown != show(&self.stored, locale) {
             self.stored = store(&self.shown, locale);
@@ -180,8 +180,16 @@ pub fn show(stored: &str, locale: Locale) -> String {
     gridcraft_engine::numfmt::localize_code(stored, locale)
 }
 
-/// Text typed in the dialog as the code to store.
+/// Text typed in the dialog as the code to store. The locale's spelling of the system short date
+/// (`dd/mm/yyyy` in vi-VN, with or without ` h:mm`) is the system date itself (built-in 14/22),
+/// as Excel's list shows the system short date in the system's order.
 pub fn store(shown: &str, locale: Locale) -> String {
+    let t = shown.trim();
+    for system in ["m/d/yyyy", "m/d/yyyy h:mm"] {
+        if locale != Locale::EnUs && t == show(system, locale) {
+            return system.to_string();
+        }
+    }
     gridcraft_engine::numfmt::delocalize_code(shown, locale)
 }
 
@@ -270,6 +278,20 @@ mod tests {
         e.shown = "dd/mm/yy".into();
         e.edited(ViVn);
         assert_eq!(e.stored, "dd/mm/yy");
+        // Typed back, the locale's short date is the system date again (built-in 14, 22).
+        e.shown = "dd/mm/yyyy".into();
+        e.edited(ViVn);
+        assert_eq!(e.stored, "m/d/yyyy");
+        e.shown = " dd/mm/yyyy h:mm".into();
+        e.edited(ViVn);
+        assert_eq!(e.stored, "m/d/yyyy h:mm");
+        assert_eq!(store("dd/mm/yyyy", EnUs), "dd/mm/yyyy");
+        // A code with a comma in its condition survives an edit elsewhere in it.
+        let mut e = CodeEdit::new("[>=1,000]#,##0;0.0", ViVn);
+        assert_eq!(e.shown, "[>=1.000]#.##0;0,0");
+        e.shown = "[>=1.000]#.##0;0,00".into();
+        e.edited(ViVn);
+        assert_eq!(e.stored, "[>=1,000]#,##0;0.00");
         e.pick(category_code(ViVn, "Currency"), ViVn);
         assert_eq!((e.stored.as_str(), e.shown.as_str()), ("#,##0 [$₫-42A]", "#.##0 [$₫-42A]"));
         // en-US shows and stores the code as written.

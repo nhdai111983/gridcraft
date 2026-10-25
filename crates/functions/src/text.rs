@@ -1,7 +1,7 @@
 //! Text functions.
 
 use gridcraft_core::parse::parse_number_text_in;
-use gridcraft_core::{CellError, Value, canonical, number_to_text};
+use gridcraft_core::{CellError, Value, canonical};
 
 use crate::criteria::wildcard_find;
 use crate::util::{
@@ -630,7 +630,7 @@ fn value_text(v: &Value, strict: bool) -> String {
         Value::Text(t) if strict => format!("\"{}\"", t.replace('"', "\"\"")),
         Value::Text(t) => t.to_string(),
         Value::Error(e) => e.as_str().to_string(),
-        Value::Number(n) => number_to_text(*n),
+        // NexusOffice: spelled in the evaluation's regional format, as `&` spells it (`1,5`).
         other => other.to_text().unwrap_or_default(),
     }
 }
@@ -655,12 +655,16 @@ fn arraytotext(a: &[Arg], _c: &mut dyn Ctx) -> R<Value> {
     if strict {
         out.push('{');
     }
+    // NexusOffice: where the decimal separator is `,` (vi-VN) the numbers are `1,5`, so the
+    // separators are the formula syntax's (`{1,5\2;3\4}`) and the list separator (`1,5; 2`).
+    let comma_decimal = gridcraft_core::coercion_locale().decimal_separator() == ',';
+    let (col_sep, row_sep, plain_sep) = if comma_decimal { ("\\", ";", "; ") } else { (",", ";", ", ") };
     for r in 0..arr.rows {
         for c in 0..arr.cols {
             if r > 0 && c == 0 {
-                out.push_str(if strict { ";" } else { ", " });
+                out.push_str(if strict { row_sep } else { plain_sep });
             } else if c > 0 {
-                out.push_str(if strict { "," } else { ", " });
+                out.push_str(if strict { col_sep } else { plain_sep });
             }
             push_capped(&mut out, &value_text(arr.get(r, c).unwrap_or(&Value::Empty), strict))?;
         }

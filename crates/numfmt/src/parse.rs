@@ -641,7 +641,8 @@ pub(crate) fn parse_sections(code: &str) -> Vec<Section> {
 /// Respells a format code written in a regional format (`#.##0,00` in Vietnamese, where `,` is
 /// the decimal separator and `.` groups digits) as the en-US code files store (`#,##0.00`).
 /// Quoted text, `\` escapes, `_`/`*` and `[...]` tags are kept, except the number of a condition
-/// (`[<1000,5]` → `[<1000.5]`). In date and time sections `.` and `,` are literal characters, so
+/// (`[<1000,5]` → `[<1000.5]`: the two separators trade places there too, so every code
+/// round-trips through [`localize_code_separators`]). In date and time sections `.` and `,` are literal characters, so
 /// only the decimal separator before fractional seconds (`ss,00`) changes. en-US codes are
 /// returned unchanged.
 pub fn delocalize_code(code: &str, loc: gridcraft_core::Locale) -> String {
@@ -660,8 +661,9 @@ fn respell_code(code: &str, loc: gridcraft_core::Locale, to_local: bool) -> Stri
     if dec == '.' {
         return code.to_string();
     }
-    // The two separators trade places, which is its own inverse.
-    let (from_dec, to_dec) = if to_local { ('.', dec) } else { (dec, '.') };
+    // The two separators trade places everywhere they are separators (number sections, the
+    // number of a condition, `ss.00`), which is its own inverse: delocalizing a localized code
+    // gives back the code byte for byte, so an edit elsewhere in it never changes this part.
     let swap = |c: char| -> char {
         if c == dec {
             if to_local { group } else { '.' }
@@ -701,7 +703,7 @@ fn respell_code(code: &str, loc: gridcraft_core::Locale, to_local: bool) -> Stri
                     let condition = cs.get(i).is_some_and(|d| matches!(d, '<' | '>' | '='));
                     while let Some(&d) = cs.get(i) {
                         i += 1;
-                        out.push(if condition && d == from_dec { to_dec } else { d });
+                        out.push(if condition { swap(d) } else { d });
                         if d == ']' {
                             break;
                         }
@@ -710,7 +712,7 @@ fn respell_code(code: &str, loc: gridcraft_core::Locale, to_local: bool) -> Stri
                 _ if quoted => out.push(c),
                 _ if date => {
                     let after_s = i >= 2 && cs.get(i - 2).is_some_and(|p| p.eq_ignore_ascii_case(&'s'));
-                    if c == from_dec && after_s && cs.get(i) == Some(&'0') { out.push(to_dec) } else { out.push(c) }
+                    if (c == '.' || c == ',') && after_s && cs.get(i) == Some(&'0') { out.push(swap(c)) } else { out.push(c) }
                 }
                 _ => out.push(swap(c)),
             }

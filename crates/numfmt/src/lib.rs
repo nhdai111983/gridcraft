@@ -373,7 +373,7 @@ fn system_format(code: &str, loc: Locale) -> Option<&'static str> {
 /// system short date (built-in 14 `m/d/yyyy`, 22 with the time) in the locale's order
 /// (`dd/mm/yyyy`). en-US returns the code unchanged. To store what was edited, keep the original
 /// code when the text still equals this function's result, and otherwise store
-/// [`delocalize_code`] of it (`dd/mm/yyyy` typed by hand is a custom code, not the system's).
+/// [`delocalize_code`] of it (the interface maps the locale's short date back to built-in 14).
 pub fn localize_code(code: &str, loc: Locale) -> String {
     let t = code.trim();
     if loc != Locale::EnUs

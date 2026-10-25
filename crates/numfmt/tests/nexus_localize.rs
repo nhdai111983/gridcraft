@@ -26,6 +26,12 @@ const CODES: &[&str] = &[
     "#,##0.00 [$₫-42A];-#,##0.00 [$₫-42A]",
     "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)",
     "[<1000.5]0.0;#,##0",
+    "[>=1,000]0",
+    "[<1000.5]",
+    "[>=1,000.5]#,##0.00;[<0]\"neg\"0.0",
+    "[=1.5]0.0;[>2,5]#,##0",
+    "hh:mm:ss,00",
+    "mm:ss,0;[h]:mm:ss.00",
     "\"1,000.5\" 0.0",
     "\\. 0.00",
     "#,##0,",
@@ -67,6 +73,24 @@ fn separators_round_trip_and_en_us_is_unchanged() {
         assert_eq!(delocalize_code(&vi, Locale::ViVn), *c, "{c} → {vi}");
         assert_eq!(localize_code(c, Locale::EnUs), *c);
         assert_eq!(delocalize_code(c, Locale::EnUs), *c);
+    }
+}
+
+/// Review fix: a condition holding a comma (`[>=1,000]`) used to be left alone when shown and then
+/// turned into `[>=1.000]` when stored, so editing anything else in the code corrupted it.
+#[test]
+fn conditions_round_trip_whatever_they_hold() {
+    use Locale::ViVn;
+    assert_eq!(localize_code_separators("[>=1,000]0", ViVn), "[>=1.000]0");
+    assert_eq!(delocalize_code("[>=1.000]0", ViVn), "[>=1,000]0");
+    assert_eq!(localize_code_separators("[<1000.5]", ViVn), "[<1000,5]");
+    assert_eq!(delocalize_code("[<1000,5]", ViVn), "[<1000.5]");
+    let mixed = "[>=1,000.5]#,##0.00;[<0]\"neg\"0.0";
+    assert_eq!(localize_code_separators(mixed, ViVn), "[>=1.000,5]#.##0,00;[<0]\"neg\"0,0");
+    // Every code, and every code read as a localized one, comes back byte for byte.
+    for c in CODES {
+        assert_eq!(delocalize_code(&localize_code_separators(c, ViVn), ViVn), *c, "{c}");
+        assert_eq!(localize_code_separators(&delocalize_code(c, ViVn), ViVn), *c, "{c}");
     }
 }
 

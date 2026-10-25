@@ -435,3 +435,69 @@ fn criteria_and_coercion_follow_the_workbooks_locale() {
     set(&mut vi, "D1", "1.5", None);
     assert_eq!(value(&vi, "D1"), Value::Number(1.5));
 }
+
+fn xlsx_base64(s: &mut Session) -> serde_json::Value {
+    s.execute("file.saveBytes", json!({"format": "xlsx"})).unwrap()["base64"].clone()
+}
+
+/// Review fix: a workbook is calculated once when it opens, in the session's regional format —
+/// also one that calculates manually, whose results used to stay the en-US ones.
+#[test]
+fn opening_calculates_once_in_the_sessions_locale() {
+    // Manual calculation: `="1,5"+1` shows the vi-VN result as soon as it opens in vi-VN.
+    let mut en = session();
+    set(&mut en, "A1", "=\"1,5\"+1", None);
+    en.execute("formulas.calculationOptions", json!({"mode": "manual"})).unwrap();
+    let manual = xlsx_base64(&mut en);
+    let mut vi = Session::new();
+    vi.set_locale(Locale::ViVn);
+    vi.execute("file.open", json!({"name": "manual.xlsx", "base64": manual})).unwrap();
+    assert_eq!(vi.active().unwrap().wb.calc.mode, gridcraft_engine::model::CalcMode::Manual);
+    assert_eq!(value(&vi, "A1"), Value::Number(2.5));
+    assert_eq!(text(&vi, "A1"), "2,5");
+    assert!(!vi.active().unwrap().is_dirty());
+    // One calculation per open: `RAND()` draws the same first number as an en-US open does
+    // (each calculation pass advances the generator).
+    let mut en = session();
+    set(&mut en, "A1", "=RAND()", None);
+    let auto = xlsx_base64(&mut en);
+    let mut en2 = Session::new();
+    en2.execute("file.open", json!({"name": "auto.xlsx", "base64": auto.clone()})).unwrap();
+    let mut vi = Session::new();
+    vi.set_locale(Locale::ViVn);
+    vi.execute("file.open", json!({"name": "auto.xlsx", "base64": auto})).unwrap();
+    assert_eq!(value(&vi, "A1"), value(&en2, "A1"), "one calculation, not two");
+    // New workbooks and samples too.
+    let mut vi = Session::new();
+    vi.set_locale(Locale::ViVn);
+    vi.new_workbook();
+    assert_eq!(vi.active().unwrap().wb.locale, Locale::ViVn);
+    vi.execute("file.new", json!({"sample": "sales"})).unwrap();
+    assert_eq!(vi.active().unwrap().wb.locale, Locale::ViVn);
+}
+
+/// Review fix: undo and redo across a region switch keep the session's current regional format
+/// (the snapshot's results are recalculated in it).
+#[test]
+fn undo_and_redo_keep_the_current_locale() {
+    let mut s = session();
+    set(&mut s, "A1", "=\"1,5\"+1", None);
+    set(&mut s, "B1", "x", None);
+    let en_a1 = value(&s, "A1");
+    s.set_locale(Locale::ViVn);
+    assert_eq!(value(&s, "A1"), Value::Number(2.5));
+    s.execute("edit.undo", json!({})).unwrap();
+    assert_eq!(value(&s, "B1"), Value::Empty);
+    assert_eq!(s.active().unwrap().wb.locale, Locale::ViVn);
+    assert_eq!(value(&s, "A1"), Value::Number(2.5));
+    s.execute("edit.redo", json!({})).unwrap();
+    assert_eq!(value(&s, "B1"), Value::text("x"));
+    assert_eq!(s.active().unwrap().wb.locale, Locale::ViVn);
+    assert_eq!(value(&s, "A1"), Value::Number(2.5));
+    s.set_locale(Locale::EnUs);
+    s.execute("edit.undo", json!({"steps": 5})).unwrap();
+    assert_eq!(s.active().unwrap().wb.locale, Locale::EnUs);
+    assert_eq!(value(&s, "A1"), Value::Empty);
+    s.execute("edit.redo", json!({})).unwrap();
+    assert_eq!(value(&s, "A1"), en_a1);
+}

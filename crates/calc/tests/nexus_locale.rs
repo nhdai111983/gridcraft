@@ -122,6 +122,16 @@ fn arithmetic_coerces_text_in_the_workbooks_regional_format() {
     assert_eq!(vi.formula("A8", "=1.5&\"\""), Value::text("1,5"));
     assert_eq!(vi.formula("A9", "=LEFT(1234.5,6)"), Value::text("1234,5"));
     assert_eq!(vi.formula("A10", "=(1.5&\"\")+1"), n(2.5));
+    // VALUETOTEXT / ARRAYTOTEXT spell numbers as `&` does, with the formula syntax's separators.
+    assert_eq!(vi.formula("A13", "=VALUETOTEXT(1.5)"), Value::text("1,5"));
+    assert_eq!(vi.formula("A14", "=ARRAYTOTEXT({1.5,2;3,4})"), Value::text("1,5; 2; 3; 4"));
+    assert_eq!(vi.formula("A15", "=ARRAYTOTEXT({1.5,2;3,4},1)"), Value::text("{1,5\\2;3\\4}"));
+    // A database field named by a number matches the number label spelled the vi-VN way.
+    vi.num("D1", 1.5);
+    vi.num("D2", 7.0);
+    vi.num("E1", 1.5);
+    vi.num("E2", 7.0);
+    assert_eq!(vi.formula("A16", "=DSUM(D1:D2,\"1,5\",E1:E2)"), n(7.0));
     // Outside an evaluation everything is en-US again.
     assert_eq!(coercion_locale(), Locale::EnUs);
     assert_eq!(Value::Number(1.5).to_text(), Ok("1.5".to_string()));
@@ -131,6 +141,8 @@ fn arithmetic_coerces_text_in_the_workbooks_regional_format() {
     assert_eq!(en.formula("A2", "=1.5&\"\""), Value::text("1.5"));
     assert_eq!(en.formula("A3", "=\"10/25/2026\"+0"), n(serial_from_ymd(DateSystem::D1900, 2026, 10, 25).unwrap()));
     assert_eq!(en.formula("A4", "=\"25/10/2026\"+0"), Value::Error(CellError::Value));
+    assert_eq!(en.formula("A7", "=ARRAYTOTEXT({1.5,2;3,4},1)"), Value::text("{1.5,2;3,4}"));
+    assert_eq!(en.formula("A8", "=ARRAYTOTEXT({1.5,2;3,4})"), Value::text("1.5, 2, 3, 4"));
     assert_eq!(en.formula("A5", "=DATEVALUE(\"10/25/2026\")"), n(serial_from_ymd(DateSystem::D1900, 2026, 10, 25).unwrap()));
     assert_eq!(en.formula("A6", "=DATEVALUE(\"25/10/2026\")"), Value::Error(CellError::Value));
 }

@@ -32,7 +32,9 @@ pub fn specs() -> Vec<CommandSpec> {
 fn new_workbook(s: &mut Session, p: &Json) -> Result<Json> {
     let i = match str_param(p, "sample") {
         Some(name) => {
-            let wb = crate::sample::build(name).ok_or_else(|| bad("file.new", format!("unknown sample `{name}`")))?;
+            let mut wb = crate::sample::build(name).ok_or_else(|| bad("file.new", format!("unknown sample `{name}`")))?;
+            // NexusOffice: calculated once, in the session's regional format.
+            wb.locale = s.locale;
             let title = crate::sample::title(name);
             s.add_document(DocState::new(wb, None, title))
         }
@@ -75,6 +77,9 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
     if s.documents().len() == 1 && s.active().is_some_and(DocState::is_untouched_blank) {
         s.close_document(0);
     }
+    // NexusOffice: the workbook is calculated once, when it opens, in the session's regional
+    // format — also a manual-calculation one, whose results would otherwise stay the file's.
+    wb.locale = s.locale;
     let mut doc = DocState::new(wb, path, title);
     if crate::io::FileKind::from_path(&name).is_none() && gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Xlsx {
         doc.content_kind = Some(crate::io::FileKind::Xlsx);

@@ -184,6 +184,11 @@ pub fn coercion_locale() -> Locale {
 
 /// Coerces in `locale` until the returned guard drops (also when a panic unwinds through it),
 /// then restores the previous locale. Scopes nest.
+///
+/// The scope belongs to the calling thread. Evaluation is single-threaded today; any future
+/// parallel recalculation (worker threads, a thread pool, async tasks moved across threads) must
+/// enter `coercion_scope(workbook.locale)` again in every worker before it evaluates, or those
+/// formulas coerce in en-US.
 #[must_use = "the locale applies only while the guard lives"]
 pub fn coercion_scope(locale: Locale) -> CoercionScope {
     let previous = COERCION.with(|c| c.replace(locale));

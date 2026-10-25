@@ -209,7 +209,8 @@ impl<'h> Evaluator<'h> {
 
     pub fn eval(&mut self, e: &Expr) -> Ev {
         // NexusOffice: text ↔ number coercion and criteria follow the workbook's regional format
-        // while its formulas run (Excel uses the system's), set once at the outermost call.
+        // while its formulas run (Excel uses the system's), set once at the outermost call. The
+        // scope is per thread: a parallel recalculation must enter it in each worker.
         let _locale = (self.depth == 0).then(|| gridcraft_core::coercion_scope(self.host.workbook().locale));
         self.depth += 1;
         if self.depth > MAX_DEPTH {
