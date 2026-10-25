@@ -41,28 +41,50 @@ pub fn toggle_button(ui: &mut Ui, icon: Icon, on: bool, tip: &str) -> Response {
     resp.on_hover_text(tr(ui, tip))
 }
 
-/// Large ribbon button: 32px icon over a one- or two-line label.
+/// Height of upstream's ribbon content (a large button).
+pub const CONTENT_H: f32 = 72.0;
+/// Height of the content in the NexusOffice WPS strip ([`crate::nexus_wps`]): two rows of small
+/// buttons; a large button is a 20 px icon over one label line there.
+pub const COMPACT_H: f32 = 50.0;
+const COMPACT_ICON_Y: f32 = 15.0;
+const COMPACT_ICON: f32 = 20.0;
+const COMPACT_LABEL_Y: f32 = 37.0;
+const _: () = assert!(COMPACT_ICON_Y + COMPACT_ICON / 2.0 <= COMPACT_LABEL_Y - 6.0);
+const _: () = assert!(COMPACT_LABEL_Y + 7.0 <= COMPACT_H);
+
+/// Height of the ribbon content being drawn: [`COMPACT_H`] in the WPS strip, else [`CONTENT_H`].
+pub fn content_h(ui: &Ui) -> f32 {
+    if crate::nexus_wps::compact(ui) { COMPACT_H } else { CONTENT_H }
+}
+
+/// Large ribbon button: 32px icon over a one- or two-line label (in the NexusOffice WPS strip, a
+/// 20 px icon over the label on one line).
 pub fn big_button(ui: &mut Ui, icon: Icon, label: &str, tip: &str, dropdown: bool) -> Response {
     let t = Tokens::get(ui.ctx());
-    let font = theme::ui_font(11.5);
+    let font = theme::ui_font(if crate::nexus_wps::compact(ui) { 12.0 } else { 11.5 });
     let label = tr(ui, label);
-    let lines: Vec<_> = label.split('\n').map(|line| ui.painter().layout_no_wrap(line.to_string(), font.clone(), t.text)).collect();
+    let compact = crate::nexus_wps::compact(ui);
+    let one_line = label.split('\n').map(str::trim).collect::<Vec<_>>().join(" ");
+    let texts: Vec<&str> = if compact { vec![one_line.as_str()] } else { label.split('\n').collect() };
+    let lines: Vec<_> = texts.iter().map(|line| ui.painter().layout_no_wrap(line.to_string(), font.clone(), t.text)).collect();
     let arrow_size = 10.0;
     let arrow_space = if dropdown { 4.0 + arrow_size } else { 0.0 };
     let text_w = lines.iter().enumerate().map(|(i, line)| line.size().x + if i + 1 == lines.len() { arrow_space } else { 0.0 }).fold(0.0, f32::max);
-    let w = (text_w + 12.0).max(44.0);
-    let (rect, resp) = ui.allocate_exact_size(vec2(w, 72.0), Sense::click());
+    let w = (text_w + 12.0).max(if compact { 36.0 } else { 44.0 });
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, content_h(ui)), Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &one_line));
     if resp.is_pointer_button_down_on() {
         ui.painter().rect_filled(rect, 5.0, t.pressed);
     } else if resp.hovered() {
         ui.painter().rect_filled(rect, 5.0, t.hover);
     }
-    icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.center().x, rect.top() + 21.0), vec2(30.0, 30.0)), icon, t.text);
+    let (icon_y, icon_size, label_y) = if compact { (COMPACT_ICON_Y, COMPACT_ICON, COMPACT_LABEL_Y) } else { (21.0, 30.0, 46.0) };
+    icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.center().x, rect.top() + icon_y), vec2(icon_size, icon_size)), icon, t.text);
     for (i, line) in lines.iter().enumerate() {
         let has_arrow = dropdown && i + 1 == lines.len();
         let line_w = line.size().x + if has_arrow { arrow_space } else { 0.0 };
         let left = rect.center().x - line_w / 2.0;
-        let y = rect.top() + 46.0 + i as f32 * 13.0;
+        let y = rect.top() + label_y + i as f32 * 13.0;
         ui.painter().galley(pos2(left, y - line.size().y / 2.0), line.clone(), t.text);
         if has_arrow {
             icons::paint(

@@ -1133,13 +1133,8 @@ pub(crate) fn paint_quadrant(
             let s = (11.0 * z * 1.2).clamp(8.0, 24.0);
             let b = Rect::from_center_size(rect.center(), vec2(s, s));
             let on = v == Value::Bool(true);
-            p.rect_filled(b, 2.0, if on { Color32::from_rgb(0x10, 0x7C, 0x41) } else { Color32::WHITE });
-            p.rect_stroke(
-                b,
-                2.0,
-                Stroke::new(1.0, if on { Color32::from_rgb(0x10, 0x7C, 0x41) } else { Color32::from_gray(110) }),
-                StrokeKind::Inside,
-            );
+            p.rect_filled(b, 2.0, if on { crate::theme::APP_INK } else { Color32::WHITE });
+            p.rect_stroke(b, 2.0, Stroke::new(1.0, if on { crate::theme::APP_INK } else { Color32::from_gray(110) }), StrokeKind::Inside);
             if on {
                 crate::icons::paint(p, b.shrink(1.5), crate::icons::Icon::Check, Color32::WHITE);
             }
