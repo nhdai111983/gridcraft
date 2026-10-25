@@ -1060,6 +1060,11 @@ fn build_params(d: &Dialog) -> Json {
 
 pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
     let Some(mut d) = app.dialog.take() else { return };
+    // NexusOffice: as a tab of the NexusOffice window, the prompt every Nexus app shows.
+    if app.embedded && d.name == "saveChanges" {
+        embedded_save_prompt(app, ctx, d);
+        return;
+    }
     if d.name == "pasteSpecial" {
         paste_special_shortcuts(&mut d, ctx);
     }
@@ -1426,6 +1431,48 @@ fn paste_special_shortcuts(d: &mut Dialog, ctx: &egui::Context) {
             _ => true,
         });
     });
+}
+
+/// NexusOffice: "Lưu thay đổi?" over the tab (`nexus_save_prompt`). Lưu, Không lưu and Hủy do
+/// what the stand-alone prompt's Save, Don't Save and Cancel do.
+fn embedded_save_prompt(app: &mut SheetApp, ctx: &egui::Context, d: Dialog) {
+    use crate::nexus_save_prompt as sp;
+    let t = theme::Tokens::get(ctx);
+    let vi = app.ui.language == crate::i18n::Language::Vi;
+    let name = d.values.get("title").and_then(Json::as_str).unwrap_or_default();
+    let question = sp::question(vi, name);
+    let prompt = sp::Prompt { words: sp::words(vi), question: &question, note: None, error: None };
+    let look = sp::Look {
+        surface: t.ribbon,
+        border: t.ribbon_border,
+        text: t.text,
+        text_dim: t.text_dim,
+        error: ctx.global_style().visuals.error_fg_color,
+        accent: t.accent,
+        on_accent: t.on_accent,
+        backdrop: egui::Color32::from_black_alpha(if t.dark { 110 } else { 56 }),
+        title_font: egui::FontId::new(sp::TITLE_SIZE, egui::FontFamily::Name(crate::theme::UI_BOLD.into())),
+    };
+    let answer = sp::show(ctx, egui::Id::new("nexus_save_prompt"), app.drawn_in, &prompt, &look);
+    match answer {
+        None => app.dialog = Some(d),
+        Some(sp::Answer::Cancel) => {}
+        Some(sp::Answer::DontSave) => app.run_or_alert("file.close", json!({"force": true})),
+        Some(sp::Answer::Save) => {
+            // File operations include the cell the user is still editing.
+            if !app.commit_edit(0, 0, false, false) {
+                app.dialog = Some(d);
+                return;
+            }
+            app.run_or_alert("file.save", json!({}));
+            if app.session.active().is_some_and(|x| !x.is_dirty()) {
+                app.run_or_alert("file.close", json!({"force": true}));
+            } else {
+                // A workbook with no file waits for the host's Save As.
+                app.close_after_pending_save();
+            }
+        }
+    }
 }
 
 fn ok_cancel(ui: &mut egui::Ui, confirm: &mut bool, open: &mut bool) {
