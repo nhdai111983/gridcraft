@@ -844,9 +844,9 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
         stack(ui, |ui| {
             number_combo(app, ui, &st);
             ui.horizontal(|ui| {
-                // NexusOffice: in Vietnamese the button is đồng's (VND, no decimals), as Excel's is the
-                // system currency's.
-                let vnd = app.ui.language == crate::i18n::Language::Vi;
+                // NexusOffice: in the vi-VN region the button is đồng's (VND, no decimals), as Excel's
+                // is the system currency's.
+                let vnd = app.ui.regional_format() == gridcraft_engine::core::Locale::ViVn;
                 let (c, ca) = split_button(ui, if vnd { Icon::CurrencyDong } else { Icon::Currency }, None, "Accounting Number Format");
                 control_keytip(app, ui, &ca, "home.accounting");
                 ca.widget_info(|| {
@@ -1137,19 +1137,20 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
 /// NexusOffice: the accounting format in Vietnamese đồng (vi-VN, no decimals), as Excel writes it.
 pub(crate) const VND_ACCOUNTING: &str = "_-* #,##0 [$₫-42A]_-;-* #,##0 [$₫-42A]_-;_-* \"-\" [$₫-42A]_-;_-@_-";
 
-/// NexusOffice: the code a Number Format list entry applies. In Vietnamese, Currency is đồng's
-/// (`1.234.567 ₫`: the sign after a space, no decimals), as Excel's is the system currency's.
-pub(crate) fn number_format_code(lang: crate::i18n::Language, name: &str) -> &str {
+/// NexusOffice: the code a Number Format list entry applies. In the vi-VN region, Currency is
+/// đồng's (`1.234.567 ₫`: the sign after a space, no decimals), as Excel's is the system
+/// currency's (`nexus_region::category_code`).
+pub(crate) fn number_format_code(region: gridcraft_engine::core::Locale, name: &str) -> &str {
     match name {
-        "Currency" if lang == crate::i18n::Language::Vi => gridcraft_engine::core::parse::VND_FORMAT,
+        "Currency" => crate::nexus_region::category_code(region, name),
         other => gridcraft_engine::cmd::format::format_code_for(other),
     }
 }
 
 /// [`number_format_code`] as `home.numberFormat`'s parameters.
-pub(crate) fn number_format_params(lang: crate::i18n::Language, name: &str) -> serde_json::Value {
+pub(crate) fn number_format_params(region: gridcraft_engine::core::Locale, name: &str) -> serde_json::Value {
     match name {
-        "Currency" if lang == crate::i18n::Language::Vi => json!({"code": number_format_code(lang, name)}),
+        "Currency" if region == gridcraft_engine::core::Locale::ViVn => json!({"code": number_format_code(region, name)}),
         n => json!({"format": n}),
     }
 }
@@ -1212,6 +1213,7 @@ fn number_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     let kind = gridcraft_engine::display::number_format(&code).kind();
     let current = format!("{kind:?}");
     let lang = app.ui.language;
+    let region = app.ui.regional_format();
     let sample = app.session.active().and_then(|d| d.wb.active().map(|sh| sh.value(d.selection.active))).unwrap_or_default();
     let resp = ui.add_sized([150.0, 24.0], egui::Button::new(egui::RichText::new(lang.tr(&current)).font(theme::ui_font(12.5))));
     control_keytip(app, ui, &resp, "home.numberFormat");
@@ -1220,7 +1222,7 @@ fn number_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     let items: Vec<(&str, String)> = names
         .iter()
         .map(|n| {
-            let code = number_format_code(lang, n);
+            let code = number_format_code(region, n);
             let preview = app.session.active().map(|d| gridcraft_engine::display::format(&sample, code, &d.wb).text).unwrap_or_default();
             (*n, format!("{:<12}   {preview}", lang.tr(n)))
         })
@@ -1229,7 +1231,7 @@ fn number_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
     if let ComboResult::Picked(value) = editable_combo(ui, &resp, "number", &current, &items, forced) {
         match value.as_str() {
             "__more" => app.open_dialog("formatCells", json!({"tab": "Number"})),
-            n => act(app, "home.numberFormat", number_format_params(lang, n)),
+            n => act(app, "home.numberFormat", number_format_params(region, n)),
         }
     }
 }
@@ -1899,7 +1901,7 @@ fn formulas(app: &mut SheetApp, ui: &mut Ui) {
                         if f["category"].as_str() == Some(cat)
                             && let Some(n) = f["name"].as_str()
                         {
-                            let locale = app.ui.language.formula_locale();
+                            let locale = app.ui.formula_locale();
                             let name = app
                                 .session
                                 .active()

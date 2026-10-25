@@ -17,7 +17,7 @@ use gridcraft_core::{CellError, DateSystem, Value};
 pub use builtin::{builtin_format, builtin_id};
 pub use decimal::format_general_fit;
 pub use gridcraft_core::Locale;
-pub use parse::delocalize_code;
+pub use parse::{delocalize_code, localize_code_separators};
 
 use parse::{SecKind, Section, Tok};
 use render::Out;
@@ -366,6 +366,23 @@ fn system_format(code: &str, loc: Locale) -> Option<&'static str> {
             }
         }
     }
+}
+
+/// A stored (en-US) format code as the interface shows it for editing in a regional format, as
+/// Excel's Format Cells shows codes in the system's: separators traded (`#.##0,00`), and the
+/// system short date (built-in 14 `m/d/yyyy`, 22 with the time) in the locale's order
+/// (`dd/mm/yyyy`). en-US returns the code unchanged. To store what was edited, keep the original
+/// code when the text still equals this function's result, and otherwise store
+/// [`delocalize_code`] of it (`dd/mm/yyyy` typed by hand is a custom code, not the system's).
+pub fn localize_code(code: &str, loc: Locale) -> String {
+    let t = code.trim();
+    if loc != Locale::EnUs
+        && (t == "m/d/yyyy" || t == "m/d/yyyy h:mm")
+        && let Some(sys) = system_format(t, loc)
+    {
+        return sys.to_string();
+    }
+    localize_code_separators(code, loc)
 }
 
 /// A small per-thread cache of parsed format codes for callers that format many values with the

@@ -497,7 +497,7 @@ impl Dialog {
                 }
                 // The saved model's numbers are en-US; the dialog shows and sends them the way
                 // the interface types them (`locale` goes with the command).
-                localize_solver_numbers(&mut values, app.ui.language.regional_format());
+                localize_solver_numbers(&mut values, app.ui.regional_format());
                 let mut d = Dialog::custom("solver", "Solver Parameters", values);
                 d.command = Some("data.solver");
                 d
@@ -1324,7 +1324,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
         if LOCALE_COMMANDS.contains(&cmd)
             && let Some(m) = params.as_object_mut()
         {
-            m.insert("locale".into(), json!(app.ui.language.regional_format().tag()));
+            m.insert("locale".into(), json!(app.ui.regional_format().tag()));
         }
         match app.run(cmd, params) {
             Ok(r) => {
@@ -1646,23 +1646,33 @@ fn format_cells(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: 
     let sample = app.session.active().and_then(|doc| doc.wb.active().map(|s| s.value(doc.selection.active))).unwrap_or_default();
     match d.tab.as_str() {
         "Number" => {
-            let mut code = st.num_fmt.as_str().to_string();
+            // NexusOffice: codes are shown and typed in the regional format (`#.##0,00`,
+            // `dd/mm/yyyy`) and stored en-US, as Excel's dialog shows the system's
+            // (`nexus_region::CodeEdit`, kept across frames in the dialog's values).
+            let region = app.ui.regional_format();
+            let mut code = crate::nexus_region::CodeEdit::new(st.num_fmt.as_str(), region);
+            if let (Some(shown), Some(stored)) = (d.values.get("codeShown").and_then(Json::as_str), d.values.get("codeStored").and_then(Json::as_str))
+                && stored == code.stored
+            {
+                code.shown = shown.to_string();
+            }
             ui.columns(2, |cols| {
                 cols[0].label(egui::RichText::new(lang.tr("Category:")).strong());
-                for name in
-                    ["General", "Number", "Currency", "Accounting", "Short Date", "Long Date", "Time", "Percentage", "Fraction", "Scientific", "Text"]
-                {
-                    let c = gridcraft_engine::cmd::format::format_code_for(name).to_string();
-                    if cols[0].selectable_label(code == c, lang.tr(name)).clicked() {
-                        code = c;
+                for name in crate::nexus_region::CATEGORIES {
+                    let c = crate::nexus_region::category_code(region, name);
+                    if cols[0].selectable_label(code.stored == c, lang.tr(name)).clicked() {
+                        code.pick(c, region);
                     }
                 }
                 cols[1].label(egui::RichText::new(lang.tr("Sample")).strong());
-                let preview = app.session.active().map(|doc| gridcraft_engine::display::format(&sample, &code, &doc.wb).text).unwrap_or_default();
+                let preview =
+                    app.session.active().map(|doc| gridcraft_engine::display::format(&sample, &code.stored, &doc.wb).text).unwrap_or_default();
                 cols[1].label(egui::RichText::new(preview).font(theme::ui_font(15.0)));
                 cols[1].add_space(8.0);
                 cols[1].label(lang.tr("Type (custom format code):"));
-                cols[1].text_edit_singleline(&mut code);
+                if cols[1].text_edit_singleline(&mut code.shown).changed() {
+                    code.edited(region);
+                }
                 for c in [
                     "0",
                     "0.00",
@@ -1681,12 +1691,14 @@ fn format_cells(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: 
                     "[h]:mm:ss",
                     "@",
                 ] {
-                    if cols[1].small_button(c).clicked() {
-                        code = c.to_string();
+                    if cols[1].small_button(crate::nexus_region::show(c, region)).clicked() {
+                        code.pick(c, region);
                     }
                 }
             });
-            st.num_fmt = gridcraft_engine::model::NumFmt::new(&code);
+            st.num_fmt = gridcraft_engine::model::NumFmt::new(&code.stored);
+            d.values.insert("codeStored".into(), json!(st.num_fmt.as_str()));
+            d.values.insert("codeShown".into(), json!(code.shown));
         }
         "Alignment" => {
             use gridcraft_engine::model::{HAlign, VAlign};
@@ -1852,7 +1864,7 @@ fn insert_function(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confir
         let r = ui.add(egui::TextEdit::singleline(&mut d.search).desired_width(300.0).hint_text("e.g. lookup, average, date"));
         r.request_focus();
     });
-    let locale = app.ui.language.formula_locale();
+    let locale = app.ui.formula_locale();
     let list = gridcraft_engine::cmd::formulas::function_list();
     let q = d.search.to_ascii_lowercase();
     let hits: Vec<&Json> = list
@@ -2399,11 +2411,8 @@ fn goal_seek(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: &mu
     ok_cancel(ui, confirm, &mut open);
     if *confirm {
         // The target is typed in the interface's regional format (`1,5` in vi-VN).
-        let target = gridcraft_engine::core::parse::parse_number_text_locale(
-            &to,
-            gridcraft_engine::core::DateSystem::D1900,
-            app.ui.language.regional_format(),
-        );
+        let target =
+            gridcraft_engine::core::parse::parse_number_text_locale(&to, gridcraft_engine::core::DateSystem::D1900, app.ui.regional_format());
         match app.run("data.goalSeek", json!({"set": set, "to": target.unwrap_or(0.0), "changing": changing})) {
             Ok(r) => app.toast = Some((format!("Goal Seeking found a solution: {}", r["value"]), crate::now_ms())),
             Err(e) => app.message = Some(("Goal Seek".into(), crate::clean_error(&e))),

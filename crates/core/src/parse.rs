@@ -139,12 +139,21 @@ fn leading_zero_group(t: &str, locale: Locale) -> bool {
     int.contains(locale.group_separator()) && int.starts_with('0')
 }
 
-/// Numeric text as arithmetic coerces it ("1,000", "50%", "$3", "1/2/2020", "10:00").
+/// Numeric text as arithmetic coerces it ("1,000", "50%", "$3", "1/2/2020", "10:00"), in the
+/// regional format of the formula being evaluated (en-US outside a formula; see
+/// [`crate::locale::coercion_locale`]): `"1,5"` is 1.5 while a vi-VN workbook calculates.
 pub fn parse_number_text(s: &str) -> Option<f64> {
-    parse_number_text_in(s, DateSystem::D1900)
+    coerce_number_text(s, DateSystem::D1900)
 }
 
-/// Like [`parse_number_text`], with date text read in the given workbook date system.
+/// [`parse_number_text`] with date text read in the given workbook date system: what
+/// [`Value::to_number_in`] does with text.
+pub fn coerce_number_text(s: &str, sys: DateSystem) -> Option<f64> {
+    parse_number_text_locale(s, sys, crate::locale::coercion_locale())
+}
+
+/// Numeric text spelled en-US, with date text read in the given workbook date system (whatever
+/// formula is being evaluated; [`coerce_number_text`] follows it).
 pub fn parse_number_text_in(s: &str, sys: DateSystem) -> Option<f64> {
     parse_numeric(s.trim(), sys).map(|(n, _)| n)
 }

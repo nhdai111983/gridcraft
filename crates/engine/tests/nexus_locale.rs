@@ -382,3 +382,56 @@ fn more_entry_points_read_the_regional_format() {
     let e = s.execute("data.fromTextCsv", json!({"text": "[1,", "locale": "vi-VN"})).unwrap_err().to_string();
     assert!(e.contains("data.fromTextCsv"), "{e}");
 }
+
+/// Criteria and coercion follow the workbook's regional format (Excel uses the system's): a
+/// locale switch recalculates every formula, the formula text is stored unchanged, and a file
+/// opened in vi-VN is recalculated in it (its cached results are the file's).
+#[test]
+fn criteria_and_coercion_follow_the_workbooks_locale() {
+    let mut s = session();
+    for (a1, v) in [("A1", "1"), ("A2", "1.5"), ("A3", "2.5")] {
+        set(&mut s, a1, v, None);
+    }
+    set(&mut s, "B1", "=COUNTIF(A1:A3,\">1,5\")", None);
+    set(&mut s, "B2", "=COUNTIF(A1:A3,\">\"&A2)", None);
+    set(&mut s, "B3", "=\"1,5\"+1", None);
+    set(&mut s, "B4", "=A2&\"\"", None);
+    set(&mut s, "B5", "=SUMIFS(A1:A3,A1:A3,\"<=1,5\")", None);
+    let en = [value(&s, "B1"), value(&s, "B2"), value(&s, "B3"), value(&s, "B4"), value(&s, "B5")];
+    assert_eq!(en[1], Value::Number(1.0));
+    assert_eq!(en[3], Value::text("1.5"));
+    s.active_mut().unwrap().saved = s.active().unwrap().wb.clone();
+    s.set_locale(Locale::ViVn);
+    assert!(!s.active().unwrap().is_dirty());
+    assert_eq!(value(&s, "B1"), Value::Number(1.0));
+    assert_eq!(value(&s, "B2"), Value::Number(1.0));
+    assert_eq!(value(&s, "B3"), Value::Number(2.5));
+    assert_eq!(value(&s, "B4"), Value::text("1,5"));
+    assert_eq!(value(&s, "B5"), Value::Number(2.5));
+    // Typed in vi-VN syntax, stored en-US with the string literal as typed.
+    set(&mut s, "C1", "=COUNTIF(A1:A3;\">=1,5\")", Some("vi-VN"));
+    assert_eq!(value(&s, "C1"), Value::Number(2.0));
+    let f = s.active().unwrap().wb.active().unwrap().cell(at("C1")).unwrap().formula.clone().unwrap();
+    assert_eq!(f.text.to_string(), "COUNTIF(A1:A3,\">=1,5\")");
+    // The XLSX keeps the formula as written; reopened in en-US it calculates the en-US way.
+    let saved = s.execute("file.saveBytes", json!({"format": "xlsx"})).unwrap();
+    let bytes = gridcraft_engine::io::base64_decode(saved["base64"].as_str().unwrap()).unwrap();
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes.clone())).unwrap();
+    let mut sheet = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("xl/worksheets/sheet1.xml").unwrap(), &mut sheet).unwrap();
+    assert!(sheet.contains("COUNTIF(A1:A3,\"&gt;1,5\")") || sheet.contains("COUNTIF(A1:A3,&quot;&gt;1,5&quot;)"), "{sheet}");
+    assert!(sheet.contains("<v>1.5</v>"), "values stay en-US: {sheet}");
+    // Back to en-US: the en-US results again.
+    s.set_locale(Locale::EnUs);
+    assert_eq!([value(&s, "B1"), value(&s, "B2"), value(&s, "B3"), value(&s, "B4"), value(&s, "B5")], en);
+    // Opened in a vi-VN session, the file is recalculated in vi-VN and stays saved.
+    let mut vi = Session::new();
+    vi.set_locale(Locale::ViVn);
+    vi.execute("file.open", json!({"name": "en.xlsx", "base64": saved["base64"]})).unwrap();
+    assert_eq!(value(&vi, "B3"), Value::Number(2.5));
+    assert_eq!(value(&vi, "B4"), Value::text("1,5"));
+    assert!(!vi.active().unwrap().is_dirty());
+    // The API (no `locale`) stays en-US for what it types.
+    set(&mut vi, "D1", "1.5", None);
+    assert_eq!(value(&vi, "D1"), Value::Number(1.5));
+}

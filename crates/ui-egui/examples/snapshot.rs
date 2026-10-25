@@ -7,6 +7,8 @@
 //! `--toolbar`: the NexusOffice layout (menu bar and one tool row); `--wps`: the NexusOffice layout in
 //! the style of WPS Office (no title bar, one row of tabs, a flat command strip); `--embedded`: as
 //! hosted in the NexusOffice window; `--accent`: a user accent colour.
+//! `--select B5` selects a cell (or range) before drawing; `--region vi-VN|en-US` sets the regional
+//! format apart from the language (NexusOffice, File › Options › Region).
 //! `--ui-cmd 'id={json}'` runs an app command (`ui.backstage`…) before drawing; `--click LABEL` and
 //! `--hover LABEL` act on the widget so named (in order) before the shot, to show an open menu.
 
@@ -33,6 +35,8 @@ fn main() {
     let mut embedded = false;
     let mut accent: Option<String> = None;
     let mut ui_cmds: Vec<String> = vec![];
+    let mut select: Option<String> = None;
+    let mut region: Option<String> = None;
     let mut pointer: Vec<(bool, String)> = vec![];
     let mut out = "snapshot.png".to_string();
     let mut i = 0;
@@ -83,6 +87,14 @@ fn main() {
                     pointer.push((click, c.clone()));
                 }
             }
+            "--select" => {
+                i += 1;
+                select = args.get(i).cloned();
+            }
+            "--region" => {
+                i += 1;
+                region = args.get(i).cloned();
+            }
             "--accent" => {
                 i += 1;
                 accent = args.get(i).cloned();
@@ -125,6 +137,11 @@ fn main() {
             eprintln!("{id}: {e}");
         }
     }
+    if let Some(r) = &select
+        && let Err(e) = session.execute("selection.set", json!({"range": r}))
+    {
+        eprintln!("--select {r}: {e}");
+    }
     let mut harness =
         egui_kittest::Harness::builder().with_size(egui::vec2(size.0, size.1)).with_pixels_per_point(scale).with_max_steps(32).wgpu().build_ui_state(
             move |ui, app: &mut SheetApp| {
@@ -152,6 +169,11 @@ fn main() {
                     && let Some(l) = gridcraft_ui_egui::i18n::Language::parse(code)
                 {
                     app.ui.language = l;
+                }
+                if let Some(r) = &region
+                    && let Err(e) = app.run("ui.region", json!({"value": r}))
+                {
+                    eprintln!("--region {r}: {e}");
                 }
                 if let Some(t) = tab {
                     app.ui.ribbon_tab = t;

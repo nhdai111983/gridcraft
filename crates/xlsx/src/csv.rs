@@ -89,7 +89,7 @@ pub fn sniff_delimiter(text: &str, quote: char) -> u8 {
 
 /// [`sniff_delimiter`] for a file written in a regional format. Where the list separator is `;`
 /// (vi-VN, whose decimal separator is `,`), Excel reads CSV with `;`. Looking at the first lines
-/// (outside quotes), in this order:
+/// (outside quotes, after any title lines that hold no tab, `;` or `,`), in this order:
 /// 1. a tab on every line: tab;
 /// 2. a `;` on every line: `;`, even when the decimal commas outnumber it;
 /// 3. at most one comma per line, each between two digits (a column of `1,5`, maybe with a
@@ -154,6 +154,10 @@ pub fn sniff_delimiter_in(text: &str, quote: char, locale: gridcraft_core::Local
     if !blank && lines.len() < 20 {
         lines.push(cur);
     }
+    // Title lines above the table (`Report`, no separator at all) say nothing about it: they
+    // would fail every "on every line" rule and leave a stray `;` in a text cell to decide.
+    let first = lines.iter().position(|l| l.tabs + l.semis + l.commas > 0).unwrap_or(0);
+    let lines = lines.get(first..).unwrap_or(&[]);
     if lines.is_empty() {
         return sniffed;
     }
