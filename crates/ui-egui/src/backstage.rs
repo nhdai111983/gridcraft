@@ -963,6 +963,7 @@ fn options(app: &mut SheetApp, ui: &mut Ui) {
             }
         });
         ui.end_row();
+        crate::nexus_region::options_row(app, ui);
     });
     ui.add_space(6.0);
     let mut formula_bar = app.session.prefs.formula_bar;

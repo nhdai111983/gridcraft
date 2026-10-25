@@ -24,6 +24,7 @@ pub mod icons;
 pub mod keymap;
 pub mod keytips;
 pub mod nexus;
+pub mod nexus_region;
 pub mod nexus_save_prompt;
 pub mod nexus_toolbar;
 pub mod nexus_wps;
@@ -85,6 +86,10 @@ pub struct UiState {
     /// app's own Emerald. A value that isn't a colour reads as `None`.
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient_accent")]
     pub accent: Option<String>,
+    /// NexusOffice: the regional format chosen in File › Options (`ui.region`); `None` follows the
+    /// interface language ([`nexus_region`]). Saved as its tag (`"vi-VN"`); junk reads as `None`.
+    #[serde(skip_serializing_if = "Option::is_none", serialize_with = "nexus_region::serialize", deserialize_with = "nexus_region::lenient")]
+    pub region: Option<gridcraft_engine::core::Locale>,
 }
 
 fn lenient_accent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
@@ -122,6 +127,7 @@ impl Default for UiState {
             language: i18n::Language::En,
             interface_scale: 100,
             accent: None,
+            region: None,
         }
     }
 }
@@ -562,7 +568,7 @@ impl SheetApp {
         let html = self.services.paste_html.as_mut().and_then(|read| read());
         // Text from another app is read in the interface's regional format (1.234,5 in vi-VN),
         // as typing it would be.
-        let locale = self.ui.language.regional_format().tag();
+        let locale = self.ui.regional_format().tag();
         let params = match html {
             Some(html) => json!({"text": text, "html": html, "locale": locale}),
             None => json!({"text": text, "locale": locale}),
@@ -794,6 +800,8 @@ impl SheetApp {
                 }
                 Ok(json!({"page": self.backstage.as_ref().map(|b| b.page.id())}))
             }
+            // NexusOffice: File › Options › Region (`{"value": "vi-VN" | "en-US" | ""}`).
+            "ui.region" => nexus_region::command(&mut self.ui, p),
             "ui.accent" => {
                 // NexusOffice: `{"value": "#RRGGBB"}` sets the accent colour, `""` or `null` goes
                 // back to the app's own; no value reads it. Applied on the next frame (`logic`).
@@ -848,7 +856,7 @@ impl SheetApp {
                     let text = text.map(|text| {
                         self.session
                             .active()
-                            .map(|d| formula_locale::display_template(&text, self.ui.language.formula_locale(), &d.wb, d.wb.active_sheet))
+                            .map(|d| formula_locale::display_template(&text, self.ui.formula_locale(), &d.wb, d.wb.active_sheet))
                             .unwrap_or(text)
                     });
                     self.begin_edit(text, false);
@@ -1051,7 +1059,7 @@ impl SheetApp {
         if text.is_none() && sh.cell_pictures.contains_key(&at) {
             return;
         }
-        let locale = self.ui.language.formula_locale();
+        let locale = self.ui.formula_locale();
         let current = if sh.cell_pictures.contains_key(&at) {
             String::new()
         } else {
@@ -1273,10 +1281,10 @@ impl SheetApp {
         if self.session.sheet_name_prefix != prefix {
             self.session.sheet_name_prefix = prefix.to_string();
         }
-        // NexusOffice: workbooks show in the interface language's regional format (vi-VN:
-        // 1.234,5, dd/mm/yyyy); cheap when nothing changed, and an undone step that comes back with
+        // NexusOffice: workbooks show in the regional format (File › Options › Region, else the
+        // interface language's; vi-VN: 1.234,5, dd/mm/yyyy); cheap when nothing changed, and an undone step that comes back with
         // another locale gets this one again.
-        self.session.set_locale(self.ui.language.regional_format());
+        self.session.set_locale(self.ui.regional_format());
         // NexusOffice: the user's accent colour (File › Options, `ui.accent`).
         theme::set_accent(ctx, self.ui.accent.as_deref().and_then(theme::parse_hex));
         self.effective_dark = ctx.theme() == egui::Theme::Dark;
@@ -1349,6 +1357,7 @@ impl SheetApp {
         text_box::before_ui(self, &ctx);
         // The language the widgets translate with this frame (see `i18n::current`).
         i18n::set_current(&ctx, self.ui.language);
+        nexus_region::set_current(&ctx, self.ui.formula_locale());
         let t = theme::Tokens::get(&ctx);
         if self.backstage.is_none() {
             self.ribbon_keys(&ctx);
