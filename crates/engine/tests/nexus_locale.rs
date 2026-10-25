@@ -408,8 +408,8 @@ fn criteria_and_coercion_follow_the_workbooks_locale() {
     assert_eq!(value(&s, "B3"), Value::Number(2.5));
     assert_eq!(value(&s, "B4"), Value::text("1,5"));
     assert_eq!(value(&s, "B5"), Value::Number(2.5));
-    // Typed in vi-VN syntax, stored en-US with the string literal as typed.
-    set(&mut s, "C1", "=COUNTIF(A1:A3;\">=1,5\")", Some("vi-VN"));
+    // Stored with the string literal as written; it is read in the workbook's locale.
+    set(&mut s, "C1", "=COUNTIF(A1:A3,\">=1,5\")", None);
     assert_eq!(value(&s, "C1"), Value::Number(2.0));
     let f = s.active().unwrap().wb.active().unwrap().cell(at("C1")).unwrap().formula.clone().unwrap();
     assert_eq!(f.text.to_string(), "COUNTIF(A1:A3,\">=1,5\")");

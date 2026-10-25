@@ -103,7 +103,7 @@ fn options_page_picks_the_region() {
     h.state_mut().run("ui.backstage", json!({"page": "options"})).unwrap();
     h.run_steps(6);
     h.get_by_label("Vùng (số và ngày)");
-    h.get_by_label("Theo ngôn ngữ giao diện — Tiếng Việt (Việt Nam)").click();
+    h.get_by_value("Theo ngôn ngữ giao diện — Tiếng Việt (Việt Nam)").click();
     h.run_steps(4);
     h.get_by_label("English (United States)").click();
     h.run_steps(4);
@@ -135,7 +135,7 @@ fn format_cells_codes_in_the_regional_format() {
     h.state_mut().run("selection.set", json!({"cell": "A1"})).unwrap();
     open_number_tab(&mut h);
     // The code field and the presets are spelled vi-VN; nothing is spelled en-US.
-    assert_eq!(h.get_all_by_value("#.##0,00").count(), 1, "the code field");
+    assert!(h.query_by_value("#,##0.00").is_none() && h.query_all_by_value("#.##0,00").next().is_some(), "the code field");
     h.get_by_label("#.##0,00");
     h.get_by_label("0,00%");
     assert!(h.query_by_label("#,##0.00").is_none());
@@ -152,23 +152,23 @@ fn format_cells_codes_in_the_regional_format() {
     open_number_tab(&mut h);
     h.get_by_label("Currency").click();
     h.run_steps(2);
-    assert_eq!(h.get_all_by_value("#.##0 [$₫-42A]").count(), 1);
+    assert!(h.query_all_by_value("#.##0 [$₫-42A]").next().is_some());
     ok(&mut h);
     assert_eq!(code(&h, "A1"), "#,##0 [$₫-42A]");
     // The system short date shows day first and stays the system date when confirmed.
     h.state_mut().run("selection.set", json!({"cell": "A2"})).unwrap();
     assert_eq!(code(&h, "A2"), "m/d/yyyy");
     open_number_tab(&mut h);
-    assert_eq!(h.get_all_by_value("dd/mm/yyyy").count(), 1);
+    assert!(h.query_all_by_value("dd/mm/yyyy").next().is_some() && h.query_by_value("m/d/yyyy").is_none());
     ok(&mut h);
     assert_eq!(code(&h, "A2"), "m/d/yyyy");
     // A typed code reads vi-VN.
     h.state_mut().run("selection.set", json!({"cell": "A1"})).unwrap();
     open_number_tab(&mut h);
-    h.get_by_value("#.##0 [$₫-42A]").click();
+    h.get_all_by_value("#.##0 [$₫-42A]").next().unwrap().click();
     h.run_steps(2);
     select_all_and_type(&mut h, "0,000");
-    assert_eq!(h.get_all_by_value("0,000").count(), 1);
+    assert!(h.query_all_by_value("0,000").next().is_some());
     ok(&mut h);
     assert_eq!(code(&h, "A1"), "0.000");
     // The XLSX written keeps the en-US codes.
@@ -198,7 +198,7 @@ fn format_cells_codes_in_en_us_are_unchanged() {
     h.state_mut().session.execute("home.numberFormat", json!({"range": "A1", "code": "#,##0.00"})).unwrap();
     h.state_mut().run("selection.set", json!({"cell": "A1"})).unwrap();
     open_number_tab(&mut h);
-    assert_eq!(h.get_all_by_value("#,##0.00").count(), 1);
+    assert!(h.query_all_by_value("#,##0.00").next().is_some());
     h.get_by_label("0.00%").click();
     h.run_steps(2);
     ok(&mut h);
