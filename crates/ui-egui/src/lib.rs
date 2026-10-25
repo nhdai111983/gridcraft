@@ -127,6 +127,7 @@ impl Default for UiState {
             language: i18n::Language::En,
             interface_scale: 100,
             accent: None,
+            region: None,
         }
     }
 }
