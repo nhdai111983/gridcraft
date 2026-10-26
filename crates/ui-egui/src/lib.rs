@@ -24,7 +24,9 @@ pub mod icons;
 pub mod keymap;
 pub mod keytips;
 pub mod nexus;
+pub mod nexus_i18n;
 pub mod nexus_region;
+pub mod nexus_reports;
 pub mod nexus_save_prompt;
 pub mod nexus_toolbar;
 pub mod nexus_wps;
@@ -1120,7 +1122,7 @@ impl SheetApp {
         let r = if fill_selection {
             self.session.run("range.fill", json!({"input": text, "locale": locale.tag()}))
         } else {
-            self.session.run("cell.set", json!({"cell": ed.cell.a1(), "input": text, "array": array, "locale": locale.tag()}))
+            self.session.run("cell.set", json!({"cell": ed.cell.a1(), "input": text, "array": array, "locale": locale.tag(), "typed": true}))
         };
         match r {
             Ok(_) => {

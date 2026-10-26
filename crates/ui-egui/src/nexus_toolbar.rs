@@ -409,6 +409,8 @@ fn divider(ui: &mut Ui) {
 /// Gives a tool its name for screen readers and tests (the widgets only set a tooltip).
 fn named(resp: egui::Response, name: &str, selected: Option<bool>) -> egui::Response {
     let enabled = resp.enabled();
+    // The accessible name in the interface's language, as the button's tooltip.
+    let name = crate::i18n::current(&resp.ctx).tr(name);
     resp.widget_info(|| match selected {
         Some(on) => egui::WidgetInfo::selected(egui::WidgetType::Checkbox, enabled, on, name),
         None => egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, name),
