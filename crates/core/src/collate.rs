@@ -853,9 +853,7 @@ pub fn text_eq_prefolded(s: &str, folded: &str) -> bool {
     if s.is_ascii() {
         return s.eq_ignore_ascii_case(folded);
     }
-    // U+0300..=U+036F are the UTF-8 sequences CC 80..=CD AF; a CC or CD lead byte (U+0300..=U+037F)
-    // takes the full path.
-    if s.bytes().any(|b| b == 0xcc || b == 0xcd) {
+    if has_loose_mark(s) {
         return fold_key(s) == folded;
     }
     let mut want = folded.chars();
@@ -897,24 +895,195 @@ impl TextSet {
     }
 }
 
-/// The weights `compare_text` compares, in order.
+// ---------------------------------------------------------------------------------------------
+// Collations: the Vietnamese order (CLDR `vi` standard) next to the Root order.
+// ---------------------------------------------------------------------------------------------
+
+/// Vietnamese letters with a quality mark: letters of their own, after their base letter
+/// (`(letter, base, rank)`, weight `(base << 4) + rank`). Tones are not letters: they are a
+/// secondary difference ([`TONES`]).
+const VI: &[(char, char, u32)] = &[('ă', 'a', 1), ('â', 'a', 2), ('đ', 'd', 1), ('ê', 'e', 1), ('ô', 'o', 1), ('ơ', 'o', 2), ('ư', 'u', 1)];
+
+/// A base letter and the quality mark that make a Vietnamese letter of their own (the first step
+/// of the Vietnamese key, in `Key::vi`).
+const QUALITY: &[(char, char, char)] =
+    &[('a', '\u{306}', 'ă'), ('a', '\u{302}', 'â'), ('e', '\u{302}', 'ê'), ('o', '\u{302}', 'ô'), ('o', '\u{31b}', 'ơ'), ('u', '\u{31b}', 'ư')];
+
+/// The Vietnamese tone marks and their secondary weights, in `vi` order: (no tone 0), huyền,
+/// hỏi, ngã, sắc, nặng.
+const TONES: &[(char, u16)] = &[('\u{300}', 1), ('\u{309}', 2), ('\u{303}', 3), ('\u{301}', 4), ('\u{323}', 5)];
+
+/// Lowercase Latin letters that have no canonical decomposition, so [`fold_key`] leaves them
+/// whole, but that sort with their base letters in `vi`: `(letter, base letters, code)`. The
+/// code is a secondary difference below every mark code: 10 dot, 11 stroke, 16 ligature,
+/// 17 dotless, 18 eth.
+const VI_FOREIGN: &[(char, &str, u16)] = &[
+    ('æ', "ae", 16),
+    ('ð', "d", 18),
+    ('ħ', "h", 11),
+    ('ı', "i", 17),
+    ('ĳ', "ij", 16),
+    ('ŀ', "l", 10),
+    ('ł', "l", 11),
+    ('ø', "o", 11),
+    ('œ', "oe", 16),
+    ('ß', "ss", 16),
+    ('ŧ', "t", 11),
+];
+
+/// The primary weight of letter `c` at `rank` places after it.
+fn weight(c: char, rank: u32) -> u32 {
+    (c as u32).saturating_mul(16).saturating_add(rank)
+}
+
+/// The tone weight of mark `m` ([`TONES`]), 0 when it is not a tone mark.
+fn tone(m: char) -> u16 {
+    TONES.iter().find(|(t, _)| *t == m).map_or(0, |(_, w)| *w)
+}
+
+/// Rule V1 of [`Key::vi`]: `base` merged with each quality mark among `marks` (the marks after it,
+/// in canonical order) that is not blocked by an earlier mark kept with a combining class >= its
+/// own. Every mark that does not merge goes to `keep`, in order.
+fn vi_merge(mut base: char, marks: impl Iterator<Item = char>, mut keep: impl FnMut(char)) -> char {
+    let mut top = 0u8;
+    for m in marks {
+        let class = ccc(m);
+        match QUALITY.iter().find(|(b, q, _)| *b == base && *q == m) {
+            Some((_, _, merged)) if top < class => base = *merged,
+            _ => {
+                keep(m);
+                top = top.max(class);
+            }
+        }
+    }
+    base
+}
+
+/// The weights of a (merged) base letter in `vi`: its first primary weight, a second one for a
+/// ligature (`æ` is `a` `e`), and its [`VI_FOREIGN`] code (0 for every other letter).
+fn vi_letter(c: char) -> (u32, Option<u32>, u16) {
+    if let Some((_, base, rank)) = VI.iter().find(|(x, _, _)| *x == c) {
+        return (weight(*base, *rank), None, 0);
+    }
+    if let Some((_, bases, code)) = VI_FOREIGN.iter().find(|(x, _, _)| *x == c) {
+        let mut b = bases.chars();
+        let first = b.next().map_or_else(|| weight(c, 0), |x| weight(x, 0));
+        return (first, b.next().map(|x| weight(x, 0)), *code);
+    }
+    (weight(c, 0), None, 0)
+}
+
+/// Which text order to sort and compare by. Equality never depends on it: two strings compare
+/// equal in every collation exactly when [`text_eq`] holds; only the order of unequal text
+/// changes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Collation {
+    /// The language-neutral order: accented letters sort with their base letter (`Anh` < `Ánh` <
+    /// `Ảnh`), `đ` with `d`, everything else by code point. That includes the Latin letters with no
+    /// decomposition (`ø`, `ł`, `æ`, `ß`, `ð`, `ħ`, `ı`…), which sort after `z`; [`Collation::Vi`]
+    /// puts them with their base letter.
+    #[default]
+    Root,
+    /// Vietnamese, the CLDR `vi` standard order: `a ă â b c d đ e ê … o ô ơ … u ư …`, tones as a
+    /// secondary difference (none, huyền, hỏi, ngã, sắc, nặng).
+    Vi,
+}
+
+impl Collation {
+    /// The collation a BCP 47 language tag asks for, by its primary language subtag: `vi`,
+    /// `vi-VN`, `VI_vn` and `vi-` give [`Collation::Vi`]; anything else, `""` and `"-"`
+    /// included, gives [`Collation::Root`].
+    pub fn from_tag(tag: &str) -> Collation {
+        let lang = tag.split(['-', '_']).next().unwrap_or("").trim();
+        if lang.eq_ignore_ascii_case("vi") { Collation::Vi } else { Collation::Root }
+    }
+
+    /// The tag [`Collation::from_tag`] reads back as this collation: `""` for Root, `"vi"`.
+    pub fn tag(self) -> &'static str {
+        match self {
+            Collation::Root => "",
+            Collation::Vi => "vi",
+        }
+    }
+}
+
+/// The weights `compare_text_with` compares, in order.
 ///
-/// - `primary`: one entry per element of the folded text: the code point of a base character
-///   (`đ` counts as `d`). Combining marks U+0300..=U+036F are not elements.
-/// - `secondary`: for each element, its stroke code (`đ`) and the codes of the marks after it
-///   (`32 + (cp - 0x300)`, in canonical order), then a `0` ending the element. A list per
-///   element, not a sum, so different mark sets never collide (`ấ` is `[34, 33]`, `ä` is `[40]`).
-///   A mark with no element before it is dropped here and survives in `text`.
-/// - `text`: the whole [`fold_key`], so only equal text compares equal.
+/// - `primary`: one entry per element of the folded text. Root: the code point of a base
+///   character (`đ` counts as `d`). Combining marks U+0300..=U+036F are not elements.
+/// - `secondary`: for each element, its codes, then a `0` ending the element. Root: the stroke
+///   code (`đ`) and the codes of the marks after it (`32 + (cp - 0x300)`, in canonical order). A
+///   list per element, not a sum, so different mark sets never collide (`ấ` is `[34, 33]`, `ä`
+///   is `[40]`). A mark with no element before it is dropped here and survives in `text`. Vi:
+///   see [`Key::vi`].
+/// - `text`: the whole [`fold_key`], so only equal text compares equal, whatever the collation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Root {
+struct Key {
     primary: Vec<u32>,
     secondary: Vec<u16>,
     text: String,
 }
 
-impl Root {
-    fn new(s: &str) -> Root {
+impl Key {
+    fn new(s: &str, c: Collation) -> Key {
+        match c {
+            Collation::Root => Key::root(s),
+            Collation::Vi => Key::vi(s),
+        }
+    }
+
+    /// The Vietnamese key (rule V of [`Collation::Vi`]): weights from the clusters of the folded
+    /// text, each a base letter and the marks after it.
+    ///
+    /// - V1. A quality mark merges with the base into a letter of its own (`ă â ê ô ơ ư`)
+    ///   wherever it stands in the cluster, unless it is blocked: a mark before it that did not
+    ///   merge has a combining class >= its own. (Canonical order puts the dot below before the
+    ///   circumflex, `ậ` is `a` U+0323 U+0302, so only looking at the first mark would miss it.)
+    /// - V2. Letters weigh `(base << 4) + rank`: `a ă â b c d đ e ê … o ô ơ … u ư …` ([`VI`]).
+    ///   Letters with a stroke or ligature ([`VI_FOREIGN`]) weigh as their base letters; other
+    ///   foreign letters arrive decomposed, so they weigh as their base letter too.
+    /// - V3. Each element's secondary codes start with its tone: 0 none, 1 huyền, 2 hỏi, 3 ngã,
+    ///   4 sắc, 5 nặng (the first tone mark among the marks that did not merge); then the code of
+    ///   a [`VI_FOREIGN`] letter; then the codes of the other marks (`32 + (cp - 0x300)`),
+    ///   leaving out every repeat of the tone mark; then the `0` ending the element. Only the
+    ///   tone can be `0` and it always comes first, so the flat list orders like a list of lists.
+    ///   So tones are a secondary difference (`ma < mà < mả < mã < má < mạ`) and `Hoà` (tone on
+    ///   `a`) sorts before `Hòa` (tone on `o`).
+    fn vi(s: &str) -> Key {
+        let text = fold_key(s);
+        let mut primary: Vec<u32> = Vec::new();
+        let mut secondary: Vec<u16> = Vec::new();
+        let mut chars = text.chars().peekable();
+        let mut rest: Vec<char> = Vec::new();
+        while primary.len() < MAX_PRIMARY {
+            let Some(c) = chars.next() else { break };
+            if is_mark(c) {
+                continue; // a mark with no letter before it leaves the weights alone
+            }
+            // V1: merge the quality marks that are not blocked; keep the others in `rest`.
+            rest.clear();
+            let base = vi_merge(c, std::iter::from_fn(|| chars.next_if(|m| is_mark(*m))), |m| rest.push(m));
+            let (first, second, letter) = vi_letter(base);
+            primary.push(first);
+            let tone_mark = rest.iter().copied().find(|m| tone(*m) != 0);
+            secondary.push(tone_mark.map_or(0, tone));
+            if letter != 0 {
+                secondary.push(letter);
+            }
+            secondary.extend(rest.iter().filter(|m| Some(**m) != tone_mark).map(|m| mark_code(*m)));
+            secondary.push(0);
+            if let Some(w) = second
+                && primary.len() < MAX_PRIMARY
+            {
+                primary.push(w);
+                secondary.extend([0, 0]); // no tone, end of element
+            }
+        }
+        Key { primary, secondary, text }
+    }
+
+    /// The Root key.
+    fn root(s: &str) -> Key {
         let text = fold_key(s);
         let mut primary: Vec<u32> = Vec::new();
         let mut secondary: Vec<u16> = Vec::new();
@@ -941,23 +1110,24 @@ impl Root {
         if !primary.is_empty() {
             secondary.push(0);
         }
-        Root { primary, secondary, text }
+        Key { primary, secondary, text }
     }
 }
 
-impl Ord for Root {
-    fn cmp(&self, other: &Root) -> Ordering {
+impl Ord for Key {
+    fn cmp(&self, other: &Key) -> Ordering {
         self.primary.cmp(&other.primary).then_with(|| self.secondary.cmp(&other.secondary)).then_with(|| self.text.cmp(&other.text))
     }
 }
 
-impl PartialOrd for Root {
-    fn partial_cmp(&self, other: &Root) -> Option<Ordering> {
+impl PartialOrd for Key {
+    fn partial_cmp(&self, other: &Key) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-/// Case-insensitive, encoding-insensitive text order (the Root order).
+/// Case-insensitive, encoding-insensitive text order (the Root order: ours, language-neutral, not
+/// CLDR root): `compare_text_with(a, b, Collation::Root)`.
 ///
 /// Letters compare by their base letter first, so `Ánh` sorts next to `Anh` and not after `z`;
 /// accents break ties, ordered by the code point of the mark (`Anh` < `Ánh` < `Ảnh`: acute U+0301
@@ -967,23 +1137,125 @@ impl PartialOrd for Root {
 /// letters that have no decomposition (such as `ø`, `ł`, `æ`, `ß`, `ð`, `ħ`, `ı`), which therefore sort
 /// after `z`. Two ASCII strings compare by their lowercase bytes, as before.
 pub fn compare_text(a: &str, b: &str) -> Ordering {
+    compare_text_with(a, b, Collation::Root)
+}
+
+/// Case-insensitive, encoding-insensitive text order in collation `c`. It compares equal exactly
+/// when [`text_eq`] holds, whatever `c` is. Two ASCII strings compare by their lowercase bytes in
+/// every collation (no ASCII text holds a Vietnamese letter or mark).
+pub fn compare_text_with(a: &str, b: &str, c: Collation) -> Ordering {
     if a.is_ascii() && b.is_ascii() {
         return a.bytes().map(|x| x.to_ascii_lowercase()).cmp(b.bytes().map(|x| x.to_ascii_lowercase()));
     }
-    Root::new(a).cmp(&Root::new(b))
+    Key::new(a, c).cmp(&Key::new(b, c))
 }
 
-/// A precomputed sort key for text: `text_key(a).cmp(&text_key(b)) == compare_text(a, b)` for
-/// every pair, and two keys are equal exactly when [`text_eq`] holds. Build it once per string
-/// and compare keys (`sort_by_cached_key`, a field of a sorted item) instead of calling
-/// [`compare_text`], which builds both keys on every comparison. Opaque: what it holds may
-/// change (a later collation choice), only its order is the contract.
+/// A precomputed sort key for text: `text_key(a, c).cmp(&text_key(b, c)) == compare_text_with(a,
+/// b, c)` for every pair, and two keys of one collation are equal exactly when [`text_eq`] holds.
+/// Build it once per string and compare keys (`sort_by_cached_key`, a field of a sorted item)
+/// instead of calling [`compare_text_with`], which builds both keys on every comparison. Only
+/// keys built with the same collation are meant to be compared. Opaque: what it holds may change,
+/// only its order is the contract.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct TextKey(Root);
+pub struct TextKey(Key);
 
-/// The [`TextKey`] of `s` (the Root order of [`compare_text`]).
-pub fn text_key(s: &str) -> TextKey {
-    TextKey(Root::new(s))
+/// The [`TextKey`] of `s` in collation `c` (the order of [`compare_text_with`]).
+pub fn text_key(s: &str, c: Collation) -> TextKey {
+    TextKey(Key::new(s, c))
+}
+
+/// A text prepared to be ordered against many others in one collation (a criterion operand, a
+/// lookup needle, the best candidate of a scan): `probe.order(t) == compare_text_with(t, text,
+/// c)` for every `t`. Its own key is built once. A text compared with it streams its primary
+/// weights (its base letters) against the probe's and stops at the first difference, so most
+/// comparisons allocate nothing; only a text whose base letters equal the probe's, or that holds
+/// a combining mark U+0300..=U+036F of its own, or that reaches the primary cap, builds its key.
+#[derive(Debug, Clone)]
+pub struct TextProbe {
+    text: String,
+    coll: Collation,
+    key: Key,
+}
+
+impl TextProbe {
+    /// The probe for `s` in collation `c`.
+    pub fn new(s: &str, c: Collation) -> TextProbe {
+        TextProbe { text: s.to_string(), coll: c, key: Key::new(s, c) }
+    }
+
+    /// The collation the probe orders by.
+    pub fn collation(&self) -> Collation {
+        self.coll
+    }
+
+    /// The order of `t` against the probe's text: `compare_text_with(t, text, collation)`.
+    pub fn order(&self, t: &str) -> Ordering {
+        if t.is_ascii() && self.text.is_ascii() {
+            return compare_text_with(t, &self.text, self.coll);
+        }
+        if !has_loose_mark(t)
+            && let Some(o) = primary_order(t, self.coll, &self.key.primary)
+        {
+            return o;
+        }
+        Key::new(t, self.coll).cmp(&self.key)
+    }
+}
+
+/// Whether `s` may hold a combining mark U+0300..=U+036F of its own: those are the UTF-8
+/// sequences CC 80..=CD AF, so a CC or CD lead byte (U+0300..=U+037F) answers yes.
+fn has_loose_mark(s: &str) -> bool {
+    s.bytes().any(|b| b == 0xcc || b == 0xcd)
+}
+
+/// How the primary weights of `t` in `c` order against `want` (the primary weights of a key),
+/// when they differ; `None` when they are equal (the secondary weights must decide) or when the
+/// stream cannot tell (the primary cap is reached, an unexpected decomposition). `t` must hold no
+/// mark U+0300..=U+036F of its own: then each char folds to one base letter followed by its own
+/// marks, already in canonical order, which is one element of the key ([`Key::root`],
+/// [`Key::vi`]), and the weights can be read char by char without building the folded text.
+fn primary_order(t: &str, c: Collation, want: &[u32]) -> Option<Ordering> {
+    let mut at = 0usize;
+    // Compares one more weight; `Err` ends the stream with an answer (or `None`: undecided).
+    let mut step = |w: u32| -> Result<(), Option<Ordering>> {
+        if at >= MAX_PRIMARY {
+            return Err(None);
+        }
+        match want.get(at) {
+            None => return Err(Some(Ordering::Greater)),
+            Some(x) if *x != w => return Err(Some(w.cmp(x))),
+            Some(_) => {}
+        }
+        at = at.saturating_add(1);
+        Ok(())
+    };
+    for ch in t.chars() {
+        let mut buf = ['\0'; 8];
+        let mut n = 0usize;
+        let mut fits = true;
+        fold_char(ch, |x| match buf.get_mut(n) {
+            Some(slot) => {
+                *slot = x;
+                n = n.saturating_add(1);
+            }
+            None => fits = false,
+        });
+        let Some((&base, marks)) = buf.get(..n).and_then(<[char]>::split_first) else { continue };
+        if !fits || is_mark(base) || !marks.iter().all(|m| is_mark(*m)) {
+            return None;
+        }
+        let r = match c {
+            Collation::Root => step(if base == 'đ' { 'd' as u32 } else { base as u32 }),
+            Collation::Vi => {
+                let (first, second, _) = vi_letter(vi_merge(base, marks.iter().copied(), |_| {}));
+                step(first).and_then(|()| second.map_or(Ok(()), &mut step))
+            }
+        };
+        if let Err(o) = r {
+            return o;
+        }
+    }
+    if at < want.len() { Some(Ordering::Less) } else { None }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1257,7 +1529,7 @@ mod tests {
         let weights: std::collections::HashSet<(Vec<u32>, Vec<u16>)> = words
             .iter()
             .map(|w| {
-                let k = Root::new(w);
+                let k = Key::root(w);
                 (k.primary, k.secondary)
             })
             .collect();
@@ -1429,14 +1701,14 @@ mod tests {
             }
         }
         // The key holds at most 16 384 elements; the rest takes part through the text.
-        let k = Root::new(&big);
+        let k = Key::root(&big);
         assert_eq!(k.primary.len(), MAX_PRIMARY);
         assert!(k.text.len() >= 1_000_000, "the text keeps the whole string");
         let almost = format!("{big}x");
         assert_ne!(compare_text(&big, &almost), Ordering::Equal);
         // A mark with nothing before it is dropped from the weights and kept in the text.
-        let k = Root::new("\u{301}a");
-        assert_eq!((k.primary, k.secondary), (Root::new("a").primary, Root::new("a").secondary));
+        let k = Key::root("\u{301}a");
+        assert_eq!((k.primary, k.secondary), (Key::root("a").primary, Key::root("a").secondary));
         assert_ne!(compare_text("\u{301}a", "a"), Ordering::Equal);
         // A run of marks longer than the cap keeps its input order, so it is not canonical-equal
         // to the other order; it must still compare consistently.
@@ -1554,22 +1826,174 @@ mod tests {
                     (a, b)
                 }
             };
-            let (ka, kb) = (text_key(&a), text_key(&b));
+            let (ka, kb) = (text_key(&a, Collation::Root), text_key(&b, Collation::Root));
             assert_eq!(ka.cmp(&kb), compare_text(&a, &b), "{a:?} {b:?}");
             assert_eq!(ka == kb, text_eq(&a, &b), "{a:?} {b:?}");
         }
         // Case and encoding give equal keys; the hostile strings still order consistently.
-        assert_eq!(text_key("NGUYỄN"), text_key("nguye\u{302}\u{303}n"));
+        assert_eq!(text_key("NGUYỄN", Collation::Root), text_key("nguye\u{302}\u{303}n", Collation::Root));
         let big = "Nguyễn Văn ".repeat(100_000);
         let cases = ["", "\u{301}", "\u{10FFFF}", "İ", "ẞ", "Zebra", "ấm", &big];
         for a in cases {
             for b in cases {
-                assert_eq!(text_key(a).cmp(&text_key(b)), compare_text(a, b), "{a:.20?} {b:.20?}");
+                assert_eq!(text_key(a, Collation::Root).cmp(&text_key(b, Collation::Root)), compare_text(a, b), "{a:.20?} {b:.20?}");
             }
         }
         let mut words = vec!["Zebra", "ấm", "bàn", "Ánh", "Anh", "Ấn"];
-        words.sort_by_cached_key(|w| text_key(w));
+        words.sort_by_cached_key(|w| text_key(w, Collation::Root));
         assert_eq!(words, ["ấm", "Ấn", "Anh", "Ánh", "bàn", "Zebra"]);
+    }
+
+    #[test]
+    fn text_key_orders_exactly_like_compare_text_with_vi() {
+        let mut rng = Rng(0x7f4a_7c15_9e37_79b9);
+        let alphabet: Vec<char> = " -_.,'0123456789abcXYZ~[]ABCdefgzZ".chars().collect();
+        let ascii = |rng: &mut Rng| -> String { (0..rng.below(8)).map(|_| alphabet[rng.below(alphabet.len())]).collect() };
+        for i in 0..20_000 {
+            let (a, b) = match i % 3 {
+                0 => (ascii(&mut rng), ascii(&mut rng)),
+                1 => (ascii(&mut rng), random_text(&mut rng)),
+                _ => {
+                    let a = random_text(&mut rng);
+                    let b = if rng.below(4) == 0 { reencode(&mut rng, &a) } else { random_text(&mut rng) };
+                    (a, b)
+                }
+            };
+            let o = compare_text_with(&a, &b, Collation::Vi);
+            let (ka, kb) = (text_key(&a, Collation::Vi), text_key(&b, Collation::Vi));
+            assert_eq!(ka.cmp(&kb), o, "{a:?} {b:?}");
+            assert_eq!(ka == kb, text_eq(&a, &b), "{a:?} {b:?}");
+            // Equality never depends on the collation.
+            assert_eq!(o == Ordering::Equal, compare_text(&a, &b) == Ordering::Equal, "{a:?} {b:?}");
+        }
+        let mut words = vec!["Zebra", "ấm", "bàn", "Ánh", "Anh", "Ấn", "ăn", "Đào", "Dương"];
+        words.sort_by_cached_key(|w| text_key(w, Collation::Vi));
+        assert_eq!(words, ["Anh", "Ánh", "ăn", "ấm", "Ấn", "bàn", "Dương", "Đào", "Zebra"]);
+    }
+
+    #[test]
+    fn vi_total_order_and_equality_invariants() {
+        let mut rng = Rng(0x0fed_cba9_8765_4321);
+        let vi = |a: &str, b: &str| compare_text_with(a, b, Collation::Vi);
+        for _ in 0..2_000 {
+            let a = random_text(&mut rng);
+            let b = if rng.below(3) == 0 { reencode(&mut rng, &a) } else { random_text(&mut rng) };
+            let c = if rng.below(3) == 0 { reencode(&mut rng, &b) } else { random_text(&mut rng) };
+            let (ab, bc, ac) = (vi(&a, &b), vi(&b, &c), vi(&a, &c));
+            assert_eq!(ab, vi(&b, &a).reverse(), "antisymmetry {a:?} {b:?}");
+            assert_eq!(vi(&a, &a), Ordering::Equal, "reflexive {a:?}");
+            if ab != Ordering::Greater && bc != Ordering::Greater {
+                assert_ne!(ac, Ordering::Greater, "transitivity {a:?} {b:?} {c:?}");
+            }
+            for (x, y, o) in [(&a, &b, ab), (&b, &c, bc), (&a, &c, ac)] {
+                assert_eq!(o == Ordering::Equal, text_eq(x, y), "text_eq {x:?} {y:?}");
+            }
+            // Re-encoding (case, NFC/NFD, mark order) never changes the order.
+            let (ra, rb) = (reencode(&mut rng, &a), reencode(&mut rng, &b));
+            assert_eq!(vi(&ra, &rb), ab, "{a:?} {b:?}");
+        }
+    }
+
+    #[test]
+    fn vi_key_structure() {
+        // One terminated secondary list per primary weight, each starting with the tone.
+        for s in ["Nguyễn Thị Ánh", "ậ", "Đắk Lắk", "ßæ", "\u{301}a\u{301}\u{301}", "", "ơ\u{323}\u{31b}"] {
+            let k = Key::vi(s);
+            // Parse `[tone, codes…, 0]` per element: the tone is 0..=5, the codes are not 0.
+            let mut it = k.secondary.iter().copied();
+            let mut elements = 0;
+            while let Some(t) = it.next() {
+                assert!(t <= 5, "{s:?}");
+                assert!(it.by_ref().any(|x| x == 0), "{s:?}: unterminated");
+                elements += 1;
+            }
+            assert_eq!(elements, k.primary.len(), "{s:?}");
+        }
+        // Tones are the first code of an element: ma < mà < mả < mã < má < mạ.
+        let tones: Vec<u16> = ["ma", "mà", "mả", "mã", "má", "mạ"].iter().map(|w| Key::vi(w).secondary.get(2).copied().unwrap_or(99)).collect();
+        assert_eq!(tones, [0, 1, 2, 3, 4, 5]);
+        // A quality mark merges wherever it stands unless blocked: ậ typed in either order is
+        // â + nặng; e + tilde + circumflex (same class) stays e with two marks, not ê.
+        assert_eq!(Key::vi("ậ").primary, Key::vi("â").primary);
+        assert_eq!(Key::vi("a\u{302}\u{323}"), Key::vi("ậ"));
+        assert_eq!(Key::vi("ễ").primary, Key::vi("ê").primary);
+        assert_eq!(Key::vi("e\u{303}\u{302}").primary, Key::vi("e").primary);
+        assert_ne!(compare_text_with("ễ", "e\u{303}\u{302}", Collation::Vi), Ordering::Equal);
+        // Every repeat of the tone mark is left out of the other codes; other marks stay.
+        assert_eq!(Key::vi("a\u{301}\u{301}").secondary, [4, 0]);
+        assert_eq!(Key::vi("a\u{301}\u{300}").secondary, [4, mark_code('\u{300}'), 0]);
+        // A foreign letter weighs as its base letter(s), told apart by its code.
+        assert_eq!(Key::vi("ø").primary, Key::vi("o").primary);
+        assert_eq!(Key::vi("ø").secondary, [0, 11, 0]);
+        assert_eq!(Key::vi("ß").primary, Key::vi("ss").primary);
+        assert_eq!(Key::vi("ß").secondary, [0, 16, 0, 0, 0]);
+        assert_eq!(compare_text_with("ss", "ß", Collation::Vi), Ordering::Less);
+        assert_eq!(compare_text_with("ß", "st", Collation::Vi), Ordering::Less);
+        // These 23 strings differ pairwise: the weights alone tell them
+        // apart in `vi` too.
+        let words = ["a", "à", "ả", "ã", "á", "ạ", "ă", "ằ", "ẳ", "ẵ", "ắ", "ặ", "â", "ầ", "ẩ", "ẫ", "ấ", "ậ", "ä", "å", "ā", "ą", "ǎ"];
+        let weights: std::collections::HashSet<(Vec<u32>, Vec<u16>)> = words
+            .iter()
+            .map(|w| {
+                let k = Key::vi(w);
+                (k.primary, k.secondary)
+            })
+            .collect();
+        assert_eq!(weights.len(), words.len());
+    }
+
+    #[test]
+    fn vi_tables_name_whole_lowercase_letters() {
+        // fold_key leaves every letter the tables name whole and lowercase, so a key can find it.
+        for (x, _, _) in VI {
+            assert_eq!(fold_key(&x.to_string()).chars().count(), if *x == 'đ' { 1 } else { 2 }, "{x}");
+        }
+        for (_, _, merged) in QUALITY {
+            assert!(VI.iter().any(|(x, _, _)| x == merged), "{merged}");
+            assert_eq!(fold_key(&merged.to_string()), canonical(&merged.to_string()));
+        }
+        for (x, bases, code) in VI_FOREIGN {
+            assert_eq!(fold_key(&x.to_string()), x.to_string(), "{x}");
+            assert!(!bases.is_empty() && bases.chars().count() <= 2 && *code > 0 && *code < 32, "{x}");
+        }
+        for (m, w) in TONES {
+            assert!(is_mark(*m) && (1..=5).contains(w));
+        }
+    }
+
+    #[test]
+    fn vi_key_caps_long_text() {
+        let big = "Nguyễn Văn ".repeat(100_000);
+        let k = Key::vi(&big);
+        assert_eq!(k.primary.len(), MAX_PRIMARY);
+        assert!(k.text.len() >= 1_000_000, "the text keeps the whole string");
+        // Ligatures at the cap do not go past it.
+        let lig = "ß".repeat(MAX_PRIMARY);
+        assert_eq!(Key::vi(&lig).primary.len(), MAX_PRIMARY);
+        let marks = "a".to_string() + &"\u{323}\u{302}".repeat(5_000);
+        let k = Key::vi(&marks);
+        assert_eq!(k.primary.len(), 1);
+    }
+
+    #[test]
+    fn vi_tone_marks_typed_as_their_singletons_are_the_tones() {
+        // U+0340 and U+0341 decompose to U+0300 (huyền) and U+0301 (sắc).
+        for (single, usual) in [("ma\u{341}", "má"), ("ma\u{340}", "mà"), ("Ă\u{341}", "Ắ"), ("Hoa\u{340}", "Hoà"), ("a\u{344}", "a\u{308}\u{301}")]
+        {
+            assert_eq!(compare_text_with(single, usual, Collation::Vi), Ordering::Equal, "{single:?}");
+            assert_eq!(text_key(single, Collation::Vi), text_key(usual, Collation::Vi), "{single:?}");
+            assert_eq!(text_key(single, Collation::Root), text_key(usual, Collation::Root), "{single:?}");
+            assert_eq!(TextProbe::new(usual, Collation::Vi).order(single), Ordering::Equal, "{single:?}");
+            assert_eq!(TextProbe::new(single, Collation::Vi).order(usual), Ordering::Equal, "{single:?}");
+        }
+        assert_eq!(Key::vi("ma\u{340}").secondary.get(2), Some(&1));
+        assert_eq!(Key::vi("ma\u{341}").secondary.get(2), Some(&4));
+        // They sort exactly where `mà` and `má` do.
+        let row = ["ma", "ma\u{340}", "mả", "mã", "ma\u{341}", "mạ"];
+        let mut v = row;
+        v.reverse();
+        v.sort_by(|a, b| compare_text_with(a, b, Collation::Vi));
+        assert_eq!(v, row);
     }
 
     #[test]
@@ -1649,5 +2073,51 @@ mod tests {
         assert!(text_eq_prefolded("NGUYỄN VĂN ÁNH", &k));
         assert!(!text_eq_prefolded("Nguyễn Văn Anh", &k));
         assert_eq!(folds(), before);
+    }
+
+    #[test]
+    fn text_probe_orders_like_compare_text_with() {
+        let mut rng = Rng(0x7e57_9b0b_e5a1_c0de);
+        let words = [
+            "Nguyễn", "Ánh", "Anh", "Ảnh", "Ấn", "Ăn", "Đặng", "Dương", "Hoà", "Hòa", "Ưng", "Uyên", "æble", "Æsir", "œuf", "ĳs", "ß", "ss", "øre",
+            "Zebra", "ê", "ệ",
+        ];
+        let word = |rng: &mut Rng| -> String { (0..1 + rng.below(3)).map(|_| words[rng.below(words.len())]).collect::<Vec<_>>().join(" ") };
+        for c in [Collation::Root, Collation::Vi] {
+            for i in 0..20_000 {
+                let (a, b) = match i % 5 {
+                    0 => {
+                        let a = random_text(&mut rng);
+                        (reencode(&mut rng, &a), a)
+                    }
+                    1 => (random_text(&mut rng), random_text(&mut rng)),
+                    2 => {
+                        let a = word(&mut rng);
+                        (format!("{a}{}", random_text(&mut rng)), a)
+                    }
+                    3 => (word(&mut rng), word(&mut rng)),
+                    _ => {
+                        let a = word(&mut rng);
+                        (canonical(&a).to_uppercase(), a)
+                    }
+                };
+                for (x, y) in [(&a, &b), (&b, &a)] {
+                    assert_eq!(TextProbe::new(y, c).order(x), compare_text_with(x, y, c), "{c:?}: {x:?} against {y:?}");
+                }
+            }
+            // The primary cap: long texts that differ past it, and a ligature (two primaries
+            // under vi) straddling it.
+            let big = "Nguyễn Văn ".repeat(100_000);
+            let almost = format!("{big}x");
+            let edge = "a".repeat(MAX_PRIMARY - 1);
+            let (lig, plain) = (format!("{edge}æ"), format!("{edge}a"));
+            let marks = "a".to_string() + &"\u{323}\u{302}".repeat(5_000);
+            let cases = ["", "\u{301}", "a\u{301}", "\u{10FFFF}", "İ", "\u{212b}", "å", &big, &almost, &lig, &plain, &marks, "Ê-đê", "e-de"];
+            for x in cases {
+                for y in cases {
+                    assert_eq!(TextProbe::new(y, c).order(x), compare_text_with(x, y, c), "{c:?}: {x:.20?} against {y:.20?}");
+                }
+            }
+        }
     }
 }

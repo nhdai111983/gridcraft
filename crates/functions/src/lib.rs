@@ -116,6 +116,11 @@ pub trait Ctx {
     fn computed_criterion(&mut self, _row: usize, _col: usize, _db: &Array, _record: usize) -> Option<bool> {
         None
     }
+    /// The text order of this evaluation (the workbook's collation): `<`/`>` on text, approximate
+    /// lookups, relational criteria, SORT/SORTBY and grouping. Equality never depends on it.
+    fn collation(&self) -> gridcraft_core::Collation {
+        gridcraft_core::Collation::Root
+    }
 }
 
 pub type FnImpl = fn(&[Arg], &mut dyn Ctx) -> Value;

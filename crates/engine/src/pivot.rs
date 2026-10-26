@@ -210,7 +210,9 @@ struct FieldItems {
 }
 
 /// Item order: class (numbers and date groups, text, booleans, errors, blank), then number, then
-/// label in the Root text order (`Đà Nẵng` next to `Da`, not after `z`).
+/// label in the workbook's text order (the session's sorting language; Root puts `Đà Nẵng` next
+/// to `Da`, vi after every `D…`). Every item of a field gets its key from the same workbook, so
+/// the keys compare.
 fn cmp_items(a: &Item, b: &Item) -> Ordering {
     a.class.cmp(&b.class).then(a.num.total_cmp(&b.num)).then_with(|| a.key.cmp(&b.key))
 }
@@ -257,7 +259,7 @@ impl FieldItems {
         if let Some(i) = self.index.get(&key) {
             return *i;
         }
-        item.key = Some(text_key(&item.label));
+        item.key = Some(text_key(&item.label, wb.collation));
         let i = self.items.len() as u32;
         self.items.push(item);
         self.index.insert(key, i);
