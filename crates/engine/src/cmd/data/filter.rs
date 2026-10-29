@@ -327,6 +327,9 @@ pub(super) fn reapply(s: &mut Session, _: &Json) -> Result<Json> {
     })
 }
 
+/// A filter-list entry's group: class, number, folded text (text) or key, shown text (others).
+type GroupKey = (u8, i64, String, String);
+
 /// Distinct display values of a filter column (for the dropdown list).
 pub fn filter_values(wb: &Workbook, sheet: usize, col: u32) -> Vec<(String, bool)> {
     let Some(sh) = wb.sheet(sheet) else { return vec![] };
@@ -340,8 +343,8 @@ pub fn filter_values(wb: &Workbook, sheet: usize, col: u32) -> Vec<(String, bool
     };
     // One entry per group key, showing the first text met. Text is grouped by `fold_key`, so
     // "Abc", "abc" and an NFD spelling are one entry; other values by their key and shown text.
-    let mut seen: std::collections::HashSet<(u8, i64, String, String)> = std::collections::HashSet::new();
-    let mut entries: Vec<((u8, i64, String, String), Option<TextKey>, String, bool)> = Vec::new();
+    let mut seen: std::collections::HashSet<GroupKey> = std::collections::HashSet::new();
+    let mut entries: Vec<(GroupKey, Option<TextKey>, String, bool)> = Vec::new();
     for row in af.range.start.row + 1..=af.range.end.row.min(af.range.start.row + 1_000_000) {
         let c = CellRef::new(row, col);
         let v = sh.value(c);
