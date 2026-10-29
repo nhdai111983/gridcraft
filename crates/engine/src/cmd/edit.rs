@@ -15,7 +15,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Enter Cell",
             [],
             None,
-            "{cell?: \"B2\", input: \"text, number or =formula\", sheet?, array?: bool, locale?: \"vi-VN\" (a value typed in that regional format: 1.234,5, 24/10/2026, 1.234 ₫; formulas stay en-US)}",
+            "{cell?: \"B2\", input: \"text, number or =formula\", sheet?, array?: bool, locale?: \"vi-VN\" (a value typed in that regional format: 1.234,5, 24/10/2026, 1.234 ₫; formulas stay en-US), typed?: bool (typed in the grid: a date or formatted number widens a default-width column)}",
             has_doc,
             cell_set
         ),
@@ -265,6 +265,7 @@ fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
     // Both spellings take a string, number or boolean, as typed (#697).
     let input = p.get("input").or_else(|| p.get("value")).map(json_to_input).ok_or_else(|| bad("cell.set", "missing `input` (or `value`)"))?;
     let array = bool_param(p, "array").unwrap_or(false);
+    let typed = bool_param(p, "typed").unwrap_or(false);
     let locale = locale_param("cell.set", p)?;
     let d = s.doc()?;
     if let Some(sh) = d.wb.sheet(sheet)
@@ -310,6 +311,12 @@ fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
             }
         }
         cx.touch(sheet, at);
+        // NexusOffice: typed in the grid (`typed`), a date or formatted number widens a
+        // default-width column instead of showing ##### (QC-SHT-10).
+        if typed {
+            crate::nexus_typed::inherit_number_format(&mut cx.wb, sheet, at);
+            crate::nexus_typed::widen_for_typed_number(&mut cx.wb, sheet, at);
+        }
         Ok(Json::Null)
     })?;
     let v = s.doc()?.wb.sheet(sheet).map(|sh| sh.value(at)).unwrap_or_default();
@@ -642,6 +649,7 @@ fn coalesce(cells: &[CellRef]) -> Vec<RangeRef> {
 fn undo(s: &mut Session, p: &Json) -> Result<Json> {
     let steps = u32_param(p, "steps").unwrap_or(1).max(1);
     let locale = s.locale;
+    let collation = s.collation();
     let d = s.doc_mut()?;
     let mut label = String::new();
     let now = d.wb.clone();
@@ -658,6 +666,9 @@ fn undo(s: &mut Session, p: &Json) -> Result<Json> {
     // NexusOffice: a snapshot taken in another regional format is shown, and recalculated, in
     // the session's current one.
     crate::adopt_locale(d, locale);
+    // A step recorded before the sorting language changed holds the old order (and values
+    // computed with it): the session's language applies to whatever workbook is restored.
+    d.set_collation(collation);
     d.revision += 1;
     Ok(json!({"undone": label}))
 }
@@ -665,6 +676,7 @@ fn undo(s: &mut Session, p: &Json) -> Result<Json> {
 fn redo(s: &mut Session, p: &Json) -> Result<Json> {
     let steps = u32_param(p, "steps").unwrap_or(1).max(1);
     let locale = s.locale;
+    let collation = s.collation();
     let d = s.doc_mut()?;
     let mut label = String::new();
     let now = d.wb.clone();
@@ -681,6 +693,9 @@ fn redo(s: &mut Session, p: &Json) -> Result<Json> {
     // NexusOffice: a snapshot taken in another regional format is shown, and recalculated, in
     // the session's current one.
     crate::adopt_locale(d, locale);
+    // A step recorded before the sorting language changed holds the old order (and values
+    // computed with it): the session's language applies to whatever workbook is restored.
+    d.set_collation(collation);
     d.revision += 1;
     Ok(json!({"redone": label}))
 }

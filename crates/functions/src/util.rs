@@ -294,10 +294,16 @@ pub(crate) mod testutil {
         pub state: u64,
         pub sys: DateSystem,
         pub locale: gridcraft_core::Locale,
+        pub collation: gridcraft_core::Collation,
     }
     impl Default for TestCtx {
         fn default() -> Self {
-            TestCtx { state: 0x2545_F491_4F6C_DD1D, sys: DateSystem::D1900, locale: gridcraft_core::Locale::EnUs }
+            TestCtx {
+                state: 0x2545_F491_4F6C_DD1D,
+                sys: DateSystem::D1900,
+                locale: gridcraft_core::Locale::EnUs,
+                collation: gridcraft_core::Collation::Root,
+            }
         }
     }
     impl Ctx for TestCtx {
@@ -309,6 +315,9 @@ pub(crate) mod testutil {
         }
         fn now_serial(&self) -> f64 {
             46302.5
+        }
+        fn collation(&self) -> gridcraft_core::Collation {
+            self.collation
         }
         fn random(&mut self) -> f64 {
             self.state ^= self.state << 13;

@@ -113,6 +113,11 @@ pub(crate) fn signature(name: &str, locale: FormulaLocale) -> Option<String> {
     {
         return Some((*signature).into());
     }
+    if locale == FormulaLocale::Vi
+        && let Some(signature) = crate::nexus_function_help::signature(canonical)
+    {
+        return Some(signature.into());
+    }
     crate::formula_bar::function_signature(canonical).map(|s| s.replace(',', &locale.list_separator().to_string()))
 }
 
@@ -122,6 +127,11 @@ pub(crate) fn description(name: &str, locale: FormulaLocale) -> Option<String> {
         && let Some((_, _, description)) = SPANISH_HELP.iter().find(|(name, ..)| *name == canonical)
     {
         return Some((*description).into());
+    }
+    if locale == FormulaLocale::Vi
+        && let Some(description) = crate::nexus_function_help::description(canonical)
+    {
+        return Some(description.into());
     }
     crate::formula_bar::function_description(canonical)
 }

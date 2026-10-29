@@ -3,7 +3,6 @@
 use serde_json::{Value as Json, json};
 
 use super::*;
-use crate::DocState;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -36,7 +35,8 @@ fn new_workbook(s: &mut Session, p: &Json) -> Result<Json> {
             // NexusOffice: calculated once, in the session's regional format.
             wb.locale = s.locale;
             let title = crate::sample::title(name);
-            s.add_document(DocState::new(wb, None, title))
+            let d = s.new_doc_state(wb, None, title);
+            s.add_document(d)
         }
         None => s.new_workbook(),
     };
@@ -80,7 +80,7 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
     // NexusOffice: the workbook is calculated once, when it opens, in the session's regional
     // format — also a manual-calculation one, whose results would otherwise stay the file's.
     wb.locale = s.locale;
-    let mut doc = DocState::new(wb, path, title);
+    let mut doc = s.new_doc_state(wb, path, title);
     if crate::io::FileKind::from_path(&name).is_none() && gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Xlsx {
         doc.content_kind = Some(crate::io::FileKind::Xlsx);
     }

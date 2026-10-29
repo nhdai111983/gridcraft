@@ -25,7 +25,7 @@ const MAX_INTERNED: usize = 1024;
 /// `s` with the upstream product names replaced (`GridCraft` → `Nexus Sheet`, `ArtCraft` →
 /// `NexusOffice`). Strings without them come back borrowed, without allocating.
 pub fn brand(s: &str) -> Cow<'_, str> {
-    if !NAMES.iter().any(|(from, _)| s.contains(from)) {
+    if !needs_branding(s) {
         return Cow::Borrowed(s);
     }
     let mut out = s.to_string();
@@ -34,13 +34,31 @@ pub fn brand(s: &str) -> Cow<'_, str> {
             out = out.replace(from, to);
         }
     }
+    // QC-SHT-14: shortcuts in labels are written with the Mac glyphs (`Save (⌘S)`); Windows and
+    // Linux show their own keys (`Save (Ctrl+S)`).
+    if !cfg!(target_os = "macos") {
+        for (from, to) in MAC_KEYS {
+            if out.contains(from) {
+                out = out.replace(from, to);
+            }
+        }
+    }
     Cow::Owned(out)
+}
+
+/// Mac modifier glyph → the key name elsewhere, in the order a shortcut spells them (`⌘⇧T` →
+/// `Ctrl+Shift+T`).
+const MAC_KEYS: [(&str, &str); 4] = [("⌘", "Ctrl+"), ("⌃", "Ctrl+"), ("⌥", "Alt+"), ("⇧", "Shift+")];
+
+/// Whether [`brand`] changes `s`: an upstream product name, or (off macOS) a Mac shortcut glyph.
+fn needs_branding(s: &str) -> bool {
+    NAMES.iter().any(|(from, _)| s.contains(from)) || (!cfg!(target_os = "macos") && MAC_KEYS.iter().any(|(from, _)| s.contains(from)))
 }
 
 /// [`brand`] for [`super::Language::tr`], which hands out `&str`: a label that needs branding is
 /// branded once and kept for the life of the process (a bounded set: the interface labels).
 pub(super) fn branded(s: &str) -> &str {
-    if !NAMES.iter().any(|(from, _)| s.contains(from)) {
+    if !needs_branding(s) {
         return s;
     }
     static CACHE: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
@@ -77,6 +95,11 @@ mod tests {
         assert_eq!(brand("Join the ArtCraft Discord"), "Join the NexusOffice Discord");
         assert_eq!(brand("Giới thiệu về GridCraft"), "Giới thiệu về Nexus Sheet");
         assert!(matches!(brand("Giới thiệu"), Cow::Borrowed("Giới thiệu")));
+        // Shortcuts: Mac glyphs on macOS, key names elsewhere (QC-SHT-14).
+        let want = if cfg!(target_os = "macos") { "Lưu (⌘S)" } else { "Lưu (Ctrl+S)" };
+        assert_eq!(brand("Lưu (⌘S)"), want);
+        let want = if cfg!(target_os = "macos") { "AutoSum (⌘⇧T)" } else { "AutoSum (Ctrl+Shift+T)" };
+        assert_eq!(brand("AutoSum (⌘⇧T)"), want);
         // Identifiers and variables keep upstream's spelling.
         assert!(matches!(brand("gridcraft:// GRIDCRAFT_NO_PREFS gridcraft-cli"), Cow::Borrowed(_)));
     }

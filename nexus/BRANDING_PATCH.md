@@ -222,3 +222,29 @@ craft-print) chỉ là nguồn build (T5/§4.8 mirror), không phải gọi mạ
 - DMG macOS: `dmg-layout.DS_Store`/`background.tiff` gắn với volume "GridCraft" → DMG Nexus mở với
   layout mặc định của Finder; sinh lại trên macOS (Task 12).
 - `xtask ico` test và `packaging/icons.sh` vẫn trỏ icon upstream `assets/app-icon/` (công cụ dev).
+
+## QC đợt 1 (2026-10-26, nhánh `nx/qc-sht-1`)
+
+| File | Lý do | Thay được bằng white-label? |
+|---|---|---|
+| `crates/core/src/collate.rs`, `crates/core/src/lib.rs`, `crates/core/src/value.rs`, `crates/core/tests/collate_vi.rs` | QC-SHT-01: port collation lớp 2 (M3-SCOLL.4–10, `feat/vi-collation` @ `13ac1a0f`): `Collation { Root, Vi }`, thứ tự CLDR `vi`. Test ICU (`collate_icu.rs`) và dev-dependency ICU ở lại upstream như lớp 1 | Nên PR upstream (đã có nhánh `feat/vi-collation`) |
+| `crates/functions/src/{criteria,database,dynamic,lib,lookup,math,util}.rs`, `crates/calc/src/{eval,tests}.rs`, `crates/model/src/workbook.rs` | QC-SHT-01: công thức, tra cứu, SORT/SORTBY, tiêu chí theo `Workbook::collation` (port M3-SCOLL.5/.8) | Nên PR upstream |
+| `crates/engine/src/{lib,pivot,cf}.rs`, `crates/engine/src/cmd/{data,edit,file,whatif}.rs`, `crates/engine/tests/{collation_text_compare,command_sequence_fuzz}.rs`, `apps/gridcraft/src/main.rs` | QC-SHT-01: lệnh `data.sortLanguage`, Sort/AutoFilter/pivot theo collation của phiên (port M3-SCOLL.6). NexusOffice: ngôn ngữ sắp xếp chưa chọn (`""`) theo vùng (vi-VN → tiếng Việt), `Session::set_locale` áp lại; chọn rõ thì lưu `"vi"`/`"root"` | Một phần — "theo vùng" nên PR upstream dạng tuỳ chọn |
+| `crates/engine/src/nexus_typed.rs` | File mới: QC-SHT-10 (gõ ngày/số có định dạng vào cột rộng mặc định thì giãn cột), QC-SHT-12 (công thức gõ vào ô General nhận định dạng số của ô đầu tiên nó đọc, với SUM/AVERAGE/MIN/MAX/ROUND…/phép tính), QC-SHT-05 (`column_word`: tiêu đề bảng `Cột1` ở vi-VN) | — (file mới) |
+| `crates/engine/src/cmd/edit.rs` (thêm) | `cell.set` nhận `typed` (gõ trong lưới) → gọi `nexus_typed` | Nên PR upstream (hành vi Excel) |
+| `crates/engine/src/cmd/insert.rs` | QC-SHT-05: tiêu đề bảng tự thêm theo vùng (`Cột1`) | Nên PR upstream |
+| `crates/engine/tests/nexus_qc_sheet.rs` | File mới: test QC-SHT-05/10/12 | — (file mới) |
+| `crates/ui-egui/src/nexus_i18n.rs` | File mới: `t`/`tf`/`fill`/`message` — nhãn dịch tại chỗ vẽ (QC-SHT-02/03/04/06/07/08) | — (file mới) |
+| `crates/ui-egui/src/nexus_reports.rs` | File mới: QC-SHT-08 — Thống kê sổ làm việc, Kiểm tra trợ năng, Kiểm tra lỗi, Đánh giá công thức, danh sách nhận xét, Nhật ký thao tác thành bảng có nhãn thay JSON thô | — (file mới) |
+| `crates/ui-egui/src/nexus_function_help.rs` | File mới: QC-SHT-06 — Chèn hàm hiện cú pháp (tên đối số) và mô tả tiếng Việt cho ~48 hàm thông dụng khi vùng là vi-VN; hàm khác vẫn mô tả tiếng Anh (nợ còn lại) | — (file mới) |
+| `crates/ui-egui/src/formula_locale.rs` (thêm) | `signature`/`description` lấy bản tiếng Việt từ `nexus_function_help` khi `FormulaLocale::Vi` | Có — theo vùng |
+| `crates/ui-egui/src/tabs.rs` (thêm) | Thẻ trang tính có nhãn trợ năng (tên trang, trạng thái chọn) — trình đọc màn hình đọc được thẻ | Nên PR upstream |
+| `crates/ui-egui/src/nexus_object_menu.rs` | File mới: QC-SHT-11 — chuột phải biểu đồ/ảnh/hình mở menu của đối tượng | — (file mới) |
+| `crates/ui-egui/src/dialogs.rs` (thêm) | QC-SHT-06/07/08/09: mọi nhãn hộp thoại qua `t()` (gồm `form_fields`: nhãn, lựa chọn, ghi chú; ghi chú có dữ liệu dịch trước khi điền); Thiết lập trang theo cm ở vi-VN; nhật ký và báo cáo dùng `nexus_reports` | Nên PR upstream (dịch nhãn hộp thoại) |
+| `crates/ui-egui/src/tabs.rs` | QC-SHT-02/03: thanh trạng thái Tổng/Số lượng/Trung bình, menu chuột phải thẻ trang tính, nhãn trợ năng "Tất cả trang tính" | Nên PR upstream |
+| `crates/ui-egui/src/ribbon.rs`, `crates/ui-egui/src/panes.rs`, `crates/ui-egui/src/grid.rs`, `crates/ui-egui/src/backstage.rs`, `crates/ui-egui/src/border_preview.rs`, `crates/ui-egui/src/widgets.rs`, `crates/ui-egui/src/nexus_toolbar.rs` | QC-SHT-04/05/08/09/14/15/16: menu Định dạng điều kiện, viền, kiểu bảng/kiểu ô, hình, ảnh, biểu đồ thu nhỏ, chủ đề, ngăn, màu nhấn, mẫu, hộp thông báo/toast dịch; khổ giấy A4 đứng đầu ở vi-VN; nhãn trợ năng dịch; chuột phải đối tượng | Nên PR upstream |
+| `crates/ui-egui/src/chartview.rs` (thêm) | QC-SHT-17: bản xem trước biểu đồ dàn trang theo cỡ khung xem trước (chữ trục không còn ~7 px) | Nên PR upstream |
+| `crates/ui-egui/src/i18n/brand.rs` (thêm) | QC-SHT-14: ngoài macOS, ký hiệu phím Mac trong nhãn thành tên phím (`⌘S` → `Ctrl+S`, `⇧` → `Shift+`) | Có — theo nền tảng |
+| `crates/ui-egui/src/i18n/vi.rs` (thêm) | ~430 nhãn mới cho các chỗ trên, gồm mọi nhãn lệnh và nhóm của registry engine (Tìm lệnh, menu thanh công cụ) và 6 thông báo kết quả Solver; khoá ngữ cảnh `Scope\|Workbook`, `Seasonality\|auto`, `Footer\|…`, `Pane\|Selection`, `Table Styles\|…` | — (file của fork) |
+| `crates/ui-egui/src/nexus_wps.rs` (test) | Test bấm Hoàn tác/Làm lại/Lưu theo nhãn đã đổi ký hiệu phím | — |
+| `crates/ui-egui/tests/nexus_i18n_dialogs.rs` | File mới: mở mọi hộp thoại bằng tiếng Việt và báo nhãn tiếng Anh còn sót; thanh trạng thái; menu thẻ; menu biểu đồ | — (file mới) |
