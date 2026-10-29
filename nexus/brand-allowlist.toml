@@ -59,7 +59,7 @@ reason = "Trường note là ghi chú cho người đóng góp; xtask keytips ch
 
 [[allow]]
 path = ".github/workflows/{release.yml,windows-arm64.yml}"
-pattern = '^\s+app-(title|dir): GridCraft$'
+pattern = '^\s+(app-(title|dir): GridCraft|install-relative-path: Programs/ArtCraft/GridCraft)$'
 reason = "Workflow upstream đã tắt trên fork (spec §4.6); bản phát hành Nexus do workflow riêng (Task 12) tạo"
 
 [[allow]]
@@ -78,38 +78,29 @@ pattern = '.*'
 reason = "Chính bảng thay thế GridCraft→Nexus Sheets, ArtCraft→NexusOffices và test của nó"
 
 [[allow]]
-path = "crates/ui-egui/src/i18n.rs"
-pattern = '\("About\\nGridCraft", "GridCraft について"\)'
-reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets'"
-
-[[allow]]
-path = "crates/ui-egui/src/i18n/ko.rs"
-pattern = '"About\\nGridCraft" => "GridCraft\\n정보"'
-reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets'"
-
-[[allow]]
-path = "crates/ui-egui/src/i18n/{cs,pt}.rs"
-pattern = '"(About GridCraft|How agents drive GridCraft \(MCP / control channel\))" => "[^"]*"'
-reason = "Khoá + bản dịch catalog; Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets'"
-
-[[allow]]
-path = "crates/ui-egui/src/i18n/pt.rs"
-pattern = '"Join the ArtCraft Discord" => "Participe do Discord da ArtCraft"'
-reason = "Khoá catalog không còn được dùng (trang About đã viết lại trong nexus.rs, không còn link Discord); nếu dùng lại vẫn qua brand()"
-
-[[allow]]
 path = "crates/ui-egui/src/dialogs.rs"
 pattern = 'Dialog::custom\("(about", "About GridCraft|start", "GridCraft)"'
 reason = "Tiêu đề hộp thoại: dialogs.rs vẽ qua app.ui.language.tr(&d.title) nên hiển thị 'About Nexus Sheets'/'Nexus Sheets'"
 
 [[allow]]
-path = "crates/ui-egui/src/ribbon.rs"
-pattern = '"How agents drive GridCraft \(MCP / control channel\)"'
-reason = "Tooltip nút Agent Control: widgets::big_button tra qua tr() nên hiển thị 'Nexus Sheets'"
+path = "crates/ui-egui/src/i18n/*.rs"
+pattern = '\(?"(About GridCraft|About\\nGridCraft|How agents drive GridCraft \(MCP / control channel\)|Join the ArtCraft Discord)"(,| =>) "[^"]*"\)?'
+reason = "Khoá + bản dịch catalog (mọi ngôn ngữ, kể cả các catalog upstream thêm ở đợt đồng bộ 2026-10-29); Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets'/'NexusOffices' (test interface_lookups_show_nexus_names_in_every_language). Khoá Discord không còn được dùng (About viết lại trong nexus.rs)"
 
-# ---------------------------------------------------------------------------------------------
-# 3. Ghi công upstream (bắt buộc theo giấy phép MIT/Apache và LICENSE-brand: chỉ chữ, không logo)
-# ---------------------------------------------------------------------------------------------
+[[allow]]
+path = "crates/ui-egui/src/ribbon/automate.rs"
+pattern = 'big_button\(ui, Icon::Script, ("Agent\\nControl", "How agents drive GridCraft \(MCP / control channel\)"|"Check for\\nUpdates…", "Look for a newer GridCraft release"|"About\\nGridCraft")'
+reason = "Nhãn và tooltip nút ribbon Automate là khoá catalog: widgets::big_button tra cả hai qua tr() → brand() nên hiển thị 'Nexus Sheets'"
+
+[[allow]]
+path = "crates/ui-egui/src/backstage.rs"
+pattern = 'lang\.tr\("About GridCraft"\)'
+reason = "Nút/nhãn About trong File › Account: đi qua tr() → brand() nên hiển thị 'About Nexus Sheets'"
+
+[[allow]]
+path = "crates/ui-egui/src/updates_ui.rs"
+pattern = 'lang\.tr\("GridCraft \{version\} is up to date\."\)'
+reason = "Đi qua tr() → brand(); và không bao giờ hiện: updates_ui::start của Nexus không kiểm tra bản phát hành GridCraft (cập nhật qua bộ cài NexusOffices)"
 
 [[allow]]
 path = "crates/ui-egui/src/nexus.rs"
@@ -181,11 +172,11 @@ pattern = '^(VOLUME = "GridCraft"|ICONS = \{"GridCraft\.app": .*)$'
 reason = "Công cụ dev sinh layout DMG của upstream; package.sh của Nexus không chép dmg-layout.DS_Store nữa (NỢ: sinh lại cho 'Nexus Sheets' trên macOS, Task 12)"
 
 [[allow]]
-path = "crates/ui-egui/src/i18n/{cs,de,es,fr,pt,ru,sr,zh}.rs"
-pattern = '"About\\nGridCraft" => "[^"\\]*\\nGridCraft"'
-reason = "Khoá + bản dịch catalog (nút About hai dòng); Language::tr() trả về qua brand() nên hiển thị 'Nexus Sheets' (test interface_lookups_show_nexus_names_in_every_language chạy mọi ngôn ngữ với khoá này)"
+path = "{packaging/windows/install-policy.json,packaging/windows/install-policy.wxi,packaging/windows/check-install-policy.ps1,packaging/windows/test-install-policy.ps1,packaging/windows/INSTALLATION.md}"
+pattern = '.*'
+reason = "Chính sách cài đặt hai phạm vi (per-user/per-machine) của MSI upstream (đồng bộ 2026-10-29); gridcraft.wxs và package.ps1 của Nexus không include/gọi các file này (MSI Nexus giữ cấu hình per-machine riêng, phát hành chính qua bộ cài NexusOffices)"
 
 [[allow]]
-path = "crates/ui-egui/src/ribbon.rs"
-pattern = 'big_button\(ui, Icon::Script, "About\\nGridCraft",'
-reason = "Nhãn nút là khoá catalog: big_button() gọi tr() → brand() nên hiển thị 'About\nNexus Sheets' (cùng test trên)"
+path = "{Cargo.toml,Cargo.lock}"
+pattern = 'github\.com/storytold/(egui|winit)\.git'
+reason = "Nguồn build: upstream ghim cả họ egui 0.37 và winit vào fork storytold đã duyệt ([patch.crates-io]); không gọi mạng lúc chạy, người dùng không thấy. Bộ NexusOffices phải ghim cùng commit"

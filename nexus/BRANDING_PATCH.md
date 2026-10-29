@@ -19,30 +19,43 @@ Cơ chế chính:
   nên mọi ngôn ngữ (cả `en`) hiện tên Nexus mà không sửa key/catalog. Không áp vào văn bản người dùng:
   tiêu đề hộp thoại thông báo và chuỗi ghi vào file được đổi tại nguồn.
 - `crates/ui-egui/src/nexus.rs` (file mới) — hằng `APP_NAME`, `APP_ID`, `SETTINGS_DIR(_XDG)`,
-  `SOURCE_URL`, câu ghi công và trang About (en/vi qua `i18n::nexus_text`, hiện chỉ có `en` vì gridcraft
-  chưa có tiếng Việt).
+  `SOURCE_URL`, câu ghi công, trang About và câu trả lời của Help ▸ Check for Updates… (en/vi qua
+  `i18n::nexus_text`; từ đợt đồng bộ 2026-10-29 upstream đã có catalog tiếng Việt `i18n/vi.rs` nên
+  nhánh `vi` hiện thật).
 
 ## File thương hiệu
 
 | File | Lý do | Thay được bằng white-label? |
 |---|---|---|
 | `crates/ui-egui/src/i18n.rs` | `mod brand; pub use brand::{brand, nexus_text};` + `tr()` trả kết quả qua `brand::branded`; test catalog upstream so sánh với `brand(...)` | Có — hook "display name" trong i18n |
-| `crates/ui-egui/src/lib.rs` | `pub mod nexus;`; tiêu đề hộp thoại lỗi = `nexus::APP_NAME`; thông báo VBA "Nexus Sheets keeps them intact" | Có — `APP_NAME` |
-| `crates/ui-egui/src/dialogs.rs` | Tab About → `nexus::about_ui` (bỏ "Part of ArtCraft", link getartcraft/Discord); hộp Agent Control và Macros ghi Nexus Sheets, lệnh `nexus-sheets`/`nexus-sheets-cli` | Có |
-| `crates/ui-egui/src/backstage.rs` | Tiêu đề hộp thoại lỗi = `nexus::APP_NAME` (4 chỗ) | Có — `APP_NAME` |
+| `crates/ui-egui/src/lib.rs` | `pub mod nexus;` | Có |
+| `crates/ui-egui/src/app/commands.rs` | Tiêu đề hộp thoại lỗi/thông báo = `nexus::APP_NAME` (2 chỗ) | Có — `APP_NAME` |
+| `crates/ui-egui/src/app/editing.rs` | Tiêu đề hộp thoại lỗi = `nexus::APP_NAME` (4 chỗ, kể cả tiêu đề mặc định của Data Validation) | Có — `APP_NAME` |
+| `crates/ui-egui/src/app/files.rs` | Tiêu đề hộp thoại lỗi = `nexus::APP_NAME` (2 chỗ); thông báo VBA "Nexus Sheets keeps them when you save as .xlsm" | Có — `APP_NAME` |
+| `crates/ui-egui/src/app/prefs.rs` | Tiêu đề thông báo bản web = `nexus::APP_NAME` | Có — `APP_NAME` |
+| `crates/ui-egui/src/updates_ui.rs` | Tiêu đề thông báo = `nexus::APP_NAME`; **`start()` không kiểm tra bản phát hành**: không gọi mạng tới `storytold/gridcraft`, không tự cập nhật thành GridCraft; Help ▸ Check for Updates… hiện `nexus::updates_text` (cập nhật qua NexusOffices) | Có — tắt updater qua biến build |
+| `crates/ui-egui/src/dialogs/about.rs` | Tab About → `nexus::about_ui` (bỏ "Part of ArtCraft", link getartcraft/Discord) | Có |
+| `crates/ui-egui/src/dialogs/show.rs` | Hộp Agent Control ghi Nexus Sheets, lệnh `nexus-sheets`/`nexus-sheets-cli` | Có |
+| `crates/ui-egui/src/dialogs/macros.rs` | Hộp Macros ghi Nexus Sheets | Có |
+| `crates/ui-egui/src/backstage.rs` | Tiêu đề hộp thoại lỗi = `nexus::APP_NAME` (4 chỗ); tên sản phẩm ở File › Account = `nexus::APP_NAME` | Có — `APP_NAME` |
+| `crates/ui-egui/src/backstage/options.rs` | Tiêu đề thông báo = `nexus::APP_NAME` | Có — `APP_NAME` |
 | `crates/ui-egui/src/formula_bar.rs` | Tiêu đề hộp thoại lỗi = `nexus::APP_NAME` | Có — `APP_NAME` |
-| `crates/ui-egui/src/grid.rs` | Tiêu đề hộp thoại lỗi = `nexus::APP_NAME` (2 chỗ) | Có — `APP_NAME` |
-| `crates/ui-egui/src/ribbon.rs` | Tiêu đề hộp thoại lỗi = `nexus::APP_NAME` | Có — `APP_NAME` |
+| `crates/ui-egui/src/grid/interact.rs` | Tiêu đề hộp thoại lỗi = `nexus::APP_NAME` (4 chỗ) | Có — `APP_NAME` |
+| `crates/ui-egui/src/grid/menus.rs` | Tiêu đề hộp thoại lỗi = `nexus::APP_NAME` (3 chỗ) | Có — `APP_NAME` |
+| `crates/ui-egui/src/craft_fonts_policy.rs` | Thông báo lỗi chính sách font nêu Nexus Sheets | Có |
 | `crates/engine/src/lib.rs` | Tác giả mặc định `"Nexus Sheets User"` (ký ghi chú/bình luận ghi vào file) | Có — tên app qua biến build |
-| `crates/engine/src/io.rs` | Thông báo mở file (mật khẩu, .xls lạ, JSON) nêu Nexus Sheets | Có |
-| `crates/engine/src/cmd/solver.rs` | Tiêu đề báo cáo Solver ghi vào workbook "Nexus Sheets … Report" (+ test) | Có |
-| `crates/engine/src/cmd/whatif.rs` | Chú thích dữ liệu Scenario Manager ghi vào workbook | Có |
+| `crates/engine/src/io.rs` | Thông báo mở file (mật khẩu, .xls lạ, JSON, giới hạn kích thước một phần) nêu Nexus Sheets | Có |
+| `crates/engine/src/cmd/solver/reports.rs` | Tiêu đề báo cáo Solver ghi vào workbook "Nexus Sheets … Report" | Có |
+| `crates/engine/src/cmd/solver/tests.rs` | Test của tiêu đề báo cáo Solver | Đi cùng `reports.rs` |
+| `crates/engine/src/cmd/whatif/scenarios.rs` | Chú thích dữ liệu Scenario Manager ghi vào workbook | Có |
+| `crates/engine/src/cmd/stash.rs` | Chú thích tên ẩn giữ dữ liệu app ghi vào workbook ("Nexus Sheets data") và lỗi trùng tên | Có |
+| `crates/engine/src/cmd/formulas.rs` | Mô tả tham số lệnh (list_commands/MCP) và lỗi về tên ẩn giữ dữ liệu app | Có |
 | `crates/engine/src/cmd/spelling.rs` | Thông báo thiếu từ điển | Có |
 | `crates/engine/src/cmd/extra.rs` | Mô tả lệnh `home.addIns` (hiện qua list_commands/MCP) và gợi ý `nexus-sheets-cli mcp` | Có |
 | `crates/functions/src/info.rs` | `INFO("osversion")` trả "Nexus Sheets" (giá trị ghi vào ô) | Có |
 | `crates/xlsx/src/write.rs` | `docProps/app.xml` `<Application>Nexus Sheets</Application>` | Có — tên app qua biến build |
-| `crates/xlsx/src/pivot.rs` | `refreshedBy="Nexus Sheets"` trong pivot cache ghi vào file | Có |
-| `crates/xlsx/src/xls/mod.rs` | Thông báo nhập .xls (mã hoá, không có sheet, cú pháp chưa hỗ trợ) | Có |
+| `crates/xlsx/src/pivot/write.rs` | `refreshedBy="Nexus Sheets"` trong pivot cache ghi vào file | Có |
+| `crates/xlsx/src/xls.rs` | Thông báo nhập .xls (mã hoá, không có sheet, cú pháp chưa hỗ trợ) | Có |
 | `crates/xlsx/src/xls/formula.rs` | Lý do bỏ qua defined name khi nhập .xls | Có |
 | `crates/pdf/src/lib.rs` | PDF `/Producer (Nexus Sheets PDF)`, `/Creator (Nexus Sheets)` mặc định | Có — tên app qua tham số |
 | `crates/pdf/src/tests.rs` | Assert Producer mới | Đi cùng `lib.rs` |
@@ -50,14 +63,15 @@ Cơ chế chính:
 | `crates/mcp/src/backend.rs` | Thông báo kết nối app | Có |
 | `crates/mcp/src/tools.rs` | Mô tả tool execute_command/list_commands/screenshot (lệnh `nexus-sheets-cli mcp --connect`) | Có |
 | `crates/mcp/src/headless.rs` | Thông báo `NO_UI` (tool UI ở chế độ headless) chỉ lệnh `nexus-sheets --control` / `nexus-sheets-cli mcp --connect` | Có — tên binary qua biến build |
-| `apps/gridcraft/src/main.rs` | Tiêu đề cửa sổ, app id, tên eframe, `--version`, log, tiền tố `nexus-sheets:` của panic hook trên stderr, icon cửa sổ từ `nexus/assets/`, thư mục cấu hình `Nexus Sheets` (macOS/Windows) / `nexus-sheets` (XDG) — không đụng cấu hình GridCraft | Có |
-| `apps/gridcraft/src/native_menu.rs` | Menu macOS: tên app/About Nexus Sheets, bỏ mục getartcraft.com và Discord ArtCraft trong Help | Có |
+| `apps/gridcraft/src/main.rs` | Tiêu đề cửa sổ, app id, tên eframe, `--version`, log, tiền tố `nexus-sheets:` của panic hook và của lỗi trình trợ giúp cập nhật trên stderr, icon cửa sổ từ `nexus/assets/`, thư mục cấu hình `Nexus Sheets` (macOS/Windows) / `nexus-sheets` (XDG) — không đụng cấu hình GridCraft | Có |
+| `apps/gridcraft/src/native_menu.rs` | Menu macOS: tên app/About/Quit Nexus Sheets, bỏ mục getartcraft.com và Discord ArtCraft trong Help | Có |
 | `apps/gridcraft/tests/mac_menu_appkit.rs` | Assert tên menu app mới (chỉ chạy trên macOS) | Đi cùng `native_menu.rs` |
 | `apps/gridcraft/src/print.rs` | Tên job in "Nexus Sheets document" | Có |
 | `apps/gridcraft/build.rs` | Resource Windows: icon Nexus, ProductName, CompanyName Sonnytech, LegalCopyright (ghi công), OriginalFilename `nexus-sheets.exe` | Có |
 | `apps/gridcraft-cli/src/main.rs` | USAGE, `--version` và tiền tố lỗi dùng tên cài đặt `nexus-sheets-cli`; lỗi kết nối app (gợi ý `nexus-sheets --control`) | Có — tên binary qua biến build |
-| `apps/gridcraft-cli/tests/cli.rs` | Assert `--version` = `nexus-sheets-cli <ver>` | Đi cùng `main.rs` |
-| `apps/gridcraft-cli/src/check.rs` | Dòng báo cáo "mismatch signatures (expected → Nexus Sheets)", tiền tố lỗi `nexus-sheets-cli:` | Có |
+| `apps/gridcraft-cli/tests/it/cli.rs` | Assert `--version` = `nexus-sheets-cli <ver>` | Đi cùng `main.rs` |
+| `apps/gridcraft-cli/src/check.rs` | Tiền tố lỗi `nexus-sheets-cli:` | Có |
+| `apps/gridcraft-cli/src/check/report.rs` | Dòng báo cáo "mismatch signatures (expected → Nexus Sheets)" | Có |
 | `apps/gridcraft-web/index.html` | `<title>Nexus Sheets</title>`, favicon Nexus, "Loading Nexus Sheets…" | Có |
 | `apps/gridcraft-web/src/web.rs` | Thông báo lỗi khởi động bản web | Có |
 | `packaging/windows/gridcraft.wxs` | MSI: Name/Manufacturer Sonnytech, **UpgradeCode + GUID component mới**, cài `nexus-sheets.exe`/`nexus-sheets-cli.exe` vào `Program Files\Nexus Sheets`, ProgId `Sonnytech.NexusSheets.*`, khoá `Software\Sonnytech\Nexus Sheets\…`, `RegisteredApplications\NexusSheets`, App Paths `nexus-sheets.exe`, hộp thoại cài đặt, bỏ URL ARP getartcraft/Discord (About → repo fork); cài `LICENSE-MIT`/`LICENSE-APACHE`/`NOTICE`/`ATTRIBUTION.md` cạnh exe (4 component mới, GUID tự sinh); vòng sửa 1: thư mục `licenses\` + ComponentGroup `GridcraftFontLicences` (`<Files Include="$(var.BinDir)\licenses\*">`) trong feature Main, có điều kiện `FontLicences` (mặc định `no`) | Một phần (biến WiX) |
@@ -102,6 +116,7 @@ Sinh bằng `python3 -c "import uuid; print(uuid.uuid4())"` ngày 2026-10-16.
 
 | File | Lý do | Thay được bằng white-label? |
 |---|---|---|
+| `.github/workflows/sonarcloud.yml` | Job chỉ chạy khi `github.repository == 'storytold/gridcraft'`: workflow upstream (2026-10-29) gọi workflow tái sử dụng của storytold ở `@main` với `secrets: inherit`, trên fork sẽ chuyển mọi secret của fork cho mã ngoài | Không (an ninh CI của fork) |
 
 ## Rà soát gọi mạng (guard §5)
 `rg -n -i "artcraft|storytold|storyteller|discord|telemetry|update|crash|sentry|posthog|https?://"`:
@@ -110,6 +125,24 @@ không có telemetry/crash report/cập nhật tự động trong app. Link ArtC
 getartcraft/Discord đã bỏ (ARPURLINFOABOUT → repo fork). AppImage zsync trỏ GitHub Releases của fork
 (`GITHUB_REPOSITORY` hoặc `nhdai111983/gridcraft`). Dependency git `storytold/craft-libs` (craft-ui,
 craft-print) chỉ là nguồn build (T5/§4.8 mirror), không phải gọi mạng lúc chạy.
+
+## Đồng bộ upstream 2026-10-29 (egui 0.37)
+
+- Upstream tách nhiều file lớn thành thư mục con (`ui-egui/src/{app,dialogs,grid,ribbon,backstage,control,theme}/`,
+  `engine/src/cmd/{data,pivot,solver,whatif}/`, `engine/src/pivot/`, `xlsx/src/pivot/`, `gridcraft-cli/src/check/`):
+  patch thương hiệu và collation lớp 1 được áp lại vào file mới chứa đúng đoạn mã (bảng trên đã cập nhật đường dẫn).
+- `packaging/env.sh`: upstream nay tự chép `LICENSE-MIT`/`LICENSE-APACHE`/`NOTICE`/`ATTRIBUTION.md` trong `copy_docs`
+  (đã có ở upstream phần chép; **giữ** `copy_notices` của Nexus vì nó báo lỗi khi thiếu file, chép OFL của font trong
+  repo và `CRAFT_FONTS_REQUIRED`). `packaging/macos/package.sh`: upstream nay chép `NOTICE`/`ATTRIBUTION.md` vào
+  `Contents/Resources` — giữ cả dòng upstream lẫn `copy_notices` (chép trùng, vô hại).
+- MSI Windows: upstream chuyển sang cài hai phạm vi (per-user/per-machine, `install-policy.wxi/json`,
+  `check-install-policy.ps1`, thư mục `ArtCraft\GridCraft`) và cài thông báo font qua `DocsDir`. Nexus **giữ**
+  `gridcraft.wxs`/`package.ps1`/`test-desktop-shortcut.ps1` của mình (per-machine, UpgradeCode riêng, `licenses\`):
+  MSI không phải kênh phát hành chính (bộ cài NexusOffices). Các file chính sách mới của upstream không được dùng
+  (allowlist mục 4). Nợ: nếu cần MSI riêng hai phạm vi, đổi thương hiệu cả `install-policy.*` và kiểm trên Windows.
+- Trình cập nhật mới của upstream (`craft-update`, kiểm tra lúc mở app và tự cập nhật từ `storytold/gridcraft`)
+  bị tắt trong `updates_ui::start` (xem bảng trên).
+- `sonarcloud.yml` mới của upstream bị chặn trên fork (xem "File khác").
 
 ## Việc còn nợ (đã allowlist có lý do, hoặc không bị brand-check bắt)
 - Đề xuất PR upstream (white-label): hằng `APP_NAME`/`SETTINGS_DIR`/`APP_ID` lấy từ biến build
