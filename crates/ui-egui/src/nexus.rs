@@ -32,6 +32,16 @@ pub const ATTRIBUTION: (&str, &str) = (
 /// Upstream's copyright notice (`NOTICE`), kept as upstream wrote it. Never branded.
 pub const UPSTREAM_COPYRIGHT: &str = "Copyright (c) 2026 ArtCraft Team and the GridCraft contributors. MIT OR Apache-2.0.";
 
+/// What Help ▸ Check for Updates… says: Nexus Sheets is updated with the NexusOffices suite,
+/// never by checking or downloading GridCraft's releases (see `crate::updates_ui::start`).
+pub fn updates_text(language: Language) -> &'static str {
+    nexus_text(
+        language,
+        "Nexus Sheets is updated with NexusOffices. To get a newer version, install the latest NexusOffices release.",
+        "Nexus Sheets được cập nhật cùng bộ NexusOffices. Để có phiên bản mới hơn, hãy cài bản NexusOffices mới nhất.",
+    )
+}
+
 /// The About page's first tab: name, version, what it is, where the source is, the attribution
 /// and the copyright notices.
 pub fn about_ui(ui: &mut egui::Ui, language: Language) {
@@ -54,6 +64,15 @@ pub fn about_ui(ui: &mut egui::Ui, language: Language) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn updates_come_from_the_suite_not_upstream() {
+        for language in [Language::En, Language::Vi] {
+            let text = updates_text(language);
+            assert!(text.contains("NexusOffices") && !text.contains("Craft"), "{language:?}: {text}");
+        }
+        assert!(updates_text(Language::Vi).contains("cập nhật"));
+    }
 
     #[test]
     fn names_follow_the_branding_table() {
