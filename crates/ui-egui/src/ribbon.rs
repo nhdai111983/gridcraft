@@ -7,6 +7,7 @@ use serde_json::json;
 use crate::SheetApp;
 use crate::icons::{self, Icon};
 use crate::keytips::keytip_table;
+use crate::nexus_i18n::t as tx;
 use crate::theme::{self, Tokens};
 use crate::widgets::{big_button, color_palette, icon_button, small_button, split_button, toggle_button};
 
@@ -52,14 +53,14 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
         ui.horizontal_centered(|ui| {
             ui.add_space(TITLE_LEFT_PAD);
             // AutoSave toggle (saves after each change when the workbook has a file).
-            ui.label(egui::RichText::new("AutoSave").font(theme::ui_font(12.5)).color(t.text_dim));
+            ui.label(egui::RichText::new(tx(ui, "AutoSave")).font(theme::ui_font(12.5)).color(t.text_dim));
             let on = app.grid.autosave();
             let (r, resp) = ui.allocate_exact_size(vec2(30.0, 16.0), Sense::click());
             ui.painter().rect_filled(r, 8.0, if on { t.accent } else { Color32::TRANSPARENT });
             ui.painter().rect_stroke(r, 8.0, Stroke::new(1.0, if on { t.accent } else { t.text_dim }), StrokeKind::Inside);
             let knob = if on { pos2(r.right() - 8.0, r.center().y) } else { pos2(r.left() + 8.0, r.center().y) };
             ui.painter().circle_filled(knob, 5.0, if on { Color32::WHITE } else { t.text_dim });
-            if resp.on_hover_text("AutoSave: save after every change (workbooks saved to a file)").clicked() {
+            if resp.on_hover_text(tx(ui, "AutoSave: save after every change (workbooks saved to a file)")).clicked() {
                 app.grid.toggle_autosave();
             }
             ui.add_space(6.0);
@@ -83,13 +84,13 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
                 }
                 let share = small_button(ui, Icon::Share, "Share", "Share: export or save a copy", true);
                 egui::Popup::menu(&share).show(|ui| {
-                    if ui.button("Export as PDF…").clicked() {
+                    if ui.button(tx(ui, "Export as PDF…")).clicked() {
                         app.run_or_alert("file.exportPdf", json!({}));
                     }
                     for (label, fmt) in
                         [("Save a Copy as Excel Workbook (.xlsx)…", "xlsx"), ("Export as CSV…", "csv"), ("Export as Web Page (.html)…", "html")]
                     {
-                        if ui.button(label).clicked() {
+                        if ui.button(tx(ui, label)).clicked() {
                             app.open_dialog("saveCopy", json!({"format": fmt}));
                         }
                     }
@@ -475,7 +476,7 @@ pub(crate) fn editable_combo(
             });
         }
         let text_id = anchor.id.with(salt).with("__combo_text");
-        let te = ui.add(egui::TextEdit::singleline(&mut st.text).id(text_id).desired_width(220.0).hint_text("Type to filter…"));
+        let te = ui.add(egui::TextEdit::singleline(&mut st.text).id(text_id).desired_width(220.0).hint_text(tx(ui, "Type to filter…")));
         if open_now && !te.has_focus() {
             ui.ctx().memory_mut(|m| m.request_focus(text_id));
             // Select all once focus lands so typing replaces the filter.
@@ -557,7 +558,9 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
     group(ui, app, "Clipboard", |ui, app| {
         // Clipboard
         let paste = big_button(ui, Icon::Paste, "Paste", "Paste (⌘V)", true);
-        paste.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), "Paste"));
+        let paste_label = tx(ui, "Paste");
+        let paste_enabled = ui.is_enabled();
+        paste.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, paste_enabled, paste_label));
         for sequence in
             keytip_table::group_extension(app.keytips.prefix().unwrap_or_default(), &["edit.paste", "edit.pasteSpecial", "dialog:pasteSpecial"])
         {
@@ -686,7 +689,9 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
                 if b {
                     act(app, "home.borders", json!({"preset": app.grid.last_border.clone()}));
                 }
-                ba.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), "Border presets"));
+                let ba_label = tx(ui, "Border presets");
+                let ba_enabled = ui.is_enabled();
+                ba.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ba_enabled, ba_label));
                 egui::Popup::menu(&ba).show(|ui| {
                     for (label, preset) in [
                         ("Bottom Border", "bottom"),
@@ -710,7 +715,7 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
                         }
                     }
                     ui.separator();
-                    if ui.button("More Borders…").clicked() {
+                    if ui.button(tx(ui, "More Borders…")).clicked() {
                         app.open_dialog("formatCells", json!({"tab": "Border"}));
                     }
                 });
@@ -1037,7 +1042,7 @@ fn home(app: &mut SheetApp, ui: &mut Ui) {
                         }
                     }
                     ui.separator();
-                    if ui.button("More Functions…").clicked() {
+                    if ui.button(tx(ui, "More Functions…")).clicked() {
                         app.open_dialog("insertFunction", json!({}));
                     }
                 });
@@ -1237,23 +1242,23 @@ fn number_combo(app: &mut SheetApp, ui: &mut Ui, st: &Style) {
 }
 
 fn cf_menu(app: &mut SheetApp, ui: &mut Ui) {
-    ui.menu_button("Highlight Cells Rules", |ui| {
+    ui.menu_button(tx(ui, "Highlight Cells Rules"), |ui| {
         for (label, op) in [("Greater Than…", "greater"), ("Less Than…", "less"), ("Between…", "between"), ("Equal To…", "equal")] {
-            if ui.button(label).clicked() {
+            if ui.button(tx(ui, label)).clicked() {
                 app.open_dialog("cfQuick", json!({"type": "cellIs", "operator": op, "title": label}));
             }
         }
-        if ui.button("Text that Contains…").clicked() {
+        if ui.button(tx(ui, "Text that Contains…")).clicked() {
             app.open_dialog("cfQuick", json!({"type": "containsText", "title": "Text that Contains"}));
         }
-        if ui.button("A Date Occurring…").clicked() {
+        if ui.button(tx(ui, "A Date Occurring…")).clicked() {
             app.open_dialog("cfQuick", json!({"type": "timePeriod", "title": "A Date Occurring"}));
         }
-        if ui.button("Duplicate Values…").clicked() {
+        if ui.button(tx(ui, "Duplicate Values…")).clicked() {
             act(app, "home.conditionalFormat", json!({"rule": {"type": "duplicate"}}));
         }
     });
-    ui.menu_button("Top/Bottom Rules", |ui| {
+    ui.menu_button(tx(ui, "Top/Bottom Rules"), |ui| {
         menu_items(
             app,
             ui,
@@ -1267,16 +1272,16 @@ fn cf_menu(app: &mut SheetApp, ui: &mut Ui) {
             ],
         );
     });
-    ui.menu_button("Data Bars", |ui| {
+    ui.menu_button(tx(ui, "Data Bars"), |ui| {
         for (label, c) in
             [("Blue", "#638EC6"), ("Green", "#63BE7B"), ("Red", "#F8696B"), ("Orange", "#FFB628"), ("Light Blue", "#008AEF"), ("Purple", "#D6007B")]
         {
-            if ui.button(label).clicked() {
+            if ui.button(tx(ui, label)).clicked() {
                 act(app, "home.conditionalFormat", json!({"rule": {"type": "dataBar", "color": c}}));
             }
         }
     });
-    ui.menu_button("Color Scales", |ui| {
+    ui.menu_button(tx(ui, "Color Scales"), |ui| {
         for (label, cols) in [
             ("Green - Yellow - Red", vec!["#63BE7B", "#FFEB84", "#F8696B"]),
             ("Red - Yellow - Green", vec!["#F8696B", "#FFEB84", "#63BE7B"]),
@@ -1285,12 +1290,12 @@ fn cf_menu(app: &mut SheetApp, ui: &mut Ui) {
             ("White - Green", vec!["#FCFCFF", "#63BE7B"]),
             ("White - Red", vec!["#FCFCFF", "#F8696B"]),
         ] {
-            if ui.button(label).clicked() {
+            if ui.button(tx(ui, label)).clicked() {
                 act(app, "home.conditionalFormat", json!({"rule": {"type": "colorScale", "colors": cols}}));
             }
         }
     });
-    ui.menu_button("Icon Sets", |ui| {
+    ui.menu_button(tx(ui, "Icon Sets"), |ui| {
         for (label, set) in [
             ("3 Arrows", "3Arrows"),
             ("3 Traffic Lights", "3TrafficLights1"),
@@ -1299,16 +1304,16 @@ fn cf_menu(app: &mut SheetApp, ui: &mut Ui) {
             ("5 Arrows", "5Arrows"),
             ("5 Quarters", "5Quarters"),
         ] {
-            if ui.button(label).clicked() {
+            if ui.button(tx(ui, label)).clicked() {
                 act(app, "home.conditionalFormat", json!({"rule": {"type": "iconSet", "set": set}}));
             }
         }
     });
     ui.separator();
-    if ui.button("New Rule…").clicked() {
+    if ui.button(tx(ui, "New Rule…")).clicked() {
         app.open_dialog("cfQuick", json!({"type": "expression", "title": "New Formatting Rule"}));
     }
-    ui.menu_button("Clear Rules", |ui| {
+    ui.menu_button(tx(ui, "Clear Rules"), |ui| {
         menu_items(
             app,
             ui,
@@ -1318,7 +1323,7 @@ fn cf_menu(app: &mut SheetApp, ui: &mut Ui) {
             ],
         );
     });
-    if ui.button("Manage Rules…").clicked() {
+    if ui.button(tx(ui, "Manage Rules…")).clicked() {
         app.open_dialog("manageRules", json!({}));
     }
 }
@@ -1328,7 +1333,12 @@ fn table_gallery(app: &mut SheetApp, ui: &mut Ui, cmd: &str) {
     ui.set_width(430.0);
     let Some(wb) = app.session.active().map(|d| d.wb.clone()) else { return };
     for (fam, n) in [("Light", 21u32), ("Medium", 28), ("Dark", 11)] {
-        ui.label(egui::RichText::new(fam).strong());
+        let key = match fam {
+            "Light" => "Table Styles|Light",
+            "Medium" => "Table Styles|Medium",
+            _ => "Table Styles|Dark",
+        };
+        ui.label(egui::RichText::new(tx(ui, key)).strong());
         egui::Grid::new(("tg", fam)).spacing(vec2(4.0, 4.0)).show(ui, |ui| {
             for i in 1..=n {
                 let name = format!("TableStyle{fam}{i}");
@@ -1419,7 +1429,7 @@ fn cell_style_gallery(app: &mut SheetApp, ui: &mut Ui) {
         ("Number Format", &["Comma", "Comma [0]", "Currency", "Currency [0]", "Percent"]),
     ];
     for (g, names) in groups {
-        ui.label(egui::RichText::new(*g).strong());
+        ui.label(egui::RichText::new(tx(ui, g)).strong());
         egui::Grid::new(("csg", *g)).spacing(vec2(4.0, 4.0)).show(ui, |ui| {
             for (i, n) in names.iter().enumerate() {
                 let st = gridcraft_engine::cmd::format::builtin_cell_style(n, &wb.theme).unwrap_or_default();
@@ -1445,7 +1455,7 @@ fn cell_style_gallery(app: &mut SheetApp, ui: &mut Ui) {
                 ui.painter().text(
                     r.left_center() + vec2(4.0, 0.0),
                     Align2::LEFT_CENTER,
-                    *n,
+                    tx(ui, n),
                     egui::FontId::new((st.font.size).clamp(10.0, 15.0), fam),
                     col,
                 );
@@ -1481,10 +1491,12 @@ fn insert(app: &mut SheetApp, ui: &mut Ui) {
     group(ui, app, "Illustrations", |ui, app| {
         let pic = big_button(ui, Icon::Picture, "Pictures", "Insert a picture", true);
         anchor_keytip(app, ui, &pic, &["insert.picture"]);
-        pic.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), "Pictures"));
+        let pic_label = tx(ui, "Pictures");
+        let pic_enabled = ui.is_enabled();
+        pic.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, pic_enabled, pic_label));
         egui::Popup::menu(&pic).show(|ui| {
             for (label, placement) in [("Place in Cell", "cell"), ("Place over Cells", "overCells")] {
-                if ui.button(label).clicked() {
+                if ui.button(tx(ui, label)).clicked() {
                     app.open_dialog("insertPicture", json!({"placement": placement}));
                     ui.close();
                 }
@@ -1502,7 +1514,7 @@ fn insert(app: &mut SheetApp, ui: &mut Ui) {
                 ("Arrow", "arrow"),
                 ("Text Box", "textBox"),
             ] {
-                if ui.button(label).clicked() {
+                if ui.button(tx(ui, label)).clicked() {
                     act(app, "insert.shape", json!({"kind": kind}));
                 }
             }
@@ -1518,7 +1530,7 @@ fn insert(app: &mut SheetApp, ui: &mut Ui) {
                         ui.painter().rect_filled(r, 4.0, Tokens::get(ui.ctx()).hover);
                     }
                     icons::paint(ui.painter(), r.shrink(6.0), *icon, Tokens::get(ui.ctx()).text);
-                    if resp.on_hover_text(*name).clicked() {
+                    if resp.on_hover_text(tx(ui, name)).clicked() {
                         act(app, "insert.icons", json!({"name": name}));
                         ui.close();
                     }
@@ -1576,7 +1588,7 @@ fn insert(app: &mut SheetApp, ui: &mut Ui) {
                     let forced_c = invoke(app, cid);
                     egui::Popup::menu(&r).open_memory(popup_command(forced_c, r.clicked())).show(|ui| {
                         for (label, k, s) in &subs {
-                            if ui.button(*label).clicked() {
+                            if ui.button(tx(ui, label)).clicked() {
                                 act(app, "insert.chart", json!({"type": k, "subtype": s}));
                             }
                         }
@@ -1612,7 +1624,7 @@ fn insert(app: &mut SheetApp, ui: &mut Ui) {
                     let forced_c = invoke(app, cid);
                     egui::Popup::menu(&r).open_memory(popup_command(forced_c, r.clicked())).show(|ui| {
                         for (label, k, s) in &subs {
-                            if ui.button(*label).clicked() {
+                            if ui.button(tx(ui, label)).clicked() {
                                 act(app, "insert.chart", json!({"type": k, "subtype": s}));
                             }
                         }
@@ -1633,7 +1645,7 @@ fn insert(app: &mut SheetApp, ui: &mut Ui) {
         anchor_keytip(app, ui, &sp, &["dialog:sparkline"]);
         egui::Popup::menu(&sp).show(|ui| {
             for (label, kind) in [("Line", "line"), ("Column", "column"), ("Win/Loss", "winLoss")] {
-                if ui.button(label).clicked() {
+                if ui.button(tx(ui, label)).clicked() {
                     app.open_dialog("sparkline", json!({"type": kind}));
                 }
             }
@@ -1741,7 +1753,7 @@ fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
                         let (r, _) = ui.allocate_exact_size(vec2(12.0, 12.0), Sense::hover());
                         ui.painter().rect_filled(r, 1.0, Color32::from_rgb((c >> 16) as u8, (c >> 8) as u8, *c as u8));
                     }
-                    if ui.button(name).clicked() {
+                    if ui.button(tx(ui, name)).clicked() {
                         act(app, "pageLayout.theme", json!({"name": name}));
                     }
                 });
@@ -1781,7 +1793,13 @@ fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
         let s = big_button(ui, Icon::Paper, "Size", "Paper Size", true);
         control_keytip(app, ui, &s, "pageLayout.size");
         egui::Popup::menu(&s).show(|ui| {
-            for p in ["Letter", "Legal", "Tabloid", "Executive", "A3", "A4", "A5"] {
+            // NexusOffice: A4 first in a Vietnamese region (A4 is the paper there).
+            let sizes = if app.ui.regional_format() == gridcraft_engine::core::Locale::ViVn {
+                ["A4", "A5", "A3", "Letter", "Legal", "Tabloid", "Executive"]
+            } else {
+                ["Letter", "Legal", "Tabloid", "Executive", "A3", "A4", "A5"]
+            };
+            for p in sizes {
                 if ui.button(p).clicked() {
                     act(app, "pageLayout.size", json!({"paper": p}));
                 }
@@ -2444,7 +2462,7 @@ fn table_design(app: &mut SheetApp, ui: &mut Ui) {
     };
     group(ui, app, "Properties", |ui, app| {
         stack(ui, |ui| {
-            ui.label(egui::RichText::new("Table Name:").small());
+            ui.label(egui::RichText::new(tx(ui, "Table Name:")).small());
             let field = egui::Id::new(("gridcraft.table_name", &tname));
             if let Some(name) = crate::widgets::committed_text(ui, field, &tname, Some(120.0))
                 && name != tname
@@ -2561,7 +2579,7 @@ fn chart_design(app: &mut SheetApp, ui: &mut Ui) {
                 ("Funnel", "funnel", ""),
                 ("Treemap", "treemap", ""),
             ] {
-                if ui.button(label).clicked() {
+                if ui.button(tx(ui, label)).clicked() {
                     act(app, "chart.set", json!({"chart": id, "type": k, "subtype": s}));
                 }
             }

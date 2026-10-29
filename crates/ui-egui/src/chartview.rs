@@ -32,7 +32,10 @@ impl gridcraft_chart::Measure for EguiMeasure<'_> {
 /// Paints `chart` (not necessarily on the sheet: the Recommended Charts preview) scaled to fit
 /// `rect`.
 pub fn paint_chart(p: &Painter, rect: Rect, wb: &Workbook, sheet: usize, chart: &gridcraft_engine::model::Chart) {
+    // NexusOffice (QC-SHT-17): laid out at the preview's own size when that is smaller, so its
+    // text stays readable instead of shrinking to a few pixels.
     let (w, h) = (chart.anchor.width.max(1.0), chart.anchor.height.max(1.0));
+    let (w, h) = if rect.width() < w || rect.height() < h { (rect.width().max(1.0), rect.height().max(1.0)) } else { (w, h) };
     let z = (rect.width() / w).min(rect.height() / h);
     if !(z.is_finite() && z > 0.0) {
         return;

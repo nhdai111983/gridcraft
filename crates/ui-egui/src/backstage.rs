@@ -333,7 +333,7 @@ fn new_tiles(app: &mut SheetApp, ui: &mut Ui, out: &mut Outcome) {
             out.close = true;
         }
         for (i, (name, title)) in gridcraft_engine::sample::SAMPLES.iter().enumerate() {
-            if tile(ui, title, Some(i)).clicked() {
+            if tile(ui, lang.tr(title), Some(i)).clicked() {
                 app.run_or_alert("file.new", json!({"sample": name}));
                 out.close = true;
             }
@@ -1026,6 +1026,8 @@ fn accent_picker(app: &mut SheetApp, ui: &mut Ui) {
             } else if resp.hovered() {
                 ui.painter().circle_stroke(r.center(), 10.0, egui::Stroke::new(1.0, t.text_dim));
             }
+            // NexusOffice: the colour's name in the interface's language (QC-SHT-15).
+            let name = lang.tr(name);
             resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, name));
             if resp.on_hover_text(name).clicked() {
                 app.run_or_alert("ui.accent", json!({"value": crate::theme::to_hex(c)}));

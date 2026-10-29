@@ -13,6 +13,7 @@ use serde_json::json;
 
 use crate::SheetApp;
 use crate::editor::{EditState, REF_COLORS};
+use crate::nexus_i18n::t as tx;
 use crate::theme::{self, Tokens};
 
 pub const COL_HEADER_H: f32 = 21.0;
@@ -763,6 +764,7 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
     list_picker(app, ui, &geo, previous_popups.1 == app.grid.list_picker);
     header_menu(app, ui, previous_popups.2 == app.grid.header_menu);
     context_menu(app, ui);
+    crate::nexus_object_menu::show(app, ui.ctx());
     let track_x = if rtl { (available.left(), rect.left()) } else { (rect.right(), available.right()) };
     vertical_scrollbar(app, ui, sh, &geo, track_x, max_y, &t);
     if app.session.clipboard.is_some() {
@@ -2296,6 +2298,18 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
         app.grid.drag_select = false;
     }
 
+    // NexusOffice: right-clicking a chart, picture or shape opens its own menu (QC-SHT-11).
+    if resp.secondary_clicked()
+        && let Some(p) = pos
+        && in_cells
+        && let Some((kind, id, _)) = crate::chartview::hit(app, geo, sh, p)
+    {
+        app.selected_chart = Some(id);
+        app.grid.context_menu = None;
+        crate::nexus_object_menu::open(&ctx, crate::nexus_object_menu::ObjectMenu { at: geo.mirror_pos(p), pass: 0, kind, id });
+        keyboard(app, &ctx, resp, geo, sh);
+        return;
+    }
     // Right-click: context menu.
     if resp.secondary_clicked()
         && let Some(p) = pos
@@ -2703,7 +2717,16 @@ fn in_cell_editor(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, sh: &Sheet, 
     let font = FontId::new(size, theme::cell_family(&st.font.name, st.font.bold, st.font.italic));
     let text_w = ui.painter().layout_no_wrap(ed.text.clone(), font.clone(), Color32::BLACK).size().x;
     let lines = ed.text.lines().count().max(1) as f32 + if ed.text.ends_with('\n') { 1.0 } else { 0.0 };
-    let w = (text_w + 14.0).max(rect.width()).min(geo.cells.right() - rect.left());
+    // NexusOffice (QC-SHT-13): a long entry widens the editor a whole column at a time, so it
+    // covers a neighbour entirely instead of leaving the end of the neighbour's number showing
+    // right after the text being edited.
+    let mut right = rect.right();
+    let mut col = sh.merge_at(cell).map_or(cell.col, |m| m.end.col);
+    while right - rect.left() < text_w + 14.0 && right < geo.cells.right() && col + 1 < MAX_COLS {
+        col += 1;
+        right = geo.x(sh, col + 1);
+    }
+    let w = (right - rect.left()).max(rect.width()).min(geo.cells.right() - rect.left());
     let h = (size * 1.3 * lines + 4.0).max(rect.height());
     // Grows to the left on a right-to-left sheet.
     let erect = geo.mirror_rect(Rect::from_min_size(rect.min, vec2(w, h)));
@@ -2778,22 +2801,22 @@ fn filter_menu(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, was_open: bool)
     let response = area.show(ui.ctx(), |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.set_width(230.0);
-            let ascending = ui.button("↑  Sort Ascending");
+            let ascending = ui.button(tx(ui, "↑  Sort Ascending"));
             if ascending.clicked() {
                 let _ = app.run("data.sortAscending", json!({"column": col_to_letters(col)}));
                 close = true;
             }
-            let descending = ui.button("↓  Sort Descending");
+            let descending = ui.button(tx(ui, "↓  Sort Descending"));
             if descending.clicked() {
                 let _ = app.run("data.sortDescending", json!({"column": col_to_letters(col)}));
                 close = true;
             }
             ui.separator();
-            ui.label(egui::RichText::new("Filter").strong());
+            ui.label(egui::RichText::new(tx(ui, "Filter")).strong());
             let mut checks: Vec<(String, bool)> = ui.ctx().data_mut(|d| d.get_temp::<Vec<(String, bool)>>(key)).unwrap_or(values.clone());
             // A search narrows the list; Select All and Apply then only cover the matches.
             let mut search: String = ui.ctx().data_mut(|d| d.get_temp(search_key)).unwrap_or_default();
-            let field = ui.add(egui::TextEdit::singleline(&mut search).hint_text("Search").desired_width(f32::INFINITY));
+            let field = ui.add(egui::TextEdit::singleline(&mut search).hint_text(tx(ui, "Search")).desired_width(f32::INFINITY));
             if !was_open {
                 field.request_focus();
             }
@@ -2821,14 +2844,14 @@ fn filter_menu(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, was_open: bool)
             let checks: Vec<(String, bool)> = checks.iter().map(|(v, on)| (v.clone(), *on && matches(v))).collect();
             ui.separator();
             ui.horizontal(|ui| {
-                let clear = ui.button("Clear Filter");
+                let clear = ui.button(tx(ui, "Clear Filter"));
                 if clear.clicked() {
                     let _ = app.run("data.filterBy", json!({"column": col_to_letters(col), "clear": true}));
                     close = true;
                 }
                 // Nothing checked would hide every row, so Enter (unlike a click on Apply) does nothing then.
                 let any = checks.iter().any(|(_, on)| *on);
-                let apply = ui.button("Apply");
+                let apply = ui.button(tx(ui, "Apply"));
                 ui.ctx().data_mut(|d| d.insert_temp(buttons_key, vec![ascending.id, descending.id, clear.id, apply.id]));
                 if apply.clicked() || (enter && any) {
                     let blanks = checks.iter().any(|(v, on)| v == "(Blanks)" && *on);
