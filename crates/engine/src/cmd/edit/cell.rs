@@ -153,6 +153,8 @@ pub(super) fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
     let input = p.get("input").or_else(|| p.get("value")).map(json_to_input).ok_or_else(|| bad("cell.set", "missing `input` (or `value`)"))?;
     let array = bool_param(p, "array").unwrap_or(false);
     let locale = locale_param("cell.set", p)?;
+    // NexusOffice: typed in the grid, a date or formatted number widens a default-width column.
+    let typed = bool_param(p, "typed").unwrap_or(false);
     let d = s.doc()?;
     if let Some(sh) = d.wb.sheet(sheet)
         && sh.is_protected()
@@ -197,6 +199,12 @@ pub(super) fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
             }
         }
         crate::cmd::data::grow_autofilter(sh, at);
+        // NexusOffice: typed in the grid (`typed`), a date or formatted number widens a
+        // default-width column instead of showing ##### (QC-SHT-10).
+        if typed {
+            crate::nexus_typed::inherit_number_format(&mut cx.wb, sheet, at);
+            crate::nexus_typed::widen_for_typed_number(&mut cx.wb, sheet, at);
+        }
         cx.touch(sheet, at);
         Ok(Json::Null)
     })?;

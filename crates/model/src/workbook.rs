@@ -201,6 +201,11 @@ pub struct Workbook {
     /// saved: files stay en-US.
     #[serde(skip)]
     pub locale: gridcraft_core::Locale,
+    /// The text order of this session (Sort, SORT/SORTBY, `<` and `>`, approximate lookups,
+    /// relational criteria). A runtime setting: never read from or written to XLSX or JSON (OOXML
+    /// has no field for it), and never taken from the OS locale. Root by default.
+    #[serde(skip)]
+    pub collation: gridcraft_core::Collation,
 }
 
 fn is_all(s: &ShowObjects) -> bool {
@@ -288,6 +293,7 @@ impl Workbook {
             source_dir: None,
             source_path: None,
             locale: gridcraft_core::Locale::EnUs,
+            collation: gridcraft_core::Collation::Root,
         }
     }
     pub fn sheet(&self, i: usize) -> Option<&Sheet> {

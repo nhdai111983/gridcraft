@@ -1,14 +1,15 @@
 use super::{Dialog, Json, SheetApp, json};
+use crate::nexus_i18n::t;
 
 /// The Macros dialog: lists GridCraft's own recorded scripts and (if the file carries one) the
 /// preserved VBA project. Mirrors Excel's Developer ▸ Macros list, but is honest that VBA is
 /// preserved and not executed.
 pub(super) fn macros(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.label("Automation in this workbook. Nexus Sheet runs its own scripts; a file's VBA project is preserved but not executed.");
+    ui.label(t(ui, "Automation in this workbook. Nexus Sheet runs its own scripts; a file's VBA project is preserved but not executed."));
     ui.add_space(6.0);
     let items: Vec<Json> = d.result.as_ref().and_then(Json::as_array).cloned().unwrap_or_default();
     if items.is_empty() {
-        ui.weak("This workbook has no scripts or macros.");
+        ui.weak(t(ui, "This workbook has no scripts or macros."));
         return;
     }
     // Scripts that came with a file stay disabled until the user trusts the workbook (#2178).
@@ -29,7 +30,7 @@ pub(super) fn macros(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog) {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(name).strong());
                 if is_vba {
-                    ui.weak("— VBA project (preserved, not run)");
+                    ui.weak(t(ui, "— VBA project (preserved, not run)"));
                 } else {
                     let steps = it.get("steps").and_then(Json::as_u64).unwrap_or(0);
                     ui.weak(format!("— {steps} step{}", if steps == 1 { "" } else { "s" }));

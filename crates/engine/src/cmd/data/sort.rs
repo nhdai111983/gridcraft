@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use gridcraft_core::fold_key;
+use gridcraft_core::{Collation, TextKey, fold_key, sort_compare_with, text_key};
 
 use super::{
     Anchor, AnchorMode, Arc, Cell, CellRef, Comment, EngineError, Formula, Hyperlink, Json, LineInfo, Ordering, RangeRef, Result, Session, Sheet,
-    Value, bad, bool_param, col_param, data_range, edit, guess_header, json, ok, sort_compare, split_sheet, str_param, target_sheet,
+    Value, bad, bool_param, col_param, data_range, edit, guess_header, json, ok, split_sheet, str_param, target_sheet,
 };
 
 #[derive(Clone)]
@@ -122,17 +122,27 @@ fn do_sort(s: &mut Session, sheet: usize, r: RangeRef, header: bool, keys: Vec<S
             (v, rank)
         };
         let mut order: Vec<u32> = (0..n).collect();
-        let keyed: Vec<Vec<(Value, u32)>> = (0..n).map(|i| keys.iter().enumerate().map(|(ki, k)| key_val(i, ki, k)).collect()).collect();
+        // NexusOffice: text is ordered by the workbook's collation (the session's sorting
+        // language). A key whose column holds non-ASCII text gets a `TextKey` per text cell, built
+        // once here and not on every comparison; one collation for the whole list, so the keys
+        // compare.
+        let coll = cx.wb.collation;
+        let keyed = with_text_keys((0..n).map(|i| keys.iter().enumerate().map(|(ki, k)| key_val(i, ki, k)).collect()).collect(), &keys, coll);
+        let empty = (Value::Empty, 0, None);
         order.sort_by(|&a, &b| {
             for (ki, k) in keys.iter().enumerate() {
-                let (va, ca) = &keyed[a as usize][ki];
-                let (vb, cb) = &keyed[b as usize][ki];
+                let (va, ca, ta) = keyed.get(a as usize).and_then(|l| l.get(ki)).unwrap_or(&empty);
+                let (vb, cb, tb) = keyed.get(b as usize).and_then(|l| l.get(ki)).unwrap_or(&empty);
+                let text_order = || match (ta, tb) {
+                    (Some(x), Some(y)) => x.cmp(y),
+                    _ => sort_compare_with(va, vb, coll),
+                };
                 let o = if k.by != "values" || k.list.is_some() {
                     ca.cmp(cb)
                 } else if case && va.is_text() && vb.is_text() {
-                    sort_compare(va, vb).then_with(|| case_order(va.as_text().unwrap_or(""), vb.as_text().unwrap_or("")))
+                    text_order().then_with(|| case_order(va.as_text().unwrap_or(""), vb.as_text().unwrap_or("")))
                 } else {
-                    sort_compare(va, vb)
+                    text_order()
                 };
                 // Blanks always sort last, whatever the order.
                 let o = if k.desc && !(va.is_empty() || vb.is_empty()) { o.reverse() } else { o };
@@ -354,4 +364,43 @@ pub(super) fn sort_key(v: &Value) -> (u8, i64, String) {
         Value::Empty => (9, 0, String::new()),
         _ => (3, 0, v.display()),
     }
+}
+
+/// NexusOffice: Data › Sort & Filter › Sorting Language: reports or sets the session's text order
+/// and applies it to every open workbook (each recalculated, so `=A1<A2` follows at once).
+pub(super) fn sort_language(s: &mut Session, p: &Json) -> Result<Json> {
+    match p.get("lang") {
+        None | Some(Json::Null) => {}
+        Some(Json::String(tag)) => {
+            // `""` goes back to following the regional format; any other tag is kept as a
+            // choice, `"root"` when it names no supported order.
+            s.prefs.sort_language = match Collation::from_tag(tag) {
+                _ if tag.trim().is_empty() => String::new(),
+                Collation::Root => "root".to_string(),
+                c => c.tag().to_string(),
+            };
+            s.apply_sort_language();
+        }
+        Some(_) => return Err(bad("data.sortLanguage", "`lang` must be a language tag such as \"vi\"")),
+    }
+    Ok(json!({"lang": s.collation().tag()}))
+}
+
+/// NexusOffice: `keyed` (each line's sort values and ranks) with a `TextKey` per text cell in the
+/// keys sorted by value whose column holds non-ASCII text, built once here and not on every
+/// comparison; one collation (`coll`) for the whole list, so the keys compare.
+fn with_text_keys(keyed: Vec<Vec<(Value, u32)>>, keys: &[SortKey], coll: Collation) -> Vec<Vec<(Value, u32, Option<TextKey>)>> {
+    let mut keyed: Vec<Vec<(Value, u32, Option<TextKey>)>> =
+        keyed.into_iter().map(|line| line.into_iter().map(|(v, rank)| (v, rank, None)).collect()).collect();
+    for (ki, k) in keys.iter().enumerate() {
+        let by_text = k.by == "values" && k.list.is_none();
+        if by_text && keyed.iter().any(|line| matches!(line.get(ki), Some((Value::Text(t), ..)) if !t.is_ascii())) {
+            for line in keyed.iter_mut() {
+                if let Some((Value::Text(t), _, tk)) = line.get_mut(ki) {
+                    *tk = Some(text_key(t, coll));
+                }
+            }
+        }
+    }
+    keyed
 }

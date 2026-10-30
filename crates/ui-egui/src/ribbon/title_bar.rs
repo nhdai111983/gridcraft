@@ -1,5 +1,6 @@
 use super::controls::{act, control_keytip};
 use super::{Color32, Icon, Sense, SheetApp, Stroke, StrokeKind, Tokens, Ui, icon_button, json, pos2, small_button, theme, theme_choices, vec2};
+use crate::nexus_i18n::t as tx;
 
 /// macOS draws the window into the title bar (`with_fullsize_content_view`) and AppKit paints the
 /// traffic lights itself, centred in its standard 28 pt title-bar band. Moving them would take
@@ -71,13 +72,13 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
                 }
                 let share = small_button(ui, Icon::Share, "Share", "Share: export or save a copy", true);
                 egui::Popup::menu(&share).show(|ui| {
-                    if ui.button("Export as PDF…").clicked() {
+                    if ui.button(tx(ui, "Export as PDF…")).clicked() {
                         app.run_or_alert("file.exportPdf", json!({}));
                     }
                     for (label, fmt) in
                         [("Save a Copy as Excel Workbook (.xlsx)…", "xlsx"), ("Export as CSV…", "csv"), ("Export as Web Page (.html)…", "html")]
                     {
-                        if ui.button(label).clicked() {
+                        if ui.button(crate::nexus_i18n::t(ui, label)).clicked() {
                             app.open_dialog("saveCopy", json!({"format": fmt}));
                         }
                     }

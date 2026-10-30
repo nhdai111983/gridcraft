@@ -1,6 +1,7 @@
 use super::controls::{act, anchor_keytip, control_keytip, group, keytip, menu_items, sep, stack};
 use super::galleries::{paint_table_swatch, table_gallery};
 use super::{Color32, Icon, Sense, SheetApp, Stroke, StrokeKind, Tokens, Ui, big_button, icon_button, json, keytip_table, vec2};
+use crate::nexus_i18n::t as tx;
 
 /// Draws the Table Design tab: rename, resize, remove duplicates, convert to range, slicer, table options and the style strip.
 pub(super) fn table_design(app: &mut SheetApp, ui: &mut Ui) {
@@ -13,7 +14,7 @@ pub(super) fn table_design(app: &mut SheetApp, ui: &mut Ui) {
     };
     group(ui, app, "Properties", |ui, app| {
         stack(ui, |ui| {
-            ui.label(egui::RichText::new("Table Name:").small());
+            ui.label(egui::RichText::new(tx(ui, "Table Name:")).small());
             let field = egui::Id::unique(("gridcraft.table_name", &tname));
             if let Some(name) = crate::widgets::committed_text(ui, field, &tname, Some(120.0))
                 && name != tname
@@ -172,7 +173,7 @@ pub(super) fn chart_design(app: &mut SheetApp, ui: &mut Ui) {
                 ("Funnel", "funnel", ""),
                 ("Treemap", "treemap", ""),
             ] {
-                if ui.button(label).clicked() {
+                if ui.button(crate::nexus_i18n::t(ui, label)).clicked() {
                     act(app, "chart.set", json!({"chart": id, "type": k, "subtype": s}));
                 }
             }

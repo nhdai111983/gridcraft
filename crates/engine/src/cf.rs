@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use gridcraft_core::{CellRef, RangeRef, Value, compare, contains_folded, ends_with_folded, fold_key, starts_with_folded};
+use gridcraft_core::{CellRef, RangeRef, Value, contains_folded, ends_with_folded, fold_key, starts_with_folded};
 use gridcraft_model::{CfOperator, CfRule, CfValueKind, Color, CondFormat, PatternType, Sheet, Style, Underline, Workbook, default_icon_thresholds};
 
 /// The conditional look of one cell.
@@ -153,6 +153,8 @@ fn simple_rule_style<'a>(ctx: &RuleEval<'_>, rule: &'a CfRule) -> Option<&'a Sty
         CfRule::CellIs { op, a, b, style } => {
             let eval = |f: &str| gridcraft_calc::evaluate(wb, *sheet, *cell, &relative(f, *first, *cell));
             let av = eval(a);
+            // NexusOffice: the `<`/`>` of formulas: text in the workbook's order.
+            let compare = |x: &Value, y: &Value| gridcraft_core::compare_with(x, y, wb.collation);
             let matches = match op {
                 CfOperator::Between | CfOperator::NotBetween => {
                     let bv = b.as_deref().map(eval).unwrap_or_default();

@@ -22,13 +22,14 @@ fn split_op(t: &str) -> (&str, &str) {
 
 /// Does a list value match one criteria cell's value (Excel's advanced-filter semantics)?
 #[cfg(test)]
-pub(crate) fn criterion_matches(v: &Value, text: &str, crit: &Value) -> bool {
-    criterion_matches_in(v, text, crit, gridcraft_core::Locale::EnUs)
+pub(crate) fn criterion_matches(v: &Value, text: &str, crit: &Value, coll: gridcraft_core::Collation) -> bool {
+    criterion_matches_in(v, text, crit, gridcraft_core::Locale::EnUs, coll)
 }
 
 /// NexusOffice: [`criterion_matches`] with criteria typed in a regional format: criteria cells hold
 /// what people typed, so `>1,5` compares with 1.5 in vi-VN (Excel reads them in the system's format).
-pub(crate) fn criterion_matches_in(v: &Value, text: &str, crit: &Value, locale: gridcraft_core::Locale) -> bool {
+/// `<`, `>`… compare text in `coll`, the workbook's order.
+pub(crate) fn criterion_matches_in(v: &Value, text: &str, crit: &Value, locale: gridcraft_core::Locale, coll: gridcraft_core::Collation) -> bool {
     let crit_text = match crit {
         Value::Empty => return true,
         Value::Number(n) => return v.as_f64().is_some_and(|x| (x - n).abs() <= 1e-12 * n.abs().max(1.0)),
@@ -54,7 +55,7 @@ pub(crate) fn criterion_matches_in(v: &Value, text: &str, crit: &Value, locale: 
         (Value::Number(_), None) => None,
         (Value::Empty, _) => None,
         (_, Some(_)) if op != "begins" => None,
-        _ => Some(gridcraft_core::compare_text(text, operand)),
+        _ => Some(gridcraft_core::compare_text_with(text, operand, coll)),
     };
     let wild = |pat: &str| crate::cmd::edit::wildcard(&lower_text, pat);
     match op {
@@ -158,7 +159,7 @@ fn advanced_filter_in(s: &mut Session, p: &Json) -> Result<Json> {
                     let at = CellRef::new(row, list.start.col + off);
                     let v = sh.value(at);
                     let text = crate::display::cell_text(wb, sh, at);
-                    criterion_matches_in(&v, &text, crit, wb.locale)
+                    criterion_matches_in(&v, &text, crit, wb.locale, wb.collation)
                 }
                 Cond::Computed(e, at) => {
                     let shifted = gridcraft_formula::adjust::shift_relative(e.clone(), row as i64 - first_data as i64, 0);

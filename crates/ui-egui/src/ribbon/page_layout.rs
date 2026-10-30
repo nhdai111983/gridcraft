@@ -1,5 +1,6 @@
 use super::controls::{act, anchor_keytip, checkbox_on, control_keytip, group, invoke, keytip, menu_items, sep, stack};
 use super::{Color32, Icon, Sense, SheetApp, Tokens, Ui, big_button, json, keytip_table, vec2};
+use crate::nexus_i18n::t as tx;
 
 pub(super) fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
     group(ui, app, "Themes", |ui, app| {
@@ -12,7 +13,7 @@ pub(super) fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
                         let (r, _) = ui.allocate_exact_size(vec2(12.0, 12.0), Sense::hover());
                         ui.painter().rect_filled(r, 1.0, Color32::from_rgb((c >> 16) as u8, (c >> 8) as u8, *c as u8));
                     }
-                    if ui.button(name).clicked() {
+                    if ui.button(tx(ui, name)).clicked() {
                         act(app, "pageLayout.theme", json!({"name": name}));
                     }
                 });
@@ -53,7 +54,7 @@ pub(super) fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
         control_keytip(app, ui, &s, "pageLayout.size");
         egui::Popup::menu(&s).show(|ui| {
             // B4/B5/B6 are the JIS sizes Japanese Excel uses; the ISO ones stay selectable by name.
-            for p in [
+            let mut sizes = vec![
                 "Letter",
                 "Legal",
                 "Tabloid",
@@ -74,7 +75,13 @@ pub(super) fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
                 "B4 (ISO)",
                 "B5 (ISO)",
                 "B6 (ISO)",
-            ] {
+            ];
+            // NexusOffice: A4 first in a Vietnamese region (A4 is the paper there).
+            if app.ui.regional_format() == gridcraft_engine::core::Locale::ViVn {
+                sizes.retain(|p| !matches!(*p, "A4" | "A5" | "A3"));
+                sizes.splice(0..0, ["A4", "A5", "A3"]);
+            }
+            for p in sizes {
                 if ui.button(p).clicked() {
                     act(app, "pageLayout.size", json!({"paper": p}));
                 }

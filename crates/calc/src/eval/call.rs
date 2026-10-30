@@ -1,7 +1,7 @@
 use super::array::{Acc, Agg, zip2, zip3};
 use super::format::same_kind;
 use super::special::{ev_shape, resized_sum_range, resizes_sum_range};
-use super::{Area, Arg, Array, CellError, Ev, Evaluator, Expr, FnCtx, Lambda, Pipe, Value, compare, err};
+use super::{Area, Arg, Array, CellError, Ev, Evaluator, Expr, FnCtx, Lambda, Pipe, Value, err};
 use std::sync::Arc;
 
 impl<'h> Evaluator<'h> {
@@ -234,7 +234,13 @@ impl<'h> Evaluator<'h> {
         for pair in choices.as_chunks::<2>().0 {
             let (candidate, result) = (&pair[0], &pair[1]);
             let candidate = self.value(candidate).scalar();
-            if !candidate.is_error() && compare(&value, &candidate) == std::cmp::Ordering::Equal && same_kind(&value, &candidate) {
+            // NexusOffice: equality is the same in every collation; the workbook's is passed so that
+            // every comparison in a formula goes through one relation.
+            let coll = self.host.workbook().collation;
+            if !candidate.is_error()
+                && gridcraft_core::compare_with(&value, &candidate, coll) == std::cmp::Ordering::Equal
+                && same_kind(&value, &candidate)
+            {
                 return self.eval(result);
             }
         }

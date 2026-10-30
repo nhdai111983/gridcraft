@@ -45,7 +45,20 @@ pub(super) fn in_cell_editor(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, s
         let text_w = ui.painter().layout_no_wrap(ed.text.clone(), font.clone(), Color32::BLACK).size().x;
         // Excel keeps the cell's height for one line and only grows for extra lines.
         let h = if lines > 1.0 { (size * 1.3 * lines + 4.0).max(rect.height()) } else { rect.height() };
-        (editor_width(text_w, rect.width(), size).min(geo.cells.right() - rect.left()), h)
+        // NexusOffice (QC-SHT-13): a long entry widens the editor a whole column at a time, so it
+        // covers a neighbour entirely instead of leaving the end of the neighbour's number showing
+        // right after the text being edited. Left-to-right only: the field's text stays
+        // left-aligned, so on a right-to-left sheet (where the editor grows left) a column-snapped
+        // editor would push the text off the edited cell; there the editor keeps the text's width.
+        let want = editor_width(text_w, rect.width(), size);
+        let mut right = rect.right();
+        let mut col = sh.merge_at(cell).map_or(cell.col, |m| m.end.col);
+        while !geo.rtl && right - rect.left() < want && right < geo.cells.right() && col.saturating_add(1) < gridcraft_engine::core::MAX_COLS {
+            col += 1;
+            right = geo.x(sh, col + 1);
+        }
+        let w = if want > rect.width() && !geo.rtl { (right - rect.left()).max(want) } else { want };
+        (w.min(geo.cells.right() - rect.left()), h)
     };
     // Grows to the left on a right-to-left sheet.
     let erect = geo.mirror_rect(Rect::from_min_size(rect.min, vec2(w, h)));

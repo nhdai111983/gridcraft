@@ -1,5 +1,6 @@
 use super::show::ok_cancel;
 use super::{Color32, Dialog, Icon, Json, Sense, SheetApp, Stroke, StrokeKind, icons, json, vec2};
+use crate::nexus_i18n::{t, tf};
 
 /// Every chart type the All Charts tab offers: `(type, subtype, label)` for `insert.chart`.
 const ALL_CHARTS: [(&str, &str, &str); 21] = [
@@ -60,7 +61,7 @@ fn chart_icon(t: &str) -> Icon {
 pub(super) fn recommended_charts(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: &mut bool, open: &mut bool) {
     ui.horizontal(|ui| {
         for tab in ["Recommended Charts", "All Charts"] {
-            if ui.selectable_label(d.tab == tab, tab).clicked() && d.tab != tab {
+            if ui.selectable_label(d.tab == tab, t(ui, tab)).clicked() && d.tab != tab {
                 d.tab = tab.to_string();
                 select_chart(d, 0);
             }
@@ -68,7 +69,7 @@ pub(super) fn recommended_charts(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut 
     });
     ui.separator();
     let choices = chart_choices(d);
-    let t = crate::theme::Tokens::get(ui.ctx());
+    let tokens = crate::theme::Tokens::get(ui.ctx());
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.set_width(190.0);
@@ -77,8 +78,8 @@ pub(super) fn recommended_charts(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut 
                     let resp = ui
                         .horizontal(|ui| {
                             let (r, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
-                            icons::paint(ui.painter(), r.shrink(2.0), chart_icon(kind), t.text);
-                            ui.selectable_label(i == d.list_index, label.as_str())
+                            icons::paint(ui.painter(), r.shrink(2.0), chart_icon(kind), tokens.text);
+                            ui.selectable_label(i == d.list_index, t(ui, label.as_str()))
                         })
                         .inner;
                     if resp.clicked() {
@@ -94,10 +95,10 @@ pub(super) fn recommended_charts(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut 
         ui.add_space(12.0);
         ui.vertical(|ui| {
             let label = choices.get(d.list_index).map(|c| c.2.clone()).unwrap_or_default();
-            ui.strong(label);
+            ui.strong(t(ui, &label));
             let (rect, _) = ui.allocate_exact_size(vec2(360.0, 216.0), Sense::hover());
             ui.painter().rect_filled(rect, 2.0, Color32::WHITE);
-            ui.painter().rect_stroke(rect, 2.0, Stroke::new(1.0, t.separator), StrokeKind::Inside);
+            ui.painter().rect_stroke(rect, 2.0, Stroke::new(1.0, tokens.separator), StrokeKind::Inside);
             let params = json!({"type": d.values.get("type").cloned().unwrap_or(Json::Null), "subtype": d.values.get("subtype").cloned().unwrap_or(Json::Null)});
             if let Some(doc) = app.session.active()
                 && let Ok((sheet, chart)) = gridcraft_engine::cmd::insert::build_chart(&app.session, &params)
@@ -134,7 +135,7 @@ pub(super) fn select_data(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog,
     };
     edit(ui, d, "range", "Chart data range:");
     ui.add_space(6.0);
-    ui.strong("Legend Entries (Series)");
+    ui.strong(t(ui, "Legend Entries (Series)"));
     let names: Vec<String> =
         d.values.get("names").and_then(Json::as_array).map(|a| a.iter().map(|n| n.as_str().unwrap_or("").to_string()).collect()).unwrap_or_default();
     let mut remove: Vec<u64> =
@@ -145,13 +146,13 @@ pub(super) fn select_data(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog,
             let i = i as u64;
             let removed = remove.contains(&i);
             ui.horizontal(|ui| {
-                let label = if name.is_empty() { format!("Series{}", i + 1) } else { name.clone() };
+                let label = if name.is_empty() { tf(ui, "Series{}", &[&(i + 1).to_string()]) } else { name.clone() };
                 ui.label(if removed { egui::RichText::new(label).strikethrough().weak() } else { egui::RichText::new(label) });
                 if removed {
-                    if ui.small_button("Keep").clicked() {
+                    if ui.small_button(t(ui, "Keep")).clicked() {
                         remove.retain(|x| *x != i);
                     }
-                } else if ui.add_enabled(kept > 1, egui::Button::new("Remove").small()).clicked() {
+                } else if ui.add_enabled(kept > 1, egui::Button::new(t(ui, "Remove")).small()).clicked() {
                     remove.push(i);
                 }
             });

@@ -217,6 +217,9 @@ impl Dialog {
         let sel = app.session.active().map(|d| d.selection.current().a1()).unwrap_or_default();
         let active = app.session.active().map(|d| d.selection.active.a1()).unwrap_or_default();
         let p = |k: &str| params.get(k).cloned().unwrap_or(Json::Null);
+        // NexusOffice: notes holding data are translated here, before the data is filled in.
+        let lang = app.ui.language;
+        let fill = |template: &str, args: &[&str]| crate::nexus_i18n::fill(lang.tr(template), args);
         use Field::*;
         let d = match name {
             "insertCells" => Dialog::form(
@@ -299,7 +302,7 @@ impl Dialog {
                     vec![
                         Number { key: "to", label: "Before sheet (position, 0 = first):" },
                         Check { key: "copy", label: "Create a copy" },
-                        Note(format!("Sheets: {}", sheets.join(", "))),
+                        Note(fill("Sheets: {}", &[&sheets.join(", ")])),
                     ],
                     json!({"to": 0, "copy": false}),
                 );
@@ -337,8 +340,8 @@ impl Dialog {
                         a.iter()
                             .map(|r| {
                                 let lock = match (r["password"].as_bool(), r["unlocked"].as_bool()) {
-                                    (Some(true), Some(true)) => " (password, unlocked)",
-                                    (Some(true), _) => " (password)",
+                                    (Some(true), Some(true)) => lang.tr(" (password, unlocked)"),
+                                    (Some(true), _) => lang.tr(" (password)"),
                                     _ => "",
                                 };
                                 format!("{}: {}{lock}", r["title"].as_str().unwrap_or(""), r["range"].as_str().unwrap_or(""))
@@ -346,13 +349,13 @@ impl Dialog {
                             .collect()
                     })
                     .unwrap_or_default();
-                let summary = if rows.is_empty() { "No ranges yet.".to_string() } else { rows.join("\n") };
+                let summary = if rows.is_empty() { lang.tr("No ranges yet.").to_string() } else { rows.join("\n") };
                 Dialog::form(
                     "allowEditRanges",
                     "Allow Edit Ranges",
                     "review.allowEditRanges",
                     vec![
-                        Note(format!("Ranges that stay editable when the sheet is protected:\n{summary}")),
+                        Note(fill("Ranges that stay editable when the sheet is protected:\n{}", &[&summary])),
                         Choice {
                             key: "action",
                             label: "Action",
@@ -397,7 +400,7 @@ impl Dialog {
                     "openPassword",
                     "Password",
                     "file.open",
-                    vec![Note(format!("'{file}' is protected.")), Password { key: "password", label: "Password:" }],
+                    vec![Note(fill("'{}' is protected.", &[&file])), Password { key: "password", label: "Password:" }],
                     values,
                 )
             }
@@ -416,7 +419,7 @@ impl Dialog {
                     "unhideSheet",
                     "Unhide",
                     "sheet.unhide",
-                    vec![Text { key: "sheet", label: "Unhide sheet:" }, Note(format!("Hidden: {}", opts.join(", ")))],
+                    vec![Text { key: "sheet", label: "Unhide sheet:" }, Note(fill("Hidden: {}", &[&opts.join(", ")]))],
                     json!({"sheet": first}),
                 );
                 d.values.insert("sheet".into(), json!(first));
@@ -494,8 +497,9 @@ impl Dialog {
                     "openLink",
                     "Open Hyperlink",
                     "link.open",
-                    vec![Note(format!(
-                        "This workbook asks to open the address below. Links can lead to harmful sites or start other programs: open it only if you trust the workbook.\n\n{url}"
+                    vec![Note(fill(
+                        "This workbook asks to open the address below. Links can lead to harmful sites or start other programs: open it only if you trust the workbook.\n\n{}",
+                        &[&url],
                     ))],
                     json!({"url": url}),
                 )
@@ -540,11 +544,20 @@ impl Dialog {
                 // Opens on the active sheet's saved margins, so OK without edits rewrites them unchanged.
                 let m = app.session.active().and_then(|d| d.wb.active()).map(|s| s.print.margins).unwrap_or([0.7, 0.7, 0.75, 0.75, 0.3, 0.3]);
                 // Round off f32 noise so the form shows 0.1, not 0.10000000149.
-                let [left, right, top, bottom, header, footer] = m.map(|v| (f64::from(v) * 1e4).round() / 1e4);
-                Dialog::form(
-                    "pageSetup",
-                    "Page Setup",
-                    "pageLayout.margins",
+                // NexusOffice: centimetres in a Vietnamese region (the file keeps inches).
+                let cm = app.ui.regional_format() == gridcraft_engine::core::Locale::ViVn;
+                let scale = if cm { 2.54 } else { 1.0 };
+                let [left, right, top, bottom, header, footer] = m.map(|v| (f64::from(v) * scale * 1e4).round() / 1e4);
+                let fields = if cm {
+                    vec![
+                        Number { key: "left", label: "Left margin (cm):" },
+                        Number { key: "right", label: "Right margin (cm):" },
+                        Number { key: "top", label: "Top margin (cm):" },
+                        Number { key: "bottom", label: "Bottom margin (cm):" },
+                        Number { key: "header", label: "Header (cm):" },
+                        Number { key: "footer", label: "Footer (cm):" },
+                    ]
+                } else {
                     vec![
                         Number { key: "left", label: "Left margin (in):" },
                         Number { key: "right", label: "Right margin (in):" },
@@ -552,9 +565,19 @@ impl Dialog {
                         Number { key: "bottom", label: "Bottom margin (in):" },
                         Number { key: "header", label: "Header (in):" },
                         Number { key: "footer", label: "Footer (in):" },
-                    ],
+                    ]
+                };
+                let mut d = Dialog::form(
+                    "pageSetup",
+                    "Page Setup",
+                    "pageLayout.margins",
+                    fields,
                     json!({"left": left, "right": right, "top": top, "bottom": bottom, "header": header, "footer": footer}),
-                )
+                );
+                if cm {
+                    d.values.insert("unitCm".into(), json!(true));
+                }
+                d
             }
             "textToColumns" => Dialog::form(
                 "textToColumns",
@@ -636,7 +659,7 @@ impl Dialog {
                     Check { key: "statistics", label: "Include forecast statistics" },
                     Choice { key: "chart", label: "Chart", options: vec![("line", "Line chart"), ("column", "Column chart")] },
                 ],
-                json!({"confidenceInterval": true, "confidence": "95", "seasonality": "auto", "fillMissing": "interpolate", "aggregate": "average", "chart": "line"}),
+                json!({"confidenceInterval": true, "confidence": "95", "seasonality": lang.tr("Seasonality|auto"), "fillMissing": "interpolate", "aggregate": "average", "chart": "line"}),
             ),
             "analysisToolPak" => {
                 // Opened with a known `tool`, it goes straight to that tool's form.
@@ -724,7 +747,7 @@ impl Dialog {
                 let selection = app.session.active().and_then(|d| {
                     d.wb.active().map(|s| format!("={}!{}", gridcraft_engine::formula::quote_sheet(&s.name), abs(&d.selection.current())))
                 });
-                let mut defaults = json!({"scope": "Workbook", "refersTo": selection});
+                let mut defaults = json!({"scope": lang.tr("Scope|Workbook"), "refersTo": selection});
                 for key in ["name", "scope", "comment", "refersTo", "oldName", "oldScope"] {
                     if let Some(v) = params.get(key).filter(|v| v.is_string()) {
                         defaults[key] = v.clone();

@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use gridcraft_core::{Array, CellError, CellRef, MAX_COLS, MAX_ROWS, RangeRef, Value, compare};
+use gridcraft_core::{Array, CellError, CellRef, Collation, MAX_COLS, MAX_ROWS, RangeRef, Value};
 use gridcraft_formula::{BinOp, Expr, Reference, SheetSel, StructItem, StructRef, UnOp};
 use gridcraft_functions::{Arg, Ctx};
 use gridcraft_model::Workbook;
@@ -155,6 +155,9 @@ impl Ctx for FnCtx<'_, '_> {
     }
     fn locale(&self) -> gridcraft_core::Locale {
         self.ev.host.workbook().locale
+    }
+    fn collation(&self) -> Collation {
+        self.ev.host.workbook().collation
     }
     fn now_serial(&self) -> f64 {
         self.ev.host.now_serial()
@@ -610,7 +613,8 @@ impl<'h> Evaluator<'h> {
                 let mut acc = self.value(left);
                 while let Some((o, r)) = rest.pop() {
                     let y = self.value(r);
-                    acc = binary_values(o, &acc, &y, self.host.workbook().date_system);
+                    let wb = self.host.workbook();
+                    acc = binary_values(o, &acc, &y, wb.date_system, wb.collation);
                 }
                 Ev::V(acc)
             }

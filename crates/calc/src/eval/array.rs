@@ -1,4 +1,4 @@
-use super::{Array, BinOp, CellError, MAX_CELLS, Value, compare};
+use super::{Array, BinOp, CellError, MAX_CELLS, Value};
 
 /// The aggregates that can fold a reference without building an array.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -129,11 +129,13 @@ pub(super) fn single(v: Value) -> Option<Value> {
     }
 }
 
-pub fn binary_values(op: BinOp, x: &Value, y: &Value, sys: gridcraft_core::DateSystem) -> Value {
-    zip2(x, y, |a, b| binary_scalar(op, a, b, sys))
+/// Applies a binary operator element-wise. Text comparisons (`<`, `>`…) order by `coll`
+/// (NexusOffice: the workbook's collation, Vietnamese in the vi-VN region).
+pub fn binary_values(op: BinOp, x: &Value, y: &Value, sys: gridcraft_core::DateSystem, coll: gridcraft_core::Collation) -> Value {
+    zip2(x, y, |a, b| binary_scalar(op, a, b, sys, coll))
 }
 
-fn binary_scalar(op: BinOp, a: &Value, b: &Value, sys: gridcraft_core::DateSystem) -> Value {
+fn binary_scalar(op: BinOp, a: &Value, b: &Value, sys: gridcraft_core::DateSystem, coll: gridcraft_core::Collation) -> Value {
     if let Value::Error(e) = a {
         return Value::Error(*e);
     }
@@ -169,12 +171,12 @@ fn binary_scalar(op: BinOp, a: &Value, b: &Value, sys: gridcraft_core::DateSyste
             }
             (Err(e), _) | (_, Err(e)) => Value::Error(e),
         },
-        BinOp::Eq => Value::Bool(compare(a, b) == Equal),
-        BinOp::Ne => Value::Bool(compare(a, b) != Equal),
-        BinOp::Lt => Value::Bool(compare(a, b) == Less),
-        BinOp::Gt => Value::Bool(compare(a, b) == Greater),
-        BinOp::Le => Value::Bool(compare(a, b) != Greater),
-        BinOp::Ge => Value::Bool(compare(a, b) != Less),
+        BinOp::Eq => Value::Bool(gridcraft_core::compare_with(a, b, coll) == Equal),
+        BinOp::Ne => Value::Bool(gridcraft_core::compare_with(a, b, coll) != Equal),
+        BinOp::Lt => Value::Bool(gridcraft_core::compare_with(a, b, coll) == Less),
+        BinOp::Gt => Value::Bool(gridcraft_core::compare_with(a, b, coll) == Greater),
+        BinOp::Le => Value::Bool(gridcraft_core::compare_with(a, b, coll) != Greater),
+        BinOp::Ge => Value::Bool(gridcraft_core::compare_with(a, b, coll) != Less),
         BinOp::Range | BinOp::Union | BinOp::Intersect => Value::Error(CellError::Value),
     }
 }

@@ -381,7 +381,7 @@ fn tools(app: &mut SheetApp, ui: &mut Ui) {
         divider(ui);
         let more = icon_button(ui, Icon::More, Tokens::get(ui.ctx()).text, "More tools", vec2(28.0, 26.0));
         let more = more.on_hover_text(app.ui.language.tr("More tools"));
-        more.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "More tools"));
+        more.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, app.ui.language.tr("More tools")));
         egui::Popup::menu(&more).show(|ui| {
             for (n, c) in Cluster::ALL.iter().enumerate().skip(shown) {
                 if n > shown {
@@ -409,6 +409,8 @@ fn divider(ui: &mut Ui) {
 /// Gives a tool its name for screen readers and tests (the widgets only set a tooltip).
 fn named(resp: egui::Response, name: &str, selected: Option<bool>) -> egui::Response {
     let enabled = resp.enabled();
+    // The accessible name in the interface's language, as the button's tooltip.
+    let name = crate::i18n::current(&resp.ctx).tr(name);
     resp.widget_info(|| match selected {
         Some(on) => egui::WidgetInfo::selected(egui::Role::CheckBox, enabled, on, name),
         None => egui::WidgetInfo::labeled(egui::Role::Button, enabled, name),

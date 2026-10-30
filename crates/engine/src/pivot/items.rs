@@ -72,7 +72,9 @@ impl FieldItems {
         if let Some(i) = self.index.get(&key) {
             return *i;
         }
-        item.key = Some(gridcraft_core::text_key(&item.label));
+        // NexusOffice: in the workbook's text order (the session's sorting language); every item
+        // of a field gets its key from the same workbook, so the keys compare.
+        item.key = Some(gridcraft_core::text_key(&item.label, wb.collation));
         let i = self.items.len() as u32;
         self.items.push(item);
         self.index.insert(key, i);

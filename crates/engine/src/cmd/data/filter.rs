@@ -129,16 +129,17 @@ pub(super) fn filter_by(s: &mut Session, p: &Json) -> Result<Json> {
 /// Does a value pass a custom comparison (`>`, `=*abc*`, `<>x`…)? `folded` is `fold_key(crit)`,
 /// computed once per criterion for the equality and begins/ends/contains tests. Only what `op`
 /// needs is computed: text is ordered (a key per side) for `<`, `<=`, `>` and `>=` alone.
-fn custom_ok(v: &Value, text: &str, op: &str, crit: &str, folded: &str) -> bool {
+fn custom_ok(v: &Value, text: &str, op: &str, crit: &str, folded: &str, coll: gridcraft_core::Collation) -> bool {
     let num = gridcraft_core::parse::parse_number_text(crit);
     let nums = v.as_f64().zip(num);
     let cmp = || match (v.as_f64(), num) {
         (Some(a), Some(b)) => a.partial_cmp(&b),
         // A numeric ordering comparison only matches numbers; blanks and text never do.
         (None, Some(_)) if matches!(op, "<" | "<=" | ">" | ">=") => None,
-        _ => Some(gridcraft_core::compare_text(text, crit)),
+        _ => Some(gridcraft_core::compare_text_with(text, crit, coll)),
     };
-    // `compare_text(text, crit) == Equal` exactly when `text_eq(text, crit)`.
+    // `compare_text_with(text, crit, coll) == Equal` exactly when `text_eq(text, crit)`, in every
+    // collation.
     let eq = || match nums {
         Some((a, b)) => a.partial_cmp(&b) == Some(Ordering::Equal),
         None => text_eq_prefolded(text, folded),
@@ -267,10 +268,10 @@ fn apply_filter_in(wb: &mut Workbook, sheet: usize) {
                 }
                 FilterCriterion::Custom { a, b, and } => {
                     let (fa, fb) = folded.get(i).map_or(("", ""), |(x, y)| (x.as_str(), y.as_str()));
-                    let x = custom_ok(&v, &text, &a.0, &a.1, fa);
+                    let x = custom_ok(&v, &text, &a.0, &a.1, fa, wb.collation);
                     match b {
                         Some(b) => {
-                            let y = custom_ok(&v, &text, &b.0, &b.1, fb);
+                            let y = custom_ok(&v, &text, &b.0, &b.1, fb, wb.collation);
                             if *and { x && y } else { x || y }
                         }
                         None => x,
@@ -376,12 +377,13 @@ pub fn filter_values(wb: &Workbook, sheet: usize, col: u32) -> Vec<(String, bool
         if seen.insert(key.clone()) {
             // The sort key is built once per entry, not per comparison (the list is rebuilt
             // every frame while the filter menu is open).
-            let tk = v.is_text().then(|| text_key(&t));
+            let tk = v.is_text().then(|| text_key(&t, wb.collation));
             entries.push((key, tk, t, on));
         }
     }
-    // Numbers, then text in the Root order, then booleans, errors and blanks. Text entries are
-    // ordered by their `TextKey` (`None` for the other classes, so it only breaks ties in text).
+    // Numbers, then text in the workbook's order (NexusOffice: the session's sorting language),
+    // then booleans, errors and blanks. Text entries are ordered by their `TextKey` (`None` for the
+    // other classes, so it only breaks ties in text); all of them built with the same collation.
     entries
         .sort_by(|(a, ka, ..), (b, kb, ..)| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then_with(|| ka.cmp(kb)).then_with(|| (&a.2, &a.3).cmp(&(&b.2, &b.3))));
     entries.into_iter().map(|(_, _, t, on)| (t, on)).collect()

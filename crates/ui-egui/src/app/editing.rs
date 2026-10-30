@@ -153,7 +153,7 @@ impl SheetApp {
         } else if fill_selection {
             self.session.run("range.fill", json!({"input": text, "locale": locale.tag()}))
         } else {
-            self.session.run("cell.set", json!({"cell": ed.cell.a1(), "input": text, "array": array, "locale": locale.tag()}))
+            self.session.run("cell.set", json!({"cell": ed.cell.a1(), "input": text, "array": array, "locale": locale.tag(), "typed": true}))
         };
         match r {
             Ok(_) => {

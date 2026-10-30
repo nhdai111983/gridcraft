@@ -3,7 +3,7 @@
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use gridcraft_core::{CellRef, RangeRef, Value, sort_compare};
+use gridcraft_core::{CellRef, RangeRef, Value};
 use gridcraft_model::{
     Anchor, AnchorMode, AutoFilter, Cell, CfOperator, Comment, ErrorStyle, FilterCriterion, Formula, Hyperlink, LineInfo, Sheet, Validation,
     ValidationKind, Workbook,
@@ -11,7 +11,7 @@ use gridcraft_model::{
 use serde_json::{Value as Json, json};
 
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, bool_param, cell_param, cell_param_on, cmd, edit, has_doc, ok, parse_lines, split_sheet,
+    CommandSpec, EngineError, Result, Session, always, bad, bool_param, cell_param, cell_param_on, cmd, edit, has_doc, ok, parse_lines, split_sheet,
     str_param, target_range, target_ranges, target_sheet,
 };
 use crate::outline;
@@ -27,7 +27,7 @@ pub use filter::filter_values;
 pub(crate) use filter::{apply_filter, grow_autofilter};
 use filter::{clear_filter, filter_by, reapply, toggle_filter};
 use grouping::{detail, group, outline_settings, show_levels, subtotal};
-use sort::{quick_sort, sort};
+use sort::{quick_sort, sort, sort_language};
 #[cfg(test)]
 use tools::split_delimited;
 use tools::{remove_duplicates, text_to_columns};
@@ -49,6 +49,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{range?, header?: bool, keys: [{column: \"B\", order: asc|desc, by?: values|cellColor|fontColor, customList?: [..]}], orientation?: rows|columns, matchCase?}",
             has_doc,
             sort
+        ),
+        cmd!(
+            noundo "data.sortLanguage",
+            "Sorting Language",
+            ["Data", "Sort & Filter"],
+            None,
+            "{lang?: vi|vi-VN|en (a BCP 47 tag: vi… is Vietnamese, any other language the language-neutral order, reported as an empty tag)} → {lang}. Without `lang`, reports the current one. A session setting for every open workbook (Sort, AutoFilter, PivotTables, `<` in formulas and rules, approximate lookups); not an undo step, not saved in the file",
+            always,
+            sort_language
         ),
         cmd!(
             "data.filter",

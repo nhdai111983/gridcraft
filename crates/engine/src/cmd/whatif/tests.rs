@@ -254,7 +254,7 @@ fn advanced_filter_unique_without_criteria() {
 
 #[test]
 fn criteria_semantics() {
-    use super::criterion_matches as m;
+    let m = |v: &Value, text: &str, crit: &Value| super::criterion_matches(v, text, crit, gridcraft_core::Collation::Root);
     let t = |x: &str| Value::from(x);
     assert!(m(&Value::Number(150.0), "150", &t(">100")));
     assert!(!m(&Value::Number(50.0), "50", &t(">100")));

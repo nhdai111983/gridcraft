@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Enter Cell",
             [],
             None,
-            "{cell?: \"B2\", input: \"text, number or =formula\", sheet?, array?: bool, locale?: \"vi-VN\" (a value typed in that regional format: 1.234,5, 24/10/2026, 1.234 ₫; formulas stay en-US)}",
+            "{cell?: \"B2\", input: \"text, number or =formula\", sheet?, array?: bool, locale?: \"vi-VN\" (a value typed in that regional format: 1.234,5, 24/10/2026, 1.234 ₫; formulas stay en-US), typed?: bool (typed in the grid: a date or formatted number widens a default-width column)}",
             has_doc,
             cell_set
         ),
@@ -181,6 +181,7 @@ fn coalesce(cells: &[CellRef]) -> Vec<RangeRef> {
 fn undo(s: &mut Session, p: &Json) -> Result<Json> {
     let steps = u32_param(p, "steps").unwrap_or(1).max(1);
     let locale = s.locale;
+    let collation = s.collation();
     let d = s.doc_mut()?;
     let mut label = String::new();
     let now = d.wb.clone();
@@ -199,6 +200,9 @@ fn undo(s: &mut Session, p: &Json) -> Result<Json> {
     // NexusOffice: a snapshot taken in another regional format is shown, and recalculated, in
     // the session's current one.
     crate::adopt_locale(d, locale);
+    // A step recorded before the sorting language changed holds the old order (and values
+    // computed with it): the session's language applies to whatever workbook is restored.
+    d.set_collation(collation);
     d.revision += 1;
     Ok(json!({"undone": label}))
 }
@@ -206,6 +210,7 @@ fn undo(s: &mut Session, p: &Json) -> Result<Json> {
 fn redo(s: &mut Session, p: &Json) -> Result<Json> {
     let steps = u32_param(p, "steps").unwrap_or(1).max(1);
     let locale = s.locale;
+    let collation = s.collation();
     let d = s.doc_mut()?;
     let mut label = String::new();
     let now = d.wb.clone();
@@ -223,6 +228,9 @@ fn redo(s: &mut Session, p: &Json) -> Result<Json> {
     // NexusOffice: a snapshot taken in another regional format is shown, and recalculated, in
     // the session's current one.
     crate::adopt_locale(d, locale);
+    // A step recorded before the sorting language changed holds the old order (and values
+    // computed with it): the session's language applies to whatever workbook is restored.
+    d.set_collation(collation);
     d.revision += 1;
     Ok(json!({"redone": label}))
 }

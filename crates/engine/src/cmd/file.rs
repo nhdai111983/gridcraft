@@ -38,7 +38,9 @@ fn new_workbook(s: &mut Session, p: &Json) -> Result<Json> {
             // NexusOffice: calculated once, in the session's regional format.
             wb.locale = s.locale;
             let title = crate::sample::title(name);
-            s.add_document(DocState::new(wb, None, title, crate::Trust::Local))
+            // NexusOffice: in the session's sorting language (`new_doc_state`).
+            let d = s.new_doc_state(wb, None, title, crate::Trust::Local);
+            s.add_document(d)
         }
         None => s.new_workbook(),
     };
@@ -90,8 +92,9 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
     // NexusOffice: the workbook is calculated once, when it opens, in the session's regional
     // format — also a manual-calculation one, whose results would otherwise stay the file's.
     wb.locale = s.locale;
-    // Someone else may have made the file: its active content asks before it runs.
-    let mut doc = DocState::new(wb, path, title, crate::Trust::FromFile);
+    // Someone else may have made the file: its active content asks before it runs. NexusOffice:
+    // in the session's sorting language (`new_doc_state`).
+    let mut doc = s.new_doc_state(wb, path, title, crate::Trust::FromFile);
     if crate::io::FileKind::from_path(&name).is_none() && gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Xlsx {
         doc.content_kind = Some(crate::io::FileKind::Xlsx);
     }

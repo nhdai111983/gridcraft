@@ -48,6 +48,8 @@ fn accent_picker(app: &mut SheetApp, ui: &mut Ui) {
             app.run_or_alert("ui.accent", json!({"value": null}));
         }
         for (name, c) in crate::theme::ACCENT_PRESETS {
+            // NexusOffice: the colour's name in the interface's language (QC-SHT-15).
+            let name = lang.tr(name);
             let (r, resp) = ui.allocate_exact_size(vec2(22.0, 22.0), egui::Sense::click());
             ui.painter().circle_filled(r.center(), 8.0, c);
             let on = current == Some(c);

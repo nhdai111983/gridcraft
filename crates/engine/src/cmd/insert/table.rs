@@ -43,6 +43,8 @@ pub(super) fn insert_table(s: &mut Session, p: &Json) -> Result<Json> {
     }
     let style = str_param(p, "style").unwrap_or("TableStyleMedium2").to_string();
     let id = d.wb.next_object_id();
+    // NexusOffice: headers the table adds are named in the regional format's language (Cột1).
+    let column_word = crate::nexus_typed::column_word(s.locale);
     edit(s, |cx| {
         // Without a header row, insert one with generic names.
         let r = if header {
@@ -63,7 +65,7 @@ pub(super) fn insert_table(s: &mut Session, p: &Json) -> Result<Json> {
             rewrite(&mut cx.wb, &name, &e);
             let sh = cx.sheet_mut(sheet)?;
             for (i, c) in (r.start.col..=r.end.col).enumerate() {
-                sh.set_value(CellRef::new(r.start.row, c), gridcraft_core::Value::text(format!("Column{}", i + 1)));
+                sh.set_value(CellRef::new(r.start.row, c), gridcraft_core::Value::text(format!("{column_word}{}", i + 1)));
             }
             cx.structural = true;
             RangeRef::new(r.start, CellRef::new((r.end.row + 1).min(MAX_ROWS - 1), r.end.col))
@@ -77,7 +79,7 @@ pub(super) fn insert_table(s: &mut Session, p: &Json) -> Result<Json> {
         for c in r.start.col..=r.end.col {
             let mut n = sh.value(CellRef::new(r.start.row, c)).display();
             if n.is_empty() {
-                n = format!("Column{}", c - r.start.col + 1);
+                n = format!("{column_word}{}", c - r.start.col + 1);
             }
             let base = n.clone();
             let key = base.to_ascii_lowercase();

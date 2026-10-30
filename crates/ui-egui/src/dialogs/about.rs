@@ -5,7 +5,7 @@ use super::Dialog;
 pub(super) fn about(ui: &mut egui::Ui, d: &mut Dialog) {
     ui.horizontal(|ui| {
         for tab in ["About", "Contributors", "Models"] {
-            if ui.selectable_label(d.tab == tab, tab).clicked() {
+            if ui.selectable_label(d.tab == tab, crate::nexus_i18n::t(ui, tab)).clicked() {
                 d.tab = tab.to_string();
             }
         }

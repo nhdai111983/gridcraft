@@ -87,6 +87,12 @@ fn hide_udf_prefix(text: &str, locale: FormulaLocale) -> String {
 /// A function's argument hint. The name and separators follow the formula syntax; the argument
 /// names follow the interface language, all of them or none, so a hint never mixes two languages.
 pub(crate) fn signature(name: &str, locale: FormulaLocale, language: Language) -> Option<String> {
+    // NexusOffice (QC-SHT-06): the Vietnamese syntax of the functions people use most.
+    if locale == FormulaLocale::Vi
+        && let Some(signature) = crate::nexus_function_help::signature(locale.canonical_name(name))
+    {
+        return Some(signature.into());
+    }
     let english = crate::formula_bar::function_signature(locale.canonical_name(name))?;
     let Some((head, args)) = split_signature(&english) else { return Some(english) };
     let separator = format!("{} ", locale.list_separator());
@@ -99,6 +105,12 @@ pub(crate) fn signature(name: &str, locale: FormulaLocale, language: Language) -
 
 /// A function's description in the interface language (English while untranslated).
 pub(crate) fn description(name: &str, locale: FormulaLocale, language: Language) -> Option<String> {
+    // NexusOffice (QC-SHT-06): the Vietnamese description of the functions people use most.
+    if locale == FormulaLocale::Vi
+        && let Some(description) = crate::nexus_function_help::description(locale.canonical_name(name))
+    {
+        return Some(description.into());
+    }
     let english = crate::formula_bar::function_description(locale.canonical_name(name))?;
     Some(language.function_description(&english).map_or(english, str::to_string))
 }

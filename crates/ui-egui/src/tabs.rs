@@ -184,6 +184,8 @@ pub fn sheet_tabs(app: &mut SheetApp, ui: &mut Ui) {
                                 let tw = ui.painter().layout_no_wrap(name.clone(), font.clone(), t.text).size().x;
                                 let w = (tw + 32.0).max(72.0);
                                 let (r, resp) = ui.allocate_exact_size(vec2(w, 30.0), Sense::click_and_drag());
+                                // NexusOffice: the tab is named for screen readers (and UI tests).
+                                resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Tab, true, active, &name));
                                 if active && reveal_active {
                                     resp.scroll_to_me(None);
                                 }
@@ -343,7 +345,12 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
                 if let Some(d) = app.session.active() {
                     if d.wb.vba_project.is_some() {
                         ui.add_space(12.0);
-                        text(ui, egui::RichText::new("Macros preserved (not executed)").font(theme::ui_font(12.5)).color(t.danger));
+                        text(
+                            ui,
+                            egui::RichText::new(crate::nexus_i18n::t(ui, "Macros preserved (not executed)"))
+                                .font(theme::ui_font(12.5))
+                                .color(t.danger),
+                        );
                     }
                     if d.wb.calc.mode == gridcraft_engine::model::CalcMode::Manual {
                         ui.add_space(12.0);
@@ -353,8 +360,8 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
                         ui.add_space(12.0);
                         // Only a loop on the active sheet is named, so the address needs no sheet.
                         let label = match d.calc.circular.iter().find(|(si, _)| *si == d.wb.active_sheet()) {
-                            Some((_, c)) => format!("Circular References: {}", c.a1()),
-                            None => "Circular References".to_owned(),
+                            Some((_, c)) => crate::nexus_i18n::fill(app.ui.language.tr("Circular References: {}"), &[&c.a1()]),
+                            None => app.ui.language.tr("Circular References").to_owned(),
                         };
                         text(ui, egui::RichText::new(label).font(theme::ui_font(12.5)).color(t.danger));
                     }
@@ -438,26 +445,29 @@ pub(crate) fn selection_statistics(app: &SheetApp) -> Vec<String> {
         let code = if code == "General" { "#,##0.##########".to_string() } else { code };
         gridcraft_engine::display::format(&gridcraft_engine::core::Value::Number(v), &code, &d.wb).text.trim_end_matches('.').to_string()
     };
+    // NexusOffice: the labels in the interface's language (templates are catalogue keys).
+    let lang = app.ui.language;
+    let tf = |template: &str, value: &str| crate::nexus_i18n::fill(lang.tr(template), &[value]);
     let mut parts = Vec::new();
     if on.average
         && let Some(a) = st.average
     {
-        parts.push(format!("Average: {}", fmt(a)));
+        parts.push(tf("Average: {}", &fmt(a)));
     }
     if on.count && st.count > 0 {
-        parts.push(format!("Count: {}", st.count));
+        parts.push(tf("Count: {}", &st.count.to_string()));
     }
     if on.numerical_count && st.count > 0 {
-        parts.push(format!("Numerical Count: {}", st.numeric));
+        parts.push(tf("Numerical Count: {}", &st.numeric.to_string()));
     }
     if on.minimum && st.numeric > 0 {
-        parts.push(format!("Minimum: {}", fmt(st.min)));
+        parts.push(tf("Minimum: {}", &fmt(st.min)));
     }
     if on.maximum && st.numeric > 0 {
-        parts.push(format!("Maximum: {}", fmt(st.max)));
+        parts.push(tf("Maximum: {}", &fmt(st.max)));
     }
     if on.sum && st.numeric > 0 {
-        parts.push(format!("Sum: {}", fmt(st.sum)));
+        parts.push(tf("Sum: {}", &fmt(st.sum)));
     }
     parts
 }

@@ -1,12 +1,18 @@
 use super::controls::act;
 use super::{Align2, Cat, Rect, Sense, SheetApp, Stroke, StrokeKind, Tokens, Ui, json, pos2, theme, vec2};
+use crate::nexus_i18n::t as tx;
 
 /// A gallery of table styles drawn as mini tables.
 pub(super) fn table_gallery(app: &mut SheetApp, ui: &mut Ui, cmd: &str) {
     ui.set_width(430.0);
     let Some(wb) = app.session.active().map(|d| d.wb.clone()) else { return };
     for (fam, n) in [("Light", 21u32), ("Medium", 28), ("Dark", 11)] {
-        ui.label(egui::RichText::new(fam).strong());
+        let key = match fam {
+            "Light" => "Table Styles|Light",
+            "Medium" => "Table Styles|Medium",
+            _ => "Table Styles|Dark",
+        };
+        ui.label(egui::RichText::new(tx(ui, key)).strong());
         egui::Grid::new(("tg", fam)).spacing(vec2(4.0, 4.0)).show(ui, |ui| {
             for i in 1..=n {
                 let name = format!("TableStyle{fam}{i}");
@@ -99,7 +105,7 @@ pub(super) fn cell_style_gallery(app: &mut SheetApp, ui: &mut Ui) {
         ("Number Format", &["Comma", "Comma [0]", "Currency", "Currency [0]", "Percent"]),
     ];
     for (g, names) in groups {
-        ui.label(egui::RichText::new(*g).strong());
+        ui.label(egui::RichText::new(tx(ui, g)).strong());
         egui::Grid::new(("csg", *g)).spacing(vec2(4.0, 4.0)).show(ui, |ui| {
             for (i, n) in names.iter().enumerate() {
                 let st = gridcraft_engine::cmd::format::builtin_cell_style(n, &wb.theme).unwrap_or_default();

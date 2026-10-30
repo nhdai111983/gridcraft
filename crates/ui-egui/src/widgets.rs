@@ -598,7 +598,9 @@ pub fn message_box(app: &mut SheetApp, ctx: &egui::Context) {
         });
         ui.add_space(8.0);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("  OK  ").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Escape)) {
+            if ui.button(format!("  {}  ", app.ui.language.tr("OK"))).clicked()
+                || ui.input(|i| i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Escape))
+            {
                 close = true;
             }
         });

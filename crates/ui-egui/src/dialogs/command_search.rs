@@ -12,13 +12,18 @@ pub(super) fn command_search(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dial
         )
     });
     let width = ui.available_width();
-    let r = ui.add(egui::TextEdit::singleline(&mut d.search).desired_width(width).hint_text("Type a command, e.g. freeze, chart, bold…"));
+    let r = ui.add(
+        egui::TextEdit::singleline(&mut d.search)
+            .desired_width(width)
+            .hint_text(crate::nexus_i18n::t(ui, "Type a command, e.g. freeze, chart, bold…")),
+    );
 
     if !d.focus_initialized {
         r.request_focus();
         d.focus_initialized = true;
     }
 
+    let lang = app.ui.language;
     let q = d.search.to_ascii_lowercase();
     let cmds: Vec<(String, String, String)> = app
         .session
@@ -26,7 +31,7 @@ pub(super) fn command_search(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dial
         .into_iter()
         .filter(|c| c.enabled)
         .filter(|c| q.is_empty() || c.label.to_ascii_lowercase().contains(&q) || c.id.to_ascii_lowercase().contains(&q))
-        .map(|c| (c.id.to_string(), c.label.to_string(), c.menu.join(" › ")))
+        .map(|c| (c.id.to_string(), lang.tr(c.label).to_string(), c.menu.iter().map(|m| lang.tr(m)).collect::<Vec<_>>().join(" › ")))
         .take(40)
         .collect();
 

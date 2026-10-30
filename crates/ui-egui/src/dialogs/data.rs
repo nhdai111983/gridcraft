@@ -2,6 +2,7 @@
 use super::show::build_params;
 use super::show::{form_fields, ok_cancel};
 use super::{Dialog, Field, Icon, Json, SheetApp, json, vec2};
+use crate::nexus_i18n::t;
 
 /// Initial values of the Data Validation form: the rule stored on the active cell, so OK without
 /// edits keeps it; a plain list rule when the cell has none.
@@ -184,7 +185,7 @@ pub(super) fn advanced_filter_form(ui: &mut egui::Ui, d: &mut Dialog, confirm: &
 pub(super) fn sort(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: &mut bool) {
     let lang = app.ui.language;
     let mut header = d.values.get("header").and_then(Json::as_bool).unwrap_or(true);
-    ui.checkbox(&mut header, "My list has headers");
+    ui.checkbox(&mut header, t(ui, "My list has headers"));
     d.values.insert("header".into(), json!(header));
     let mut levels: Vec<Json> = d.values.get("levels").and_then(Json::as_array).cloned().unwrap_or_default();
     // Columns of the region around the active cell, labelled with their header (or first value).
@@ -231,22 +232,25 @@ pub(super) fn sort(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confir
             lv["column"] = json!(col.to_ascii_uppercase());
             let mut by = lv["by"].as_str().unwrap_or("values").to_string();
             craft_ui::ComboBox::from_id_salt(("by", i))
-                .selected_text(match by.as_str() {
-                    "cellColor" => "Cell Color",
-                    "fontColor" => "Font Color",
-                    _ => "Cell Values",
-                })
+                .selected_text(t(
+                    ui,
+                    match by.as_str() {
+                        "cellColor" => "Cell Color",
+                        "fontColor" => "Font Color",
+                        _ => "Cell Values",
+                    },
+                ))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut by, "values".into(), "Cell Values");
-                    ui.selectable_value(&mut by, "cellColor".into(), "Cell Color");
-                    ui.selectable_value(&mut by, "fontColor".into(), "Font Color");
+                    ui.selectable_value(&mut by, "values".into(), t(ui, "Cell Values"));
+                    ui.selectable_value(&mut by, "cellColor".into(), t(ui, "Cell Color"));
+                    ui.selectable_value(&mut by, "fontColor".into(), t(ui, "Font Color"));
                 })
                 .response
                 .accessible_name(lang.tr("Sort On"));
             lv["by"] = json!(by);
             let mut desc = lv["order"].as_str() == Some("desc");
-            ui.radio_value(&mut desc, false, "A to Z");
-            ui.radio_value(&mut desc, true, "Z to A");
+            ui.radio_value(&mut desc, false, t(ui, "A to Z"));
+            ui.radio_value(&mut desc, true, t(ui, "Z to A"));
             lv["order"] = json!(if desc { "desc" } else { "asc" });
             if crate::widgets::icon_button(ui, Icon::Close, crate::theme::Tokens::get(ui.ctx()).text_dim, "Remove level", vec2(18.0, 18.0)).clicked()
             {
@@ -259,7 +263,7 @@ pub(super) fn sort(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confir
     {
         levels.remove(i);
     }
-    if ui.button("+ Add Level").clicked() {
+    if ui.button(t(ui, "+ Add Level")).clicked() {
         let used: Vec<String> = levels.iter().filter_map(|l| l.get("column").and_then(Json::as_str).map(str::to_string)).collect();
         let next = columns
             .iter()
