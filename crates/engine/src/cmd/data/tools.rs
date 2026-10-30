@@ -106,6 +106,8 @@ pub(super) fn remove_duplicates(s: &mut Session, p: &Json) -> Result<Json> {
 }
 
 pub(super) fn text_to_columns(s: &mut Session, p: &Json) -> Result<Json> {
+    // NexusOffice: the parts are read as typed in the interface's regional format (`1,5` in vi-VN).
+    let locale = crate::cmd::edit::locale_param("data.textToColumns", p)?;
     let r = target_range(s, p)?;
     let sheet = target_sheet(s, p)?;
     let mut delims: Vec<char> = p
@@ -146,7 +148,7 @@ pub(super) fn text_to_columns(s: &mut Session, p: &Json) -> Result<Json> {
             }
         }
         for (c, t) in out {
-            let cell = crate::cmd::edit::input_to_cell(&t, sheet, c, &mut cx.wb).unwrap_or(None);
+            let cell = crate::cmd::edit::input_to_cell_in(&t, sheet, c, &mut cx.wb, locale).unwrap_or(None);
             let shm = cx.sheet_mut(sheet)?;
             match cell {
                 Some(x) => shm.set_cell(c, x),

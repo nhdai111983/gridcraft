@@ -153,6 +153,9 @@ impl Ctx for FnCtx<'_, '_> {
     fn date_system(&self) -> gridcraft_core::DateSystem {
         self.ev.host.workbook().date_system
     }
+    fn locale(&self) -> gridcraft_core::Locale {
+        self.ev.host.workbook().locale
+    }
     fn now_serial(&self) -> f64 {
         self.ev.host.now_serial()
     }

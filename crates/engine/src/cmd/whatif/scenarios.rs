@@ -94,6 +94,7 @@ pub(super) fn scenario_add(s: &mut Session, p: &Json) -> Result<Json> {
         return Err(bad(CMD, "the name is too long (255 characters max)"));
     }
     let changing = str_param(p, "changing").ok_or_else(|| bad(CMD, "missing `changing`"))?.to_string();
+    let locale = crate::cmd::edit::locale_param(CMD, p)?;
     let d = s.doc()?;
     let (si, cells) = cell_list(&d.wb, &changing, CMD, MAX_SCENARIO_CELLS)?;
     if cells.is_empty() {
@@ -105,7 +106,8 @@ pub(super) fn scenario_add(s: &mut Session, p: &Json) -> Result<Json> {
             if a.len() != cells.len() {
                 return Err(bad(CMD, format!("{} values for {} changing cells", a.len(), cells.len())));
             }
-            a.clone()
+            // NexusOffice: values typed in the interface's regional format are stored as numbers or en-US text.
+            a.iter().map(|v| super::localized_value_json(v, d.wb.date_system, locale)).collect()
         }
         None => cells.iter().map(|c| value_json(&sh.value(*c))).collect(),
     };

@@ -90,3 +90,7 @@ methods `-32601`.
 `Server::new(Box::new(Remote::connect(&control_addr("7979"))?))`, then `Server::serve(stdin, stdout)` or
 `Server::handle_line(line) -> Option<String>`. Implement the `Backend` trait (`call(method, params)`) to drive another
 host.
+
+**Regional format (NexusOffice).** MCP is locale-neutral: headless it is always en-US, and
+`--connect` goes through the control channel, which reads and shows en-US unless a command passes
+`locale` (`"vi-VN"`) — see [control-protocol.md](control-protocol.md#regional-format-nexusoffice).

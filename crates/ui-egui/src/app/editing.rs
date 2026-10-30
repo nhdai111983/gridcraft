@@ -1,4 +1,4 @@
-use super::{SheetApp, clean_error, editor, formula_bar, formula_locale, json, now_ms};
+use super::{SheetApp, clean_error, editor, formula_bar, formula_locale, i18n, json, now_ms};
 
 impl SheetApp {
     /// Starts editing the active cell. `text` replaces the content (typing) or pre-fills it.
@@ -114,7 +114,8 @@ impl SheetApp {
         };
         // Data validation.
         if let Some(d) = self.session.active()
-            && let Some((dv, msg)) = gridcraft_engine::cmd::data::check_validation(&d.wb, ed.sheet, ed.cell, &text)
+            && let Some((dv, msg)) =
+                gridcraft_engine::cmd::data::check_validation_in(&d.wb, ed.sheet, ed.cell, &text, i18n::regional_format_of(ed.locale))
         {
             if dv.error_style == gridcraft_engine::model::ErrorStyle::Stop {
                 let title = if dv.error_title.is_empty() { crate::nexus::APP_NAME.to_string() } else { dv.error_title.clone() };
@@ -144,12 +145,15 @@ impl SheetApp {
                 .active()
                 .and_then(|d| d.wb.sheet(ed.sheet))
                 .is_some_and(|sh| sh.cell(ed.cell).is_none_or(|c| c.formula.is_none() && c.value == gridcraft_engine::core::Value::Empty));
+        // NexusOffice: a value typed in a regional format (1.234,5, 24/10/2026) is read in it;
+        // formulas were made canonical above.
+        let locale = i18n::regional_format_of(ed.locale);
         let r = if unchanged {
             Ok(json!({}))
         } else if fill_selection {
-            self.session.run("range.fill", json!({"input": text}))
+            self.session.run("range.fill", json!({"input": text, "locale": locale.tag()}))
         } else {
-            self.session.run("cell.set", json!({"cell": ed.cell.a1(), "input": text, "array": array}))
+            self.session.run("cell.set", json!({"cell": ed.cell.a1(), "input": text, "array": array, "locale": locale.tag()}))
         };
         match r {
             Ok(_) => {

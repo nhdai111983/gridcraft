@@ -195,6 +195,12 @@ pub struct Workbook {
     /// the links in memory are still written for the old one. Not in JSON.
     #[serde(skip)]
     pub source_path: Option<std::path::PathBuf>,
+    /// NexusOffice: the regional format the interface shows this workbook in (separators, date
+    /// and day names) and that `TEXT`, `VALUE` and `NUMBERVALUE` follow, as Excel's follow the
+    /// system's. Set by the interface ([`gridcraft_core::Locale::EnUs`] for the API), never
+    /// saved: files stay en-US.
+    #[serde(skip)]
+    pub locale: gridcraft_core::Locale,
 }
 
 fn is_all(s: &ShowObjects) -> bool {
@@ -281,6 +287,7 @@ impl Workbook {
             preserved: None,
             source_dir: None,
             source_path: None,
+            locale: gridcraft_core::Locale::EnUs,
         }
     }
     pub fn sheet(&self, i: usize) -> Option<&Sheet> {

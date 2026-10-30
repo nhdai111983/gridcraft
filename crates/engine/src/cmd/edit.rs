@@ -19,8 +19,8 @@ mod go_to;
 mod paste_special;
 mod selection;
 
+pub(crate) use cell::{canonical_number_text, check_arg_counts, input_to_cell, input_to_cell_in, json_to_input, locale_param, parse_typed_formula};
 use cell::{cell_set, range_fill, range_set_values};
-pub(crate) use cell::{check_arg_counts, input_to_cell, json_to_input, parse_typed_formula};
 #[cfg(test)]
 pub(crate) use clipboard::parse_tsv;
 use clipboard::{clear_clipboard, copy, cut, paste};
@@ -40,7 +40,15 @@ use selection::{select_all, select_col, select_region, select_row, selection_mov
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("cell.set", "Enter Cell", [], None, "{cell?: \"B2\", input: \"text, number or =formula\", sheet?, array?: bool}", has_doc, cell_set),
+        cmd!(
+            "cell.set",
+            "Enter Cell",
+            [],
+            None,
+            "{cell?: \"B2\", input: \"text, number or =formula\", sheet?, array?: bool, locale?: \"vi-VN\" (a value typed in that regional format: 1.234,5, 24/10/2026, 1.234 ₫; formulas stay en-US)}",
+            has_doc,
+            cell_set
+        ),
         cmd!(
             "range.setValues",
             "Set Values",
@@ -55,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill Range With Input",
             [],
             Some("Ctrl+Enter"),
-            "{range?, input}: enters the same input in every selected cell (relative formulas adjust)",
+            "{range?, input, locale?}: enters the same input in every selected cell (relative formulas adjust); `locale` as for cell.set",
             has_doc,
             range_fill
         ),
@@ -77,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste",
             ["Home", "Clipboard"],
             Some("Cmd+V"),
-            "{at?: \"C3\", text?: \"tab-separated text from the system clipboard\", html?: \"the clipboard's HTML flavour; cells the source recorded as numbers (x:num, sdval) stay numbers\"}",
+            "{at?: \"C3\", text?: \"tab-separated text from the system clipboard\", html?: \"the clipboard's HTML flavour; cells the source recorded as numbers (x:num, sdval) stay numbers\", locale?: \"vi-VN\" (the regional format of `text`; en-US by default)}",
             has_doc,
             paste
         ),

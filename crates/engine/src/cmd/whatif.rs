@@ -167,6 +167,20 @@ fn cell_list(wb: &Workbook, t: &str, cmd: &str, cap: usize) -> Result<(usize, Ve
     Ok((sheet.unwrap_or(wb.active_sheet()), out))
 }
 
+/// A scenario value typed in `locale` as it is stored: a number typed `1,5` (vi-VN) is the number
+/// 1.5; text that en-US would read as something else keeps its text with a leading apostrophe.
+fn localized_value_json(v: &Json, sys: gridcraft_core::DateSystem, locale: gridcraft_core::Locale) -> Json {
+    let Json::String(t) = v else { return v.clone() };
+    if locale == gridcraft_core::Locale::EnUs || t.is_empty() || t.starts_with('=') || t.starts_with('\'') {
+        return v.clone();
+    }
+    match gridcraft_core::parse::parse_input_in(t, sys, locale).value {
+        Value::Number(n) => json!(n),
+        Value::Text(_) if !matches!(gridcraft_core::parse::parse_input(t, sys).value, Value::Text(_)) => json!(format!("'{t}")),
+        _ => v.clone(),
+    }
+}
+
 /// What a JSON value typed into a cell is, as a constant.
 fn json_value(v: &Json, wb: &Workbook) -> Value {
     match v {

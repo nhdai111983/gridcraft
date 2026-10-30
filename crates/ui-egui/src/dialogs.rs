@@ -24,6 +24,8 @@ mod format_cells;
 mod insert_function;
 mod macros;
 mod names;
+// NexusOffice: numbers typed the interface's regional way.
+mod nexus_locale;
 mod paste;
 mod show;
 mod spelling;
@@ -35,6 +37,7 @@ use data::{abs, data_validation_fields, remove_duplicates_range, validation_defa
 use find::go_to_entries;
 pub(crate) use names::insert_name;
 use names::pasteable_names;
+use nexus_locale::localize_solver_numbers;
 pub(crate) use show::build_params;
 pub use show::show;
 use zoom::zoom_preset;
@@ -655,6 +658,9 @@ impl Dialog {
                 if let Some(v) = values.as_object_mut() {
                     v.insert("newOp".into(), json!("<="));
                 }
+                // The saved model's numbers are en-US; the dialog shows and sends them the way
+                // the interface types them (`locale` goes with the command).
+                localize_solver_numbers(&mut values, app.ui.language.regional_format());
                 let mut d = Dialog::custom("solver", "Solver Parameters", values);
                 d.command = Some("data.solver");
                 d

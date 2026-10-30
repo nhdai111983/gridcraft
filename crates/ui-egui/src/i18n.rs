@@ -189,7 +189,19 @@ impl Language {
     }
 
     pub fn formula_locale(self) -> gridcraft_engine::formula::FormulaLocale {
-        if self == Self::Es { gridcraft_engine::formula::FormulaLocale::Es } else { gridcraft_engine::formula::FormulaLocale::En }
+        match self {
+            Self::Es => gridcraft_engine::formula::FormulaLocale::Es,
+            Self::Vi => gridcraft_engine::formula::FormulaLocale::Vi,
+            _ => gridcraft_engine::formula::FormulaLocale::En,
+        }
+    }
+
+    /// NexusOffice: the regional format (number, date and currency display and entry) that goes
+    /// with the interface language. Vietnamese is vi-VN; every other language keeps en-US until
+    /// it has a regional format of its own. The app has no separate regional setting: the
+    /// language decides it.
+    pub fn regional_format(self) -> gridcraft_engine::core::Locale {
+        regional_format_of(self.formula_locale())
     }
 
     /// Translates an interface label; untranslated labels fall back to English.
@@ -263,6 +275,15 @@ type HelpTable = &'static [(&'static str, &'static str)];
 fn lookup(table: HelpTable, english: &str) -> Option<&'static str> {
     let i = table.binary_search_by(|(key, _)| (*key).cmp(english)).ok()?;
     table.get(i).map(|(_, translated)| *translated)
+}
+
+/// The regional format an edit's formula syntax goes with (captured when the edit starts, so a
+/// language switch mid-edit doesn't reread the typed value).
+pub fn regional_format_of(locale: gridcraft_engine::formula::FormulaLocale) -> gridcraft_engine::core::Locale {
+    match locale {
+        gridcraft_engine::formula::FormulaLocale::Vi => gridcraft_engine::core::Locale::ViVn,
+        _ => gridcraft_engine::core::Locale::EnUs,
+    }
 }
 
 /// Deserializes a saved language leniently: an unknown or malformed value (a language removed in a

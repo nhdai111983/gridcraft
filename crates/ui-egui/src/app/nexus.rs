@@ -61,6 +61,20 @@ impl SheetApp {
         ctx.set_fonts(merged);
     }
 
+    /// The grid and the cell editor own Tab, the arrows and Escape, but egui learns that only from
+    /// a widget that held the focus in the previous frame (`set_focus_lock_filter`). In the frame
+    /// right after one of them took the focus (a character typed starts the editor; committing
+    /// gives the keyboard back to the grid) egui reads those keys as "move the focus": Tab right
+    /// after a character, or right after Enter/Tab committed an entry, sent egui's focus to
+    /// another widget and the keys typed next never reached the grid. Cancel that move before
+    /// any widget is drawn: the key is ours.
+    pub(super) fn keep_keyboard(&self, ctx: &egui::Context) {
+        let ours = [Some(egui::Id::unique("gridcraft.cell_editor")), Some(egui::Id::unique("gridcraft.formula_bar")), self.grid.focus_id];
+        if self.dialog.is_none() && self.message.is_none() && ctx.memory(|m| m.focused()).is_some_and(|f| ours.contains(&Some(f))) {
+            ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+        }
+    }
+
     /// New sheets are named in the interface's language (Trang tính1), and the user's accent colour
     /// (File › Options, `ui.accent`) is applied.
     pub(super) fn sync_nexus_preferences(&mut self, ctx: &egui::Context) {
@@ -68,6 +82,10 @@ impl SheetApp {
         if self.session.sheet_name_prefix != prefix {
             self.session.sheet_name_prefix = prefix.to_string();
         }
+        // Workbooks show in the interface language's regional format (vi-VN: 1.234,5, dd/mm/yyyy);
+        // cheap when nothing changed, and an undone step that comes back with another locale gets
+        // this one again.
+        self.session.set_locale(self.ui.language.regional_format());
         theme::set_accent(ctx, self.ui.accent.as_deref().and_then(theme::parse_hex));
     }
 }

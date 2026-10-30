@@ -1,5 +1,7 @@
 //! GridCraft number formats: Excel format codes (`#,##0.00;[Red](#,##0.00)`, dates, fractions,
-//! scientific…), the General display format and the `TEXT()` worksheet function. en-US only.
+//! scientific…), the General display format and the `TEXT()` worksheet function. Codes are always
+//! en-US (`#,##0.00`, as files store them); the `_in` functions show them in a regional format
+//! ([`Locale`]): its separators, month and day names, AM/PM, and its system date and time formats.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
@@ -14,6 +16,8 @@ use gridcraft_core::{CellError, DateSystem, Value};
 
 pub use builtin::{builtin_format, builtin_id};
 pub use decimal::format_general_fit;
+pub use gridcraft_core::Locale;
+pub use parse::delocalize_code;
 
 use parse::{SecKind, Section, Tok};
 use render::Out;
@@ -274,9 +278,16 @@ impl NumberFormat {
     }
 
     /// Formats a number. The flag is true when the value cannot be shown (date out of range).
-    fn format_number(&self, n: f64, sys: DateSystem) -> (Formatted, bool) {
+    fn format_number(&self, n: f64, sys: DateSystem, loc: Locale) -> (Formatted, bool) {
+        if let Some(system) = system_format(self.code(), loc) {
+            return NumberFormat::parse_cached(system).format_number_as_is(n, sys, loc);
+        }
+        self.format_number_as_is(n, sys, loc)
+    }
+
+    fn format_number_as_is(&self, n: f64, sys: DateSystem, loc: Locale) -> (Formatted, bool) {
         let general = |n: f64| Formatted {
-            text: format_general_fit(n, GENERAL_WIDTH).unwrap_or_else(|| OVERFLOW.into()),
+            text: format_general_fit_in(n, GENERAL_WIDTH, loc).unwrap_or_else(|| OVERFLOW.into()),
             color: None,
             fill: None,
             numeric: true,
@@ -287,19 +298,19 @@ impl NumberFormat {
         let Some((sec, drop_sign)) = self.select(n) else { return (general(n), false) };
         let minus = n < 0.0 && !drop_sign;
         let out: Option<Out> = match sec.kind {
-            SecKind::Text => Some(render::render_text(sec, &format_general_fit(n, GENERAL_WIDTH).unwrap_or_default())),
+            SecKind::Text => Some(render::render_text(sec, &format_general_fit_in(n, GENERAL_WIDTH, loc).unwrap_or_default())),
             SecKind::General => {
                 let width = if minus { GENERAL_WIDTH - 1 } else { GENERAL_WIDTH };
-                Some(render::render_general(sec, n.abs(), width))
+                Some(render::render_general(sec, n.abs(), width, loc))
             }
             SecKind::Date => {
                 if minus {
                     None
                 } else {
-                    render::render_date(sec, n.abs(), sys)
+                    render::render_date(sec, n.abs(), sys, loc)
                 }
             }
-            SecKind::Number => Some(render::render_number(sec, n.abs())),
+            SecKind::Number => Some(render::render_number(sec, n.abs(), loc)),
         };
         let Some(mut out) = out else {
             return (Formatted { text: OVERFLOW.into(), color: sec.color, fill: None, numeric: true }, true);
@@ -322,19 +333,56 @@ impl NumberFormat {
     }
 }
 
-/// Formats a cell value for display.
+/// Formats a cell value for display (en-US).
 pub fn format_value(v: &Value, fmt: &NumberFormat, sys: DateSystem) -> Formatted {
+    format_value_in(v, fmt, sys, Locale::EnUs)
+}
+
+/// Formats a cell value for display in a regional format.
+pub fn format_value_in(v: &Value, fmt: &NumberFormat, sys: DateSystem, loc: Locale) -> Formatted {
     match v {
         Value::Empty => Formatted::default(),
         Value::Number(n) if !n.is_finite() => Formatted { text: CellError::Num.as_str().into(), ..Formatted::default() },
-        Value::Number(n) => fmt.format_number(*n, sys).0,
+        Value::Number(n) => fmt.format_number(*n, sys, loc).0,
         Value::Text(t) => fmt.format_text(t),
         Value::Bool(b) => Formatted { text: if *b { "TRUE" } else { "FALSE" }.into(), ..Formatted::default() },
         Value::Error(e) => Formatted { text: e.as_str().into(), ..Formatted::default() },
         Value::Array(a) => match a.data.first() {
             Some(Value::Array(_)) | None => Formatted::default(),
-            Some(first) => format_value(first, fmt, sys),
+            Some(first) => format_value_in(first, fmt, sys, loc),
         },
+    }
+}
+
+/// [`format_general_fit`] with the locale's decimal separator (`1234,5`).
+pub fn format_general_fit_in(n: f64, max_chars: usize, loc: Locale) -> Option<String> {
+    format_general_fit(n, max_chars).map(|s| loc.localize_number(&s))
+}
+
+/// The codes that mean "the system's format" in Excel and how a regional format spells them:
+/// built-in 14 (`m/d/yyyy`, short date) and 22 (short date and time), `[$-F800]`/`[$-x-sysdate]`
+/// (long date) and `[$-F400]`/`[$-x-systime]` (long time). en-US shows them as written.
+fn system_format(code: &str, loc: Locale) -> Option<&'static str> {
+    if loc == Locale::EnUs {
+        return None;
+    }
+    let code = code.trim();
+    let starts = |prefix: &str| code.get(..prefix.len()).is_some_and(|p| p.eq_ignore_ascii_case(prefix));
+    match loc {
+        Locale::EnUs => None,
+        Locale::ViVn => {
+            if code == "m/d/yyyy" {
+                Some("dd/mm/yyyy")
+            } else if code == "m/d/yyyy h:mm" {
+                Some("dd/mm/yyyy h:mm")
+            } else if starts("[$-F800]") || starts("[$-x-sysdate]") {
+                Some("dddd, d mmmm, yyyy")
+            } else if starts("[$-F400]") || starts("[$-x-systime]") {
+                Some("h:mm:ss")
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -414,19 +462,27 @@ impl NumberFormat {
 /// converted to a number first; other text and booleans (as `TRUE`/`FALSE`) go through the text
 /// section, or are returned as is.
 pub fn text_function(v: &Value, code: &str, sys: DateSystem) -> Result<String, CellError> {
+    text_function_in(v, code, sys, Locale::EnUs)
+}
+
+/// `TEXT()` in a regional format: the format text is written the locale's way (`"#.##0,00"` in
+/// Vietnamese, see [`delocalize_code`]), numeric text is read the locale's way, and the result is
+/// shown in the locale, as Excel's TEXT depends on the regional settings.
+pub fn text_function_in(v: &Value, code: &str, sys: DateSystem, loc: Locale) -> Result<String, CellError> {
     if code.is_empty() {
         return Ok(String::new());
     }
     if too_long(code) {
         return Err(CellError::Value);
     }
-    let fmt = NumberFormat::parse_cached(code);
+    let code = delocalize_code(code, loc);
+    let fmt = NumberFormat::parse_cached(&code);
     let n = match v.scalar() {
         Value::Error(e) => return Err(e),
         Value::Empty => 0.0,
         Value::Number(n) => n,
         Value::Bool(b) => return Ok(fmt.format_text(if b { "TRUE" } else { "FALSE" }).text),
-        Value::Text(t) => match gridcraft_core::parse::parse_number_text(&t) {
+        Value::Text(t) => match gridcraft_core::parse::parse_number_text_locale(&t, DateSystem::D1900, loc) {
             Some(n) => n,
             None => return Ok(fmt.format_text(&t).text),
         },
@@ -435,7 +491,7 @@ pub fn text_function(v: &Value, code: &str, sys: DateSystem) -> Result<String, C
     if !n.is_finite() {
         return Err(CellError::Num);
     }
-    let (f, overflow) = fmt.format_number(n, sys);
+    let (f, overflow) = fmt.format_number(n, sys, loc);
     if overflow { Err(CellError::Value) } else { Ok(f.text) }
 }
 

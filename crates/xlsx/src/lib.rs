@@ -160,11 +160,13 @@ pub struct CsvOptions {
     pub date_system: DateSystem,
     /// Interpret fields like typed input (numbers, dates, booleans…); otherwise keep text.
     pub parse_values: bool,
+    /// The regional format the fields are typed in (`1.234,5` and `24/10/2026` in vi-VN).
+    pub locale: gridcraft_core::Locale,
 }
 
 impl Default for CsvOptions {
     fn default() -> Self {
-        CsvOptions { delimiter: b',', quote: b'"', date_system: DateSystem::D1900, parse_values: true }
+        CsvOptions { delimiter: b',', quote: b'"', date_system: DateSystem::D1900, parse_values: true, locale: gridcraft_core::Locale::EnUs }
     }
 }
 

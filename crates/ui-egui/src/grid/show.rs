@@ -29,6 +29,8 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
     };
     let resp = ui.allocate_rect(rect, Sense::click_and_drag());
     app.grid.rect = Some(rect);
+    // NexusOffice: the grid's widget id, for `SheetApp::keep_keyboard`.
+    app.grid.focus_id = Some(resp.id);
     let Some(d) = app.session.active() else { return };
     let wb: Arc<Workbook> = d.wb.clone();
     let si = wb.active_sheet();

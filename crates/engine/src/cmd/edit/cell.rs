@@ -9,6 +9,42 @@ use super::{
 /// format). Inherits the destination's cell, row or column style, including its number
 /// format, before parsing. Errors when the formula can't be parsed.
 pub(crate) fn input_to_cell(input: &str, sheet: usize, at: CellRef, wb: &mut gridcraft_model::Workbook) -> Result<Option<Cell>> {
+    input_to_cell_in(input, sheet, at, wb, gridcraft_core::Locale::EnUs)
+}
+
+/// NexusOffice: the optional `locale` parameter of an entry command: the regional format a typed
+/// value is in. Absent is en-US (the API's format); an unknown tag is an error rather than a
+/// silent en-US.
+pub(crate) fn locale_param(id: &str, p: &Json) -> Result<gridcraft_core::Locale> {
+    match str_param(p, "locale") {
+        None => Ok(gridcraft_core::Locale::EnUs),
+        Some(tag) => gridcraft_core::Locale::from_tag(tag).ok_or_else(|| bad(id, format!("unknown `locale` {tag:?}: use \"en-US\" or \"vi-VN\""))),
+    }
+}
+
+/// NexusOffice: a constant typed in `locale` as the en-US text the engine stores and reads (`1,5`
+/// → `1.5`, `24/10/2026` → its serial): numbers become their canonical digits; text, formulas and
+/// anything that isn't a number stay as typed. Parameters that end up in the workbook (filter
+/// criteria, scenario values, solver constraints) go through it, so files stay en-US.
+pub(crate) fn canonical_number_text(text: &str, sys: gridcraft_core::DateSystem, locale: gridcraft_core::Locale) -> String {
+    if locale == gridcraft_core::Locale::EnUs || text.trim_start().starts_with('=') {
+        return text.to_string();
+    }
+    match gridcraft_core::parse::parse_input_in(text, sys, locale).value {
+        Value::Number(n) => gridcraft_core::number_to_text(n),
+        _ => text.to_string(),
+    }
+}
+
+/// NexusOffice: [`input_to_cell`] for a value typed in a regional format (`locale`). Formulas are
+/// en-US whatever the locale: the interface translates its formula syntax before it gets here.
+pub(crate) fn input_to_cell_in(
+    input: &str,
+    sheet: usize,
+    at: CellRef,
+    wb: &mut gridcraft_model::Workbook,
+    locale: gridcraft_core::Locale,
+) -> Result<Option<Cell>> {
     let style = wb.sheet(sheet).map(|sh| sh.style_id(at)).unwrap_or_default();
     if input.is_empty() {
         let c = Cell { value: Value::Empty, formula: None, style };
@@ -52,7 +88,7 @@ pub(crate) fn input_to_cell(input: &str, sheet: usize, at: CellRef, wb: &mut gri
         }
         return Ok(Some(cell));
     }
-    let mut parsed = gridcraft_core::parse::parse_input(input, wb.date_system);
+    let mut parsed = gridcraft_core::parse::parse_input_in(input, wb.date_system, locale);
     // Like Excel's automatic percent entry: a bare number of 1 or more typed into a cell already
     // formatted as a percentage is a percent (3 -> 3%); smaller numbers are taken as fractions.
     if parsed.format.is_none()
@@ -116,6 +152,7 @@ pub(super) fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
     // Both spellings take a string, number or boolean, as typed (#697).
     let input = p.get("input").or_else(|| p.get("value")).map(json_to_input).ok_or_else(|| bad("cell.set", "missing `input` (or `value`)"))?;
     let array = bool_param(p, "array").unwrap_or(false);
+    let locale = locale_param("cell.set", p)?;
     let d = s.doc()?;
     if let Some(sh) = d.wb.sheet(sheet)
         && sh.is_protected()
@@ -135,7 +172,7 @@ pub(super) fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
             if !range.is_single() && cx.wb.sheet(sheet).is_some_and(|sh| sh.tables.iter().any(|t| t.range.intersects(&range))) {
                 return Err(EngineError::Other("Multi-cell array formulas aren't allowed in tables.".into()));
             }
-            let mut cell = input_to_cell(&input, sheet, range.start, &mut cx.wb)?.unwrap_or_default();
+            let mut cell = input_to_cell_in(&input, sheet, range.start, &mut cx.wb, locale)?.unwrap_or_default();
             if let Some(f) = cell.formula.as_mut() {
                 std::sync::Arc::make_mut(f).array = Some(range);
             }
@@ -151,7 +188,7 @@ pub(super) fn cell_set(s: &mut Session, p: &Json) -> Result<Json> {
             cx.touch(sheet, range.start);
             return Ok(Json::Null);
         }
-        let cell = input_to_cell(&input, sheet, at, &mut cx.wb)?;
+        let cell = input_to_cell_in(&input, sheet, at, &mut cx.wb, locale)?;
         let sh = cx.sheet_mut(sheet)?;
         match cell {
             Some(c) => sh.set_cell(at, c),
@@ -252,6 +289,7 @@ pub(super) fn range_fill(s: &mut Session, p: &Json) -> Result<Json> {
     let sheet = target_sheet(s, p)?;
     let ranges = target_ranges(s, p)?;
     let input = str_param(p, "input").unwrap_or("").to_string();
+    let locale = locale_param("range.fill", p)?;
     let origin = s.doc()?.selection.active;
     edit(s, |cx| {
         // Each cell gets what typing the input there gives: the automatic number format where
@@ -267,7 +305,7 @@ pub(super) fn range_fill(s: &mut Session, p: &Json) -> Result<Json> {
                 let base = match by_style.get(&style) {
                     Some(c) => c.clone(),
                     None => {
-                        let c = input_to_cell(&input, sheet, at, &mut cx.wb)?;
+                        let c = input_to_cell_in(&input, sheet, at, &mut cx.wb, locale)?;
                         by_style.insert(style, c.clone());
                         c
                     }

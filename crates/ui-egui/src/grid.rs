@@ -175,6 +175,8 @@ impl Trace {
 
 #[derive(Default)]
 pub struct GridState {
+    /// NexusOffice: the grid's widget id, last frame (see `SheetApp::keep_keyboard`).
+    pub(crate) focus_id: Option<egui::Id>,
     pub drag: Drag,
     pub ensure_visible: bool,
     /// With `ensure_visible`: scroll to the moving end of the selection instead of the active cell

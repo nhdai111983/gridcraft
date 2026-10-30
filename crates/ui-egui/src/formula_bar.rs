@@ -297,6 +297,14 @@ pub fn editor_widget(app: &mut SheetApp, ui: &mut egui::Ui, id: egui::Id, font: 
     let focused = ui.ctx().memory(|m| m.focused());
     let has_focus = focused == Some(id) || (mine && (ed.request_focus || focused.is_none()));
     let EditorKeyOutcome { action, arrow, cancel } = editor_shortcuts(app, ui, id, &mut ed, mine, has_focus);
+    if has_focus && mine {
+        // NexusOffice: the editor owns Tab, the arrows and Escape (its event filter), but egui learns
+        // that only from a TextEdit that drew with the focus in the previous frame. In the frame
+        // right after the focus was given (typing `a` and pressing Tab at once) egui reads Tab as
+        // "move the focus on": the edit commits and egui hands the keyboard to the next widget
+        // drawn, so the keys typed next never reach the grid. Cancel that move: the key was ours.
+        ui.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+    }
     // The text widget.
     let refs = formula_refs(&ed.text);
     let t = Tokens::get(ui.ctx());

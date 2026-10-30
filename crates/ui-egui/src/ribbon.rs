@@ -34,7 +34,7 @@ use data::data;
 use formulas::formulas;
 pub use home::FONTS;
 use home::home;
-pub(crate) use home::{font_combo, size_combo};
+pub(crate) use home::{font_combo, number_format_params, size_combo};
 use insert::{draw, insert};
 use page_layout::page_layout;
 use review::review;

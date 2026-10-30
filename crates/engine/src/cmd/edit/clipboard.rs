@@ -1,4 +1,4 @@
-use super::cell::input_to_cell;
+use super::cell::{input_to_cell_in, locale_param};
 use super::paste_special::paste_special;
 use super::{
     Cell, Clipboard, EngineError, Json, RangeRef, Result, Session, Value, cell_param_on, edit, json, ok, str_param, target_ranges, target_sheet,
@@ -167,6 +167,8 @@ fn paste_text(s: &mut Session, p: &Json, text: &str) -> Result<Json> {
     let sheet = target_sheet(s, p)?;
     let at = cell_param_on(s, p, "at", sheet)?.unwrap_or(s.doc()?.selection.current().start);
     let rows: Vec<Vec<String>> = parse_tsv(text);
+    // NexusOffice: text from another app in the interface's regional format (`locale`).
+    let locale = locale_param("edit.paste", p)?;
     let h = rows.len();
     let w = rows.iter().map(Vec::len).max().unwrap_or(0);
     // The HTML flavour, when the host passed it: the number behind each cell's shown text. Read
@@ -176,7 +178,7 @@ fn paste_text(s: &mut Session, p: &Json, text: &str) -> Result<Json> {
         for (ri, row) in rows.iter().enumerate() {
             for (ci, v) in row.iter().enumerate() {
                 let Some(c) = at.offset(ri as i64, ci as i64) else { continue };
-                let mut cell = input_to_cell(v, sheet, c, &mut cx.wb).unwrap_or_else(|_| Some(Cell::value(Value::text(v.as_str()))));
+                let mut cell = input_to_cell_in(v, sheet, c, &mut cx.wb, locale).unwrap_or_else(|_| Some(Cell::value(Value::text(v.as_str()))));
                 if let Some(cl) = cell.as_mut() {
                     numeric_from_html(cl, v, html.get(ri).and_then(|r| r.get(ci)), &mut cx.wb);
                 }

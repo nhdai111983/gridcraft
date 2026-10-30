@@ -31,6 +31,11 @@ pub(crate) fn canonical(
         let expr = formula::parse_closing_parens(body, |text| formula::parse_input(text, locale, known));
         return Ok(format!("={}", formula::print(&expr?)));
     }
+    // Vietnamese values (1.234,5, 24/10/2026, 1.234 ₫) are read by the engine in the vi-VN
+    // regional format (`cell.set`'s `locale`): they pass through as typed.
+    if locale == FormulaLocale::Vi {
+        return Ok(text.to_string());
+    }
     // Decimal-comma number entry follows the same preference, without rewriting text or dates.
     let normalized = body.trim().replace(locale.decimal_separator(), ".");
     let number = normalized.strip_suffix('%').unwrap_or(&normalized);

@@ -77,6 +77,8 @@ impl<'h> Evaluator<'h> {
                 let v = self.arg_val(args, 0).unwrap_or_default();
                 let f = self.arg_val(args, 1).unwrap_or_default();
                 let sys = self.host.workbook().date_system;
+                // NexusOffice: TEXT follows the workbook's regional format, as Excel's follows the system's.
+                let locale = self.host.workbook().locale;
                 let one = |v: &Value, f: &Value| -> Value {
                     if let Value::Error(e) = v {
                         return Value::Error(*e);
@@ -85,7 +87,7 @@ impl<'h> Evaluator<'h> {
                         Ok(c) => c,
                         Err(e) => return Value::Error(e),
                     };
-                    match gridcraft_numfmt::text_function(v, &code, sys) {
+                    match gridcraft_numfmt::text_function_in(v, &code, sys, locale) {
                         Ok(s) => Value::text(s),
                         Err(e) => Value::Error(e),
                     }

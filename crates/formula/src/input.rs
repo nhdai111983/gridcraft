@@ -9,6 +9,10 @@ pub enum FormulaLocale {
     #[default]
     En,
     Es,
+    /// NexusOffice: Vietnamese (vi-VN). Function names stay English, as in Excel's Vietnamese
+    /// version; the separators follow the regional format: decimal `,`, arguments `;`, array
+    /// columns `\` (as Spanish).
+    Vi,
 }
 
 const SPANISH: &[(&str, &str)] = &[
@@ -31,14 +35,18 @@ const SPANISH: &[(&str, &str)] = &[
 ];
 
 impl FormulaLocale {
+    /// Whether numbers take a decimal comma and arguments a `;` (every locale but English).
+    fn comma_decimal(self) -> bool {
+        matches!(self, Self::Es | Self::Vi)
+    }
     pub fn list_separator(self) -> char {
-        if self == Self::Es { ';' } else { ',' }
+        if self.comma_decimal() { ';' } else { ',' }
     }
     pub fn decimal_separator(self) -> char {
-        if self == Self::Es { ',' } else { '.' }
+        if self.comma_decimal() { ',' } else { '.' }
     }
     pub fn array_column_separator(self) -> char {
-        if self == Self::Es { '\\' } else { ',' }
+        if self.comma_decimal() { '\\' } else { ',' }
     }
     pub fn function_name(self, canonical: &str) -> &str {
         if self == Self::Es {
@@ -96,7 +104,10 @@ pub fn print_input(expr: &Expr, locale: FormulaLocale, known_name: impl Fn(&str)
         return Ok(crate::print(expr));
     }
     let mut expr = expr.clone();
-    normalize(&mut expr, &known_name, &mut Vec::new(), 0, true)?;
+    // Only Spanish has localized names (VERDADERO); Vietnamese keeps the English ones.
+    if locale == FormulaLocale::Es {
+        normalize(&mut expr, &known_name, &mut Vec::new(), 0, true)?;
+    }
     let canonical = crate::print(&expr);
     let tokens = crate::lexer::tokenize(&canonical).map_err(|e| ParseError { msg: e.msg, pos: e.pos })?;
     let mut out = String::new();

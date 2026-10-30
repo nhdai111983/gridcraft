@@ -21,7 +21,13 @@ pub(super) fn goal_seek(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, c
     let mut open = true;
     ok_cancel(ui, confirm, &mut open);
     if *confirm {
-        match app.run("data.goalSeek", json!({"set": set, "to": to.parse::<f64>().unwrap_or(0.0), "changing": changing})) {
+        // NexusOffice: the target is typed in the interface's regional format (`1,5` in vi-VN).
+        let target = gridcraft_engine::core::parse::parse_number_text_locale(
+            &to,
+            gridcraft_engine::core::DateSystem::D1900,
+            app.ui.language.regional_format(),
+        );
+        match app.run("data.goalSeek", json!({"set": set, "to": target.unwrap_or(0.0), "changing": changing})) {
             Ok(r) => app.toast = Some((format!("Goal Seeking found a solution: {}", r["value"]), crate::now_ms())),
             Err(e) => app.message = Some(("Goal Seek".into(), crate::clean_error(&e))),
         }

@@ -106,7 +106,9 @@ impl Default for EvoOptions {
 
 fn evo_options(p: &Json) -> EvoOptions {
     let d = EvoOptions::default();
-    let num = |k: &str| p.get(k).and_then(Json::as_f64).or_else(|| str_param(p, k).and_then(num_text)).filter(|v| v.is_finite());
+    // NexusOffice: typed in the Options dialog in the interface's regional format (`0,075`).
+    let locale = crate::cmd::edit::locale_param(CMD, p).unwrap_or_default();
+    let num = |k: &str| p.get(k).and_then(Json::as_f64).or_else(|| str_param(p, k).and_then(|t| num_text_in(t, locale))).filter(|v| v.is_finite());
     EvoOptions {
         population: num("populationSize").map_or(d.population, |v| v.clamp(MIN_POPULATION as f64, MAX_POPULATION as f64) as usize),
         mutation: num("mutationRate").map_or(d.mutation, |v| v.clamp(0.0, 1.0)),
@@ -155,6 +157,11 @@ fn cells_of(wb: &Workbook, t: &str, default_sheet: usize, cap: usize) -> Result<
     Ok((sheet.unwrap_or(default_sheet), out))
 }
 
+/// NexusOffice: [`num_text`] for a number typed in a regional format (`1,5` in vi-VN; `locale` parameter).
+fn num_text_in(t: &str, locale: gridcraft_core::Locale) -> Option<f64> {
+    gridcraft_core::parse::parse_number_text_locale(t.trim(), gridcraft_core::DateSystem::D1900, locale).filter(|v| v.is_finite())
+}
+
 fn num_text(t: &str) -> Option<f64> {
     gridcraft_core::parse::parse_number_text(t.trim()).filter(|v| v.is_finite())
 }
@@ -179,7 +186,7 @@ fn split_constraint(t: &str) -> Option<(String, Rel, String)> {
     None
 }
 
-fn parse_constraint(wb: &Workbook, sheet: usize, c: &Json) -> Result<Constraint> {
+fn parse_constraint(wb: &Workbook, sheet: usize, c: &Json, locale: gridcraft_core::Locale) -> Result<Constraint> {
     let (lhs_text, rel, rhs_json) = match c {
         Json::String(t) => {
             let (l, r, rhs) = split_constraint(t).ok_or_else(|| bad(CMD, format!("not a constraint: `{t}`")))?;
@@ -206,8 +213,9 @@ fn parse_constraint(wb: &Workbook, sheet: usize, c: &Json) -> Result<Constraint>
             }
             Json::String(t) => {
                 let t = t.trim().trim_start_matches('=').trim();
-                if let Some(v) = num_text(t) {
-                    (Rhs::Const(v), t.to_string())
+                // NexusOffice: a number typed in the interface's regional format (`1,5`) is kept en-US.
+                if let Some(v) = gridcraft_core::parse::parse_number_text_locale(t, wb.date_system, locale).filter(|v| v.is_finite()) {
+                    (Rhs::Const(v), if locale == gridcraft_core::Locale::EnUs { t.to_string() } else { gridcraft_core::number_to_text(v) })
                 } else {
                     let (rsi, cells) = cells_of(wb, t, sheet, MAX_CONSTRAINTS)?;
                     if rsi != sheet {
@@ -228,6 +236,7 @@ fn parse_constraint(wb: &Workbook, sheet: usize, c: &Json) -> Result<Constraint>
 pub(super) fn parse_model(s: &Session, p: &Json) -> Result<Model> {
     let d = s.doc()?;
     let wb = &d.wb;
+    let locale = crate::cmd::edit::locale_param(CMD, p)?;
     let obj_text = str_param(p, "objective").or_else(|| str_param(p, "setObjective")).or_else(|| str_param(p, "set")).unwrap_or("");
     let (sheet, obj) = cells_of(wb, obj_text, wb.active_sheet(), 1).map_err(|_| EngineError::Other("The objective must be a single cell.".into()))?;
     let objective = *obj.first().ok_or_else(|| EngineError::Other("The objective must be a single cell.".into()))?;
@@ -240,7 +249,7 @@ pub(super) fn parse_model(s: &Session, p: &Json) -> Result<Model> {
         "min" | "minimize" | "minimum" => Goal::Min,
         "value" | "valueof" | "value of" => {
             let v = f64_param(p, "value")
-                .or_else(|| str_param(p, "value").and_then(num_text))
+                .or_else(|| str_param(p, "value").and_then(|t| num_text_in(t, locale)))
                 .filter(|v| v.is_finite())
                 .ok_or_else(|| bad(CMD, "goal `value` needs a number in `value`"))?;
             Goal::Value(v)
@@ -270,7 +279,7 @@ pub(super) fn parse_model(s: &Session, p: &Json) -> Result<Model> {
             return Err(EngineError::Other(format!("Too many constraints (at most {MAX_CONSTRAINTS}).")));
         }
         for c in list {
-            let c = parse_constraint(wb, sheet, c)?;
+            let c = parse_constraint(wb, sheet, c, locale)?;
             scalar = scalar.saturating_add(c.lhs.len());
             if scalar > MAX_CONSTRAINTS {
                 return Err(EngineError::Other(format!("Too many constraints (at most {MAX_CONSTRAINTS} cells).")));

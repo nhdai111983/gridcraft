@@ -145,7 +145,8 @@ fn closing_a_new_workbook_saves_through_the_hosts_dialog_then_closes() {
     h.state_mut().run_or_alert("file.close", json!({}));
     h.run_steps(3);
     assert!(h.query_by_label("Lưu thay đổi?").is_some() || h.query_by_label_contains("Bạn có muốn lưu").is_some(), "asks in Vietnamese");
-    h.get_by_label("Lưu").click();
+    // (egui 0.37 also names the title bar's Save icon by its tooltip: the dialog's button is the lower one.)
+    h.query_all_by_label("Lưu").max_by(|a, b| a.rect().top().total_cmp(&b.rect().top())).expect("the Lưu button").click();
     h.run_steps(3);
     let tx = waiting.borrow_mut().pop().expect("Save asked where");
     tx.send(Ok(Some(d.join("Sổ quỹ.xlsx").to_string_lossy().into_owned()))).unwrap();
@@ -277,7 +278,7 @@ fn vietnamese_names_sheets_and_formats_dong() {
     let names: Vec<String> = h.state().session.active().unwrap().wb.sheets.iter().map(|s| s.name.clone()).collect();
     assert_eq!(names.last().map(String::as_str), Some("Trang tính1"), "{names:?}");
     h.state_mut().run("cell.set", json!({"cell": "A1", "input": "1250000"})).unwrap();
-    h.get_by_label("Định dạng số kế toán").click();
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Định dạng số kế toán").click();
     h.run_steps(3);
     h.get_by_label("₫ Tiếng Việt").click();
     h.run_steps(3);

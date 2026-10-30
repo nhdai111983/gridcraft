@@ -370,7 +370,13 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
         confirm = false;
     }
     if confirm && let Some(cmd) = d.command {
-        let params = build_params(&d);
+        let mut params = build_params(&d);
+        // NexusOffice: numbers and dates typed in these dialogs are in the interface's regional format.
+        if super::nexus_locale::LOCALE_COMMANDS.contains(&cmd)
+            && let Some(m) = params.as_object_mut()
+        {
+            m.insert("locale".into(), json!(app.ui.language.regional_format().tag()));
+        }
         match app.run(cmd, params) {
             Ok(r) => {
                 open = false;

@@ -156,6 +156,14 @@ pub fn command_specs() -> &'static [CommandSpec] {
     })
 }
 
+/// NexusOffice: whether a command only returns text to its caller (a query such as `cell.get`
+/// or `file.saveBytes`, or a copy), so an API caller's display locale ([`crate::display::with_locale`])
+/// may apply to it. Commands that change the workbook or write the user's files evaluate and
+/// write in the workbook's own regional format.
+pub fn returns_text_only(id: &str) -> bool {
+    matches!(id, "edit.copy" | "edit.cut") || find_command(id).is_some_and(|c| !c.journal && !c.undoable)
+}
+
 pub fn find_command(id: &str) -> Option<&'static CommandSpec> {
     if let Some(spec) = command_specs().iter().find(|c| c.id == id) {
         return Some(spec);
