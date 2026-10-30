@@ -2,6 +2,16 @@ use super::{Json, Notice, NoticeKind, OpenWindow, SheetApp, clean_error, json};
 
 impl SheetApp {
     pub fn open_path(&mut self, path: &str) {
+        // NexusOffice: a host with tabs opens it in a tab of its own, unless this window holds only
+        // an untouched blank workbook (which the opened one replaces) or has it open already.
+        if let Some(open) = &self.services.open_document
+            && !self.session.documents().iter().any(|d| d.path.as_deref() == Some(path))
+            && !(self.session.documents().len() == 1 && self.session.active().is_some_and(gridcraft_engine::DocState::is_untouched_blank))
+        {
+            open(path);
+            self.backstage = None;
+            return;
+        }
         match self.run("file.open", json!({"path": path})) {
             Ok(r) => self.after_open(Some(path), &r),
             // A password-protected workbook: ask for the password; the dialog opens it.
@@ -50,12 +60,23 @@ impl SheetApp {
             } else {
                 "This workbook contains VBA macros. Nexus Sheet keeps them when you save as .xlsm, but does not run them."
             };
-            self.notice = Some(Notice { text: text.into(), kind: NoticeKind::Warning, action: Some(("What this means".into(), "macros".into())) });
+            // NexusOffice: notices in the interface's language.
+            let lang = self.ui.language;
+            self.notice = Some(Notice {
+                text: lang.tr(text).into(),
+                kind: NoticeKind::Warning,
+                action: Some((lang.tr("What this means").into(), "macros".into())),
+            });
         } else {
+            let first = msgs.first().copied().unwrap_or_default();
             let text = if msgs.len() == 1 {
-                msgs[0].to_string()
+                first.to_string()
             } else {
-                format!("{} items in this file were handled differently. First: {}", msgs.len(), msgs[0])
+                self.ui
+                    .language
+                    .tr("{count} items in this file were handled differently. First: {first}")
+                    .replace("{count}", &msgs.len().to_string())
+                    .replace("{first}", first)
             };
             self.notice = Some(Notice { text, kind: NoticeKind::Info, action: None });
         }

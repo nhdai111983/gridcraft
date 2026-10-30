@@ -425,7 +425,9 @@ pub fn read_xlsx(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
 pub(crate) fn unique_name(wb: &Workbook, name: &str, i: usize) -> String {
     let mut base: String = name.chars().filter(|c| !matches!(c, ':' | '\\' | '/' | '?' | '*' | '[' | ']')).take(31).collect();
     if base.trim().is_empty() {
-        base = format!("Sheet{}", i + 1);
+        // NexusOffice: in the interface's language (`with_sheet_prefix`), "Sheet" by default.
+        let prefix = gridcraft_model::workbook::sheet_prefix();
+        base = format!("{}{}", if prefix.trim().is_empty() { "Sheet" } else { prefix.as_str() }, i + 1);
     }
     if wb.sheet_index(&base).is_none() {
         return base;

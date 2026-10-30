@@ -1,7 +1,8 @@
 use super::{
     INTERFACE_SCALE_MAX, INTERFACE_SCALE_MIN, Json, NoticeKind, SheetApp, UiRequest, backstage, clamp_interface_scale, clean_error, dialogs,
-    formula_locale, i18n, json, now_ms, printing,
+    formula_locale, i18n, json, now_ms, printing, theme,
 };
+use crate::{FileDialogRequest, file_dialogs};
 
 impl SheetApp {
     /// Runs an engine command (or a UI command) and handles UI requests it makes.
@@ -42,6 +43,14 @@ impl SheetApp {
                 | "object.move"
         ) {
             self.commit_text_box_edit()?;
+        }
+        // NexusOffice: the host's tabs take new workbooks; this one stays as it is.
+        if id == "file.new"
+            && let Some(new) = &self.services.new_document
+        {
+            new(params);
+            self.backstage = None;
+            return Ok(json!({"host": "file.new"}));
         }
         if let Some(r) = self.run_ui_command(id, &params) {
             return r;
@@ -89,7 +98,10 @@ impl SheetApp {
         }
         // Menu-style Export as PDF with no file named: ask where to save, like Save As does.
         // Programmatic callers use `run` and keep getting the PDF bytes back.
-        if id == "file.exportPdf" && self.services.pick_save.is_some() && params.get("path").and_then(Json::as_str).is_none_or(str::is_empty) {
+        if id == "file.exportPdf"
+            && (self.services.pick_save.is_some() || self.services.file_dialog.is_some())
+            && params.get("path").and_then(Json::as_str).is_none_or(str::is_empty)
+        {
             return self.export_pdf_with_picker(params);
         }
         // Recommended Charts with no chart type named (ribbon button, keytip, command search) asks
@@ -220,6 +232,24 @@ impl SheetApp {
                 }
                 Ok(json!({"page": self.backstage.as_ref().map(|b| b.page.id())}))
             }
+            "ui.accent" => {
+                // NexusOffice: `{"value": "#RRGGBB"}` sets the accent colour, `""` or `null` goes
+                // back to the app's own; no value reads it. Applied on the next frame (`logic`).
+                if let Some(v) = p.get("value") {
+                    match v.as_str().map(str::trim).filter(|h| !h.is_empty()) {
+                        None if v.is_null() || v.as_str().is_some() => self.ui.accent = None,
+                        None => return Some(Err("the accent colour is a string: \"#RRGGBB\", or \"\" for the app's own".into())),
+                        Some(hex) => match theme::parse_hex(hex) {
+                            Some(c) => self.ui.accent = Some(theme::to_hex(c)),
+                            None => {
+                                let shown: String = hex.chars().take(24).collect();
+                                return Some(Err(format!("unknown colour {shown:?}; use \"#RRGGBB\"")));
+                            }
+                        },
+                    }
+                }
+                Ok(json!({"accent": self.ui.accent}))
+            }
             "ui.dialog" => {
                 let name = p.get("name").and_then(Json::as_str).unwrap_or("");
                 self.open_dialog(name, p.clone());
@@ -299,6 +329,7 @@ impl SheetApp {
             return;
         }
         match name {
+            "open" if self.ask_file(FileDialogRequest::Open { purpose: "workbook".into() }, file_dialogs::AfterPick::OpenWorkbook) => {}
             "open" => {
                 if let Some(start) = &self.services.open_async {
                     start();
@@ -310,9 +341,13 @@ impl SheetApp {
             }
             "saveAs" => {
                 let suggested = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
-                if let Some(pick) = &self.services.pick_save {
+                let name = if std::path::Path::new(&suggested).extension().is_none() { format!("{suggested}.xlsx") } else { suggested.clone() };
+                // Save As writes the workbook: only workbook types (a CSV or PDF is a copy, made by Export).
+                if self.ask_file(FileDialogRequest::Save { name, types: vec!["xlsx".into()] }, file_dialogs::AfterPick::Save { then_close: false }) {
+                    // NexusOffice: the host shows the dialog; the save happens when its answer comes.
+                } else if let Some(pick) = &self.services.pick_save {
                     if let Some(path) = pick(&suggested) {
-                        let path = if std::path::Path::new(&path).extension().is_none() { format!("{path}.xlsx") } else { path };
+                        let path = file_dialogs::with_workbook_extension(path, false);
                         self.run_or_alert("file.save", json!({"path": path}));
                     }
                 } else if self.services.download.is_some()

@@ -78,6 +78,12 @@ impl EditState {
         }
     }
 
+    /// NexusOffice: the edit would change the cell — typed text (an edit started by typing has no
+    /// `original`), or text edited away from what the cell held, or an AutoComplete suggestion.
+    pub fn changed(&self) -> bool {
+        self.original.as_ref().is_none_or(|o| self.text != *o) || self.completion.is_some()
+    }
+
     pub fn is_formula(&self) -> bool {
         self.text.starts_with('=')
             || (self.text.starts_with('+') && self.text.len() > 1)

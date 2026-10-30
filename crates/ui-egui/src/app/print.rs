@@ -22,6 +22,13 @@ impl SheetApp {
         }
         let title = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
         let stem = std::path::Path::new(&title).file_stem().and_then(std::ffi::OsStr::to_str).unwrap_or("Book1").to_string();
+        // NexusOffice: the host's own (non-blocking) Save dialog, when it has one.
+        if self.ask_file(
+            crate::FileDialogRequest::Save { name: format!("{stem}.pdf"), types: vec!["pdf".into()] },
+            crate::file_dialogs::AfterPick::ExportPdf(params.clone()),
+        ) {
+            return;
+        }
         let Some(pick) = &self.services.pick_save else { return };
         let Some(path) = pick(&format!("{stem}.pdf")) else { return };
         // The picker may suggest a workbook extension; the export writes a PDF.

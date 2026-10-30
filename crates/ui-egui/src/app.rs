@@ -8,7 +8,7 @@ use super::updates_ui;
 use super::{
     CellRef, HashMap, INTERFACE_SCALE_MAX, INTERFACE_SCALE_MIN, Json, Notice, Perf, RangeRef, Session, SheetApp, UiRequest, UiState, backstage,
     clamp_interface_scale, clean_error, control, desktop_theme, dialogs, editor, floating_pictures, formula_bar, formula_locale, grid, i18n, json,
-    keytips, panes, pivot_pane, printing, ribbon, tabs, text_box, theme, widgets,
+    keytips, nexus_toolbar, nexus_wps, panes, pivot_pane, printing, ribbon, tabs, text_box, theme, widgets,
 };
 
 mod clipboard;
@@ -18,6 +18,7 @@ mod files;
 mod fonts;
 mod input;
 mod keys;
+mod nexus;
 mod prefs;
 mod print;
 mod quit;
@@ -81,6 +82,10 @@ impl SheetApp {
             arrange_windows: None,
             #[cfg(not(target_arch = "wasm32"))]
             updates_rt: Default::default(),
+            toolbar: false,
+            wps: false,
+            embedded: false,
+            file_dialog: None,
         }
     }
 
@@ -113,6 +118,8 @@ impl SheetApp {
             self.desktop_dark = Some(answer);
         }
         self.sync_theme_preference(ctx);
+        // NexusOffice: sheet names in the interface's language and the user's accent colour.
+        self.sync_nexus_preferences(ctx);
         self.sync_input_options(ctx);
         // The geometry captures are bound to. Native frames recorded it from their fresh
         // `RawInput` in `raw_input_hook` (including hidden logic-only ticks); the epoch is
@@ -126,6 +133,8 @@ impl SheetApp {
         // issues the capture command (after every widget, so a command cannot be missed).
         control::drain_screenshots(self, ctx);
         control::poll(self, ctx);
+        // NexusOffice: the host's file dialog answered.
+        self.poll_file_dialog();
         // Printing feedback is polled once per frame, here, so hidden windows and logic-only
         // frames still see worker completion. `ui` and the desktop app no longer poll it.
         self.poll_printing(ctx);
@@ -148,8 +157,9 @@ impl SheetApp {
     /// Window title, next to the close/autosave state: `ViewportCommand::Title` is valid outside a
     /// pass and a control-channel rename while hidden updates it on return.
     fn update_title(&mut self, ctx: &egui::Context) {
-        // Native windows get theirs from `doc_windows`.
-        if self.native_windows {
+        // Native windows get theirs from `doc_windows`; a hosted app (NexusOffice) leaves the
+        // host window's title alone.
+        if self.native_windows || self.embedded {
             return;
         }
         let Some(d) = self.session.active() else { return };
@@ -187,6 +197,15 @@ impl SheetApp {
             ctx.request_repaint();
             return;
         }
+        // NexusOffice: a host window that brings this tab forward in the middle of a frame (a
+        // click on its tab strip) draws it before `logic` has seen another editor's fonts: paint
+        // nothing this frame and install ours again, instead of drawing with families egui no
+        // longer has (which panics).
+        if self.embedded && !self.fonts_installed(&ctx) {
+            self.restyle();
+            ctx.request_repaint();
+            return;
+        }
         let t0 = now_ms();
         // A script may have switched windows since the last frame.
         self.follow_active_window();
@@ -210,14 +229,21 @@ impl SheetApp {
         if self.backstage.is_none() || self.keytips.prefix().is_some() {
             self.ribbon_keys(&ctx);
         }
-        if self.chrome.title_bar {
+        // NexusOffice: the WPS-style layout has no title bar (its top row carries the same tools).
+        if self.chrome.title_bar && !self.wps {
             ribbon::title_bar(self, ui);
         }
         if self.backstage.is_some() {
             // File tab: the Backstage view replaces everything below the title bar.
             backstage::show(self, ui);
         } else {
-            ribbon::show(self, ui);
+            if self.wps {
+                nexus_wps::show(self, ui);
+            } else if self.toolbar {
+                nexus_toolbar::show(self, ui);
+            } else {
+                ribbon::show(self, ui);
+            }
             widgets::notice_bar(self, ui);
             if self.session.prefs.formula_bar {
                 formula_bar::show(self, ui);

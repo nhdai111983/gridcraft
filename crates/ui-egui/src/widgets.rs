@@ -96,20 +96,48 @@ pub fn toggle_button(ui: &mut Ui, icon: Icon, on: bool, tip: &str) -> Response {
     resp.on_hover_text(tip_text(ui, tip))
 }
 
-/// Large ribbon button: 32px icon over a one- or two-line label.
+/// Height of upstream's ribbon content (a large button).
+pub const CONTENT_H: f32 = 72.0;
+/// Height of the content in the NexusOffice WPS strip ([`crate::nexus_wps`]): two rows of small
+/// buttons; a large button is a 20 px icon over one label line there.
+pub const COMPACT_H: f32 = 50.0;
+const COMPACT_ICON_Y: f32 = 15.0;
+const COMPACT_ICON: f32 = 20.0;
+const COMPACT_LABEL_Y: f32 = 37.0;
+const _: () = assert!(COMPACT_ICON_Y + COMPACT_ICON / 2.0 <= COMPACT_LABEL_Y - 6.0);
+const _: () = assert!(COMPACT_LABEL_Y + 7.0 <= COMPACT_H);
+
+/// Height of the ribbon content being drawn: [`COMPACT_H`] in the WPS strip, else [`CONTENT_H`].
+pub fn content_h(ui: &Ui) -> f32 {
+    if crate::nexus_wps::compact(ui) { COMPACT_H } else { CONTENT_H }
+}
+
+/// Large ribbon button: 32px icon over a one- or two-line label (in the NexusOffice WPS strip, a
+/// 20 px icon over the label on one line).
 pub fn big_button(ui: &mut Ui, icon: Icon, label: &str, tip: &str, dropdown: bool) -> Response {
     let t = Tokens::get(ui.ctx());
     let label = tr(ui, label);
     let (lines, w) = big_label(ui, label, dropdown);
-    let (rect, resp) = ui.allocate_exact_size(vec2(w, 72.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, content_h(ui)), Sense::click());
+    // NexusOffice: the button's accessible name is its label on one line.
+    let one_line = label.split('\n').map(str::trim).collect::<Vec<_>>().join(" ");
+    let enabled = ui.is_enabled();
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, &one_line));
     if resp.is_pointer_button_down_on() {
         ui.painter().rect_filled(rect, 5.0, t.pressed);
     } else if resp.hovered() {
         ui.painter().rect_filled(rect, 5.0, t.hover);
     }
-    icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.center().x, rect.top() + 21.0), vec2(30.0, 30.0)), icon, t.text);
+    let (icon_y, icon_size) = big_icon(ui);
+    icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.center().x, rect.top() + icon_y), vec2(icon_size, icon_size)), icon, t.text);
     paint_big_label(ui, rect, &lines, dropdown);
     resp.on_hover_text(tip_text(ui, tip))
+}
+
+/// NexusOffice: where a big button's icon sits (centre from the top) and its size — a 20 px icon
+/// in the WPS strip, upstream's 30 px otherwise.
+fn big_icon(ui: &Ui) -> (f32, f32) {
+    if crate::nexus_wps::compact(ui) { (COMPACT_ICON_Y, COMPACT_ICON) } else { (21.0, 30.0) }
 }
 
 /// Large split button (Formulas › AutoSum): the icon runs the default action, the label and its
@@ -119,8 +147,10 @@ pub fn big_split_button(ui: &mut Ui, icon: Icon, label: &str, tip: &str) -> (Res
     let t = Tokens::get(ui.ctx());
     let label = tr(ui, label);
     let (lines, w) = big_label(ui, label, true);
-    let (rect, _) = ui.allocate_exact_size(vec2(w, 72.0), Sense::hover());
-    let split = rect.top() + 38.0;
+    let (rect, _) = ui.allocate_exact_size(vec2(w, content_h(ui)), Sense::hover());
+    let (icon_y, icon_size) = big_icon(ui);
+    // NexusOffice: the split sits under the icon (38 px in upstream's ribbon).
+    let split = rect.top() + icon_y + icon_size / 2.0 + 2.0;
     let main_rect = Rect::from_min_max(rect.min, pos2(rect.right(), split));
     let arrow_rect = Rect::from_min_max(pos2(rect.left(), split), rect.max);
     let main = ui.interact(main_rect, ui.scope_id().with((label, "big-split-main")), Sense::click());
@@ -134,7 +164,7 @@ pub fn big_split_button(ui: &mut Ui, icon: Icon, label: &str, tip: &str) -> (Res
             ui.painter().rect_filled(r, 5.0, t.pressed);
         }
     }
-    icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.center().x, rect.top() + 21.0), vec2(30.0, 30.0)), icon, t.text);
+    icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.center().x, rect.top() + icon_y), vec2(icon_size, icon_size)), icon, t.text);
     paint_big_label(ui, rect, &lines, true);
     let name = label.replace('\n', " ");
     let enabled = ui.is_enabled();
@@ -147,25 +177,30 @@ pub fn big_split_button(ui: &mut Ui, icon: Icon, label: &str, tip: &str) -> (Res
 /// Size of the dropdown arrow beside a big button's last label line.
 const BIG_ARROW: f32 = 10.0;
 
-/// A big button's label lines, laid out, and the width the button needs for them.
+/// A big button's label lines, laid out, and the width the button needs for them. NexusOffice: in
+/// the WPS strip the label is one line, a little larger, and the button narrower.
 fn big_label(ui: &Ui, label: &str, dropdown: bool) -> (Vec<std::sync::Arc<egui::Galley>>, f32) {
     let t = Tokens::get(ui.ctx());
-    let font = theme::ui_font(11.5);
-    let lines: Vec<_> = label.split('\n').map(|line| ui.painter().layout_no_wrap(line.to_string(), font.clone(), t.text)).collect();
+    let compact = crate::nexus_wps::compact(ui);
+    let font = theme::ui_font(if compact { 12.0 } else { 11.5 });
+    let one_line = label.split('\n').map(str::trim).collect::<Vec<_>>().join(" ");
+    let texts: Vec<&str> = if compact { vec![one_line.as_str()] } else { label.split('\n').collect() };
+    let lines: Vec<_> = texts.iter().map(|line| ui.painter().layout_no_wrap((*line).to_string(), font.clone(), t.text)).collect();
     let arrow_space = if dropdown { 4.0 + BIG_ARROW } else { 0.0 };
     let text_w = lines.iter().enumerate().map(|(i, line)| line.size().x + if i + 1 == lines.len() { arrow_space } else { 0.0 }).fold(0.0, f32::max);
-    (lines, (text_w + 12.0).max(44.0))
+    (lines, (text_w + 12.0).max(if compact { 36.0 } else { 44.0 }))
 }
 
 /// Paints a big button's label lines in `rect`, with the dropdown arrow beside the last one.
 fn paint_big_label(ui: &Ui, rect: Rect, lines: &[std::sync::Arc<egui::Galley>], dropdown: bool) {
     let t = Tokens::get(ui.ctx());
     let arrow_space = if dropdown { 4.0 + BIG_ARROW } else { 0.0 };
+    let label_y = if crate::nexus_wps::compact(ui) { COMPACT_LABEL_Y } else { 46.0 };
     for (i, line) in lines.iter().enumerate() {
         let has_arrow = dropdown && i + 1 == lines.len();
         let line_w = line.size().x + if has_arrow { arrow_space } else { 0.0 };
         let left = rect.center().x - line_w / 2.0;
-        let y = rect.top() + 46.0 + i as f32 * 13.0;
+        let y = rect.top() + label_y + i as f32 * 13.0;
         ui.painter().galley(pos2(left, y - line.size().y / 2.0), line.clone(), t.text);
         if has_arrow {
             icons::paint(

@@ -22,6 +22,8 @@ use egui::{Color32, FontData, FontDefinitions, FontFamily, FontId, Stroke, Visua
 
 mod font_fallback;
 mod font_setup;
+// NexusOffice: Emerald and the user's accent colour.
+mod nexus_accent;
 
 pub use font_fallback::symbol_face_installed;
 #[cfg(test)]
@@ -36,6 +38,7 @@ pub use font_setup::{
 use font_setup::{candidates, craft_font_faces, try_load};
 #[cfg(test)]
 pub(crate) use font_setup::{drop_unparseable_fonts, font_parses};
+pub use nexus_accent::{ACCENT_PRESETS, APP_COLOR, APP_INK, BRAND_GRADIENT, accent, contrast_ratio, parse_hex, set_accent, to_hex, with_accent};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tokens {
@@ -151,10 +154,15 @@ const SHEET_CONTROL_TEXT: Color32 = rgb(0x1F1F1F);
 const SHEET_TRACK: Color32 = rgb(0xD6D6D6);
 
 impl Tokens {
+    /// Nexus Sheet light palette (NexusOffice design system): slate surfaces, Emerald app colour.
+    /// The accent is Emerald's ink shade #047857, so white text on it and accent text on the bars
+    /// reach WCAG 4.5:1 (Emerald #10B981 itself is 2.5:1 on white).
     pub fn light() -> Tokens {
         Tokens::palette(false)
     }
 
+    /// Nexus Sheet dark palette: Obsidian #0F172A and slate surfaces, Emerald 400 accent with dark
+    /// text on it (white on a light accent would be under 2:1). Cells stay white paper.
     pub fn dark() -> Tokens {
         Tokens::palette(true)
     }
@@ -163,36 +171,36 @@ impl Tokens {
     fn palette(dark: bool) -> Tokens {
         Tokens {
             dark,
-            window: pick(dark, Color32::from_rgb(0xF3, 0xF3, 0xF3), Color32::from_rgb(0x29, 0x29, 0x29)),
-            ribbon: pick(dark, Color32::from_rgb(0xFF, 0xFF, 0xFF), Color32::from_rgb(0x33, 0x33, 0x33)),
-            ribbon_border: pick(dark, Color32::from_rgb(0xE3, 0xE3, 0xE3), Color32::from_rgb(0x40, 0x40, 0x40)),
-            text: pick(dark, Color32::from_rgb(0x24, 0x24, 0x24), Color32::from_rgb(0xEE, 0xEE, 0xEE)),
-            text_dim: pick(dark, Color32::from_rgb(0x61, 0x61, 0x61), Color32::from_rgb(0xB0, 0xB0, 0xB0)),
-            text_disabled: pick(dark, Color32::from_rgb(0xB0, 0xB0, 0xB0), Color32::from_rgb(0x70, 0x70, 0x70)),
-            accent: pick(dark, Color32::from_rgb(0x10, 0x7C, 0x41), Color32::from_rgb(0x5C, 0xC5, 0x87)),
-            accent_dark: pick(dark, Color32::from_rgb(0x0B, 0x5E, 0x31), Color32::from_rgb(0x3F, 0xA8, 0x6C)),
-            accent_soft: pick(dark, Color32::from_rgb(0xDF, 0xF1, 0xE6), Color32::from_rgb(0x23, 0x45, 0x31)),
-            hover: pick(dark, Color32::from_rgb(0xEB, 0xEB, 0xEB), Color32::from_rgb(0x42, 0x42, 0x42)),
-            pressed: pick(dark, Color32::from_rgb(0xDD, 0xDD, 0xDD), Color32::from_rgb(0x4D, 0x4D, 0x4D)),
-            separator: pick(dark, Color32::from_rgb(0xE0, 0xE0, 0xE0), Color32::from_rgb(0x48, 0x48, 0x48)),
+            window: pick(dark, Color32::from_rgb(0xF1, 0xF5, 0xF9), Color32::from_rgb(0x0F, 0x17, 0x2A)), // NexusOffice
+            ribbon: pick(dark, Color32::from_rgb(0xF8, 0xFA, 0xFC), Color32::from_rgb(0x1E, 0x29, 0x3B)), // NexusOffice
+            ribbon_border: pick(dark, Color32::from_rgb(0xE2, 0xE8, 0xF0), Color32::from_rgb(0x33, 0x41, 0x55)), // NexusOffice
+            text: pick(dark, Color32::from_rgb(0x1E, 0x29, 0x3B), Color32::from_rgb(0xF1, 0xF5, 0xF9)),   // NexusOffice
+            text_dim: pick(dark, Color32::from_rgb(0x47, 0x55, 0x69), Color32::from_rgb(0xA8, 0xB4, 0xC4)), // NexusOffice
+            text_disabled: pick(dark, Color32::from_rgb(0xA3, 0xAD, 0xBA), Color32::from_rgb(0x64, 0x74, 0x8B)), // NexusOffice
+            accent: pick(dark, APP_INK, Color32::from_rgb(0x34, 0xD3, 0x99)),                             // NexusOffice
+            accent_dark: pick(dark, Color32::from_rgb(0x06, 0x5F, 0x46), Color32::from_rgb(0x6E, 0xE7, 0xB7)), // NexusOffice
+            accent_soft: pick(dark, Color32::from_rgb(0xD1, 0xFA, 0xE5), Color32::from_rgb(0x06, 0x4E, 0x3B)), // NexusOffice
+            hover: pick(dark, Color32::from_rgb(0xE9, 0xED, 0xF2), Color32::from_rgb(0x33, 0x41, 0x55)),  // NexusOffice
+            pressed: pick(dark, Color32::from_rgb(0xDC, 0xE3, 0xEA), Color32::from_rgb(0x3F, 0x4C, 0x5F)), // NexusOffice
+            separator: pick(dark, Color32::from_rgb(0xE2, 0xE8, 0xF0), Color32::from_rgb(0x33, 0x41, 0x55)), // NexusOffice
             grid_bg: Color32::WHITE,
-            desk: pick(dark, Color32::from_rgb(0xDE, 0xDE, 0xDE), Color32::from_rgb(0x3A, 0x3A, 0x3A)),
-            gridline: Color32::from_rgb(0xE1, 0xE1, 0xE1),
-            header_bg: pick(dark, Color32::from_rgb(0xF8, 0xF8, 0xF8), Color32::from_rgb(0x30, 0x30, 0x30)),
-            header_text: pick(dark, Color32::from_rgb(0x42, 0x42, 0x42), Color32::from_rgb(0xCC, 0xCC, 0xCC)),
-            header_line: pick(dark, Color32::from_rgb(0xD6, 0xD6, 0xD6), Color32::from_rgb(0x45, 0x45, 0x45)),
-            header_sel_bg: pick(dark, Color32::from_rgb(0xE1, 0xE1, 0xE1), Color32::from_rgb(0x45, 0x45, 0x45)),
-            header_sel_text: pick(dark, Color32::from_rgb(0x0B, 0x5E, 0x31), Color32::from_rgb(0x6F, 0xD3, 0x9A)),
-            header_all_bg: pick(dark, Color32::from_rgb(0xC8, 0xE6, 0xD3), Color32::from_rgb(0x2E, 0x55, 0x3E)),
-            sel_fill: pick(dark, Color32::from_rgba_unmultiplied(0x10, 0x7C, 0x41, 0x1C), Color32::from_rgba_unmultiplied(0x10, 0x7C, 0x41, 0x24)),
-            sel_border: Color32::from_rgb(0x10, 0x7C, 0x41),
-            input_bg: pick(dark, Color32::WHITE, Color32::from_rgb(0x1F, 0x1F, 0x1F)),
-            input_border: pick(dark, Color32::from_rgb(0xD1, 0xD1, 0xD1), Color32::from_rgb(0x50, 0x50, 0x50)),
-            tab_bar: pick(dark, Color32::from_rgb(0xF3, 0xF3, 0xF3), Color32::from_rgb(0x29, 0x29, 0x29)),
-            tab_active: pick(dark, Color32::WHITE, Color32::from_rgb(0x3A, 0x3A, 0x3A)),
-            status_bar: pick(dark, Color32::from_rgb(0xF3, 0xF3, 0xF3), Color32::from_rgb(0x29, 0x29, 0x29)),
+            desk: pick(dark, Color32::from_rgb(0xE9, 0xED, 0xF2), Color32::from_rgb(0x02, 0x06, 0x17)), // NexusOffice
+            gridline: Color32::from_rgb(0xE2, 0xE8, 0xF0),                                              // NexusOffice
+            header_bg: pick(dark, Color32::from_rgb(0xF8, 0xFA, 0xFC), Color32::from_rgb(0x1E, 0x29, 0x3B)), // NexusOffice
+            header_text: pick(dark, Color32::from_rgb(0x47, 0x55, 0x69), Color32::from_rgb(0xCB, 0xD5, 0xE1)), // NexusOffice
+            header_line: pick(dark, Color32::from_rgb(0xCB, 0xD5, 0xE1), Color32::from_rgb(0x33, 0x41, 0x55)), // NexusOffice
+            header_sel_bg: pick(dark, Color32::from_rgb(0xE2, 0xE8, 0xF0), Color32::from_rgb(0x33, 0x41, 0x55)), // NexusOffice
+            header_sel_text: pick(dark, Color32::from_rgb(0x06, 0x5F, 0x46), Color32::from_rgb(0x34, 0xD3, 0x99)), // NexusOffice
+            header_all_bg: pick(dark, Color32::from_rgb(0xA7, 0xF3, 0xD0), Color32::from_rgb(0x06, 0x5F, 0x46)), // NexusOffice
+            sel_fill: pick(dark, Color32::from_rgba_unmultiplied(0x10, 0xB9, 0x81, 0x1C), Color32::from_rgba_unmultiplied(0x10, 0xB9, 0x81, 0x24)), // NexusOffice
+            sel_border: Color32::from_rgb(0x05, 0x96, 0x69),                           // NexusOffice
+            input_bg: pick(dark, Color32::WHITE, Color32::from_rgb(0x02, 0x06, 0x17)), // NexusOffice
+            input_border: pick(dark, Color32::from_rgb(0xCB, 0xD5, 0xE1), Color32::from_rgb(0x47, 0x55, 0x69)), // NexusOffice
+            tab_bar: pick(dark, Color32::from_rgb(0xF1, 0xF5, 0xF9), Color32::from_rgb(0x0F, 0x17, 0x2A)), // NexusOffice
+            tab_active: pick(dark, Color32::WHITE, Color32::from_rgb(0x1E, 0x29, 0x3B)), // NexusOffice
+            status_bar: pick(dark, Color32::from_rgb(0xF1, 0xF5, 0xF9), Color32::from_rgb(0x0F, 0x17, 0x2A)), // NexusOffice
             cell_text: Color32::BLACK,
-            menu_bg: pick(dark, Color32::WHITE, Color32::from_rgb(0x30, 0x30, 0x30)),
+            menu_bg: pick(dark, Color32::WHITE, Color32::from_rgb(0x1E, 0x29, 0x3B)), // NexusOffice
             shadow: pick(dark, Color32::from_black_alpha(40), Color32::from_black_alpha(90)),
             danger: pick(dark, Color32::from_rgb(0xC4, 0x2B, 0x1C), Color32::from_rgb(0xFF, 0x95, 0x85)),
             error_check_green: pick(dark, Color32::from_rgb(0x1E, 0x8E, 0x3E), Color32::from_rgb(0x4C, 0xC2, 0x6B)),
@@ -202,11 +210,13 @@ impl Tokens {
             notice_warn_border: pick(dark, Color32::from_rgb(0xF0, 0xC3, 0x6E), Color32::from_rgb(0x7A, 0x67, 0x30)),
             notice_info_bg: pick(dark, Color32::from_rgb(0xEA, 0xF2, 0xFB), Color32::from_rgb(0x24, 0x33, 0x44)),
             notice_info_border: pick(dark, Color32::from_rgb(0xB9, 0xD2, 0xEC), Color32::from_rgb(0x3B, 0x55, 0x72)),
-            on_accent: pick(dark, Color32::WHITE, rgb(0x0F2A1A)),
+            on_accent: pick(dark, Color32::WHITE, Color32::from_rgb(0x02, 0x2C, 0x22)), // NexusOffice
             cat: pick(
                 dark,
-                [rgb(0x2F6FCF), rgb(0x1E8A4C), rgb(0xC8601A), rgb(0xC8372D), rgb(0x8350C8), rgb(0x13808A), rgb(0x9C6C00), rgb(0x5A6B7D)],
-                [rgb(0x6EA8F7), rgb(0x5CC587), rgb(0xF0965A), rgb(0xF07B6E), rgb(0xB394EE), rgb(0x4CC7CF), rgb(0xF2C14E), rgb(0xA9B6C4)],
+                // NexusOffice: the icons' green is Emerald (ink shade #047857, Emerald 400 in dark),
+                // not a spreadsheet-brand green.
+                [rgb(0x2F6FCF), rgb(0x047857), rgb(0xC8601A), rgb(0xC8372D), rgb(0x8350C8), rgb(0x13808A), rgb(0x9C6C00), rgb(0x5A6B7D)],
+                [rgb(0x6EA8F7), rgb(0x34D399), rgb(0xF0965A), rgb(0xF07B6E), rgb(0xB394EE), rgb(0x4CC7CF), rgb(0xF2C14E), rgb(0xA9B6C4)],
             ),
             paper: pick(dark, Color32::WHITE, rgb(0x454545)),
             ref_colors: pick(
@@ -225,8 +235,22 @@ impl Tokens {
         }
     }
 
+    /// The palette in use: light or dark, with the user's accent colour ([`set_accent`]) if any.
     pub fn get(ctx: &egui::Context) -> Tokens {
-        if ctx.global_style().visuals.dark_mode { Tokens::dark() } else { Tokens::light() }
+        let dark = ctx.global_style().visuals.dark_mode;
+        let t = if dark { Tokens::dark() } else { Tokens::light() };
+        let Some(c) = accent(ctx) else { return t };
+        // Every widget asks for the palette each frame: the shaded one is kept per (colour, theme).
+        let cache = egui::Id::unique("nexus_user_accent_tokens");
+        if let Some((cc, cd, ct)) = ctx.data(|d| d.get_temp::<(Color32, bool, Tokens)>(cache))
+            && cc == c
+            && cd == dark
+        {
+            return ct;
+        }
+        let t = with_accent(t, c);
+        ctx.data_mut(|d| d.insert_temp(cache, (c, dark, t)));
+        t
     }
 
     /// One colour of the category palette.
@@ -258,10 +282,32 @@ pub fn contrast(a: Color32, b: Color32) -> f32 {
 
 /// Installs light and dark token visuals in both theme slots, keeps the 2-3 px widget and 8-10 px window/menu corner radii from 0.36, and sets spacing, text styles and the active theme.
 pub fn apply(ctx: &egui::Context, dark: bool) {
-    // Install both palettes before System can switch between the style slots.
+    install_visuals(ctx);
+    ctx.options_mut(|o| o.fallback_theme = egui::Theme::Light);
+    ctx.set_theme(if dark { egui::Theme::Dark } else { egui::Theme::Light });
+    ctx.all_styles_mut(|s| {
+        s.spacing.item_spacing = egui::vec2(6.0, 4.0);
+        s.spacing.button_padding = egui::vec2(6.0, 3.0);
+        s.spacing.interact_size.y = 22.0;
+        s.text_styles.insert(egui::TextStyle::Body, ui_font(13.0));
+        s.text_styles.insert(egui::TextStyle::Button, ui_font(13.0));
+        s.text_styles.insert(egui::TextStyle::Small, ui_font(11.0));
+        s.text_styles.insert(egui::TextStyle::Heading, ui_bold(18.0));
+        s.text_styles.insert(egui::TextStyle::Monospace, FontId::new(12.0, FontFamily::Name(MONO.into())));
+    });
+}
+
+/// Installs both palettes (with the user's accent, if any) before System can switch between the
+/// style slots. Leaves the theme choice and the spacing alone.
+pub fn install_visuals(ctx: &egui::Context) {
+    let user = accent(ctx);
     for theme in [egui::Theme::Light, egui::Theme::Dark] {
         let dark = theme == egui::Theme::Dark;
         let t = if dark { Tokens::dark() } else { Tokens::light() };
+        let t = match user {
+            Some(c) => with_accent(t, c),
+            None => t,
+        };
         let mut v = if dark { Visuals::dark() } else { Visuals::light() };
         v.panel_fill = t.window;
         v.window_fill = t.menu_bg;
@@ -286,18 +332,6 @@ pub fn apply(ctx: &egui::Context, dark: bool) {
         v.popup_shadow = egui::epaint::Shadow { offset: [0, 4], blur: 16, spread: 0, color: t.shadow };
         ctx.set_visuals_of(theme, v);
     }
-    ctx.options_mut(|o| o.fallback_theme = egui::Theme::Light);
-    ctx.set_theme(if dark { egui::Theme::Dark } else { egui::Theme::Light });
-    ctx.all_styles_mut(|s| {
-        s.spacing.item_spacing = egui::vec2(6.0, 4.0);
-        s.spacing.button_padding = egui::vec2(6.0, 3.0);
-        s.spacing.interact_size.y = 22.0;
-        s.text_styles.insert(egui::TextStyle::Body, ui_font(13.0));
-        s.text_styles.insert(egui::TextStyle::Button, ui_font(13.0));
-        s.text_styles.insert(egui::TextStyle::Small, ui_font(11.0));
-        s.text_styles.insert(egui::TextStyle::Heading, ui_bold(18.0));
-        s.text_styles.insert(egui::TextStyle::Monospace, FontId::new(12.0, FontFamily::Name(MONO.into())));
-    });
 }
 
 /// Model colour → egui colour.

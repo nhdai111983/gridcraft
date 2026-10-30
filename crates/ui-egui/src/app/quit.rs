@@ -67,6 +67,9 @@ impl SheetApp {
                     if quitting {
                         self.continue_quit(ctx);
                     }
+                } else {
+                    // NexusOffice: a workbook with no file waits for the host's Save As.
+                    self.close_after_pending_save();
                 }
             }
         }

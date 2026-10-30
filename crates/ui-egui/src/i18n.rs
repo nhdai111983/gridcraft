@@ -359,6 +359,12 @@ mod tests {
         assert_eq!(Language::PtBr.tr_error("command `chart`: Select a chart first."), Language::PtBr.tr("Select a chart first."));
         assert_eq!(Language::PtBr.tr_error("Sheet|Unknown failure"), "Sheet|Unknown failure");
         assert_eq!(Language::PtBr.tr_error("Printer Office: permission denied"), "Printer Office: permission denied");
+        // NexusOffice: the Vietnamese catalogue (`vi.rs`, NexusOffice's own) and the brand names in it.
+        assert_eq!(Language::Vi.tr("Data"), "Dữ liệu");
+        assert_eq!(Language::Vi.tr("File"), "Tệp");
+        assert_eq!(Language::Vi.tr("Sheet1!A1"), "Sheet1!A1");
+        assert_eq!(Language::Vi.tr("Page Layout|Orientation"), "Hướng giấy");
+        assert_eq!(Language::Vi.tr("About GridCraft"), "Giới thiệu về Nexus Sheet", "branded in Vietnamese too");
         assert_eq!(Language::parse("xx"), None);
     }
 
@@ -476,6 +482,7 @@ mod tests {
         assert_eq!(Language::parse("uk"), Some(Language::Uk));
         assert_eq!(Language::from_tag("vi-VN"), Some(Language::Vi));
         assert_eq!(Language::parse("vi"), Some(Language::Vi));
+        assert_eq!(Language::from_tag("vi_VN.UTF-8"), Some(Language::Vi));
         assert_eq!(Language::from_tag("nl-NL"), Some(Language::Nl));
         assert_eq!(Language::from_tag("nl_BE"), Some(Language::Nl));
         assert_eq!(Language::parse("nl"), Some(Language::Nl));

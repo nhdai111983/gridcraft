@@ -272,7 +272,8 @@ fn paint_data_bar(p: &egui::Painter, rect: Rect, frac: f32, rgb: [u8; 3], gradie
 fn paint_checkbox(p: &egui::Painter, rect: Rect, z: f32, on: bool) {
     let s = (11.0 * z * 1.2).clamp(8.0, 24.0);
     let b = Rect::from_center_size(rect.center(), vec2(s, s));
-    let color = if on { Color32::from_rgb(0x10, 0x7C, 0x41) } else { Color32::WHITE };
+    // NexusOffice: Emerald ink, not a spreadsheet-brand green.
+    let color = if on { crate::theme::APP_INK } else { Color32::WHITE };
     p.rect_filled(b, 2.0, color);
     p.rect_stroke(b, 2.0, Stroke::new(1.0, if on { color } else { Color32::from_gray(110) }), StrokeKind::Inside);
     if on {

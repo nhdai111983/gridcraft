@@ -78,6 +78,16 @@ pattern = '.*'
 reason = "Chính bảng thay thế GridCraft→Nexus Sheet, ArtCraft→NexusOffice và test của nó"
 
 [[allow]]
+path = "crates/ui-egui/src/i18n.rs"
+pattern = 'assert_eq!\(Language::Vi\.tr\("About GridCraft"\)'
+reason = "Test (#[cfg(test)]) khẳng định khoá About GridCraft hiện 'Giới thiệu về Nexus Sheet'"
+
+[[allow]]
+path = "crates/ui-egui/src/nexus_wps.rs"
+pattern = 'lang\.tr\("About GridCraft"\)'
+reason = "Mục Giới thiệu của bố cục WPS: tra qua Language::tr() → brand() nên hiển thị 'Giới thiệu về Nexus Sheet'"
+
+[[allow]]
 path = "crates/ui-egui/src/dialogs.rs"
 pattern = 'Dialog::custom\("(about", "About GridCraft|start", "GridCraft)"'
 reason = "Tiêu đề hộp thoại: dialogs.rs vẽ qua app.ui.language.tr(&d.title) nên hiển thị 'About Nexus Sheet'/'Nexus Sheet'"

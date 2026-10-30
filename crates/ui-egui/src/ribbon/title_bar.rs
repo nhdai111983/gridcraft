@@ -36,8 +36,8 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
     let ch = TITLE_CONTROL_H;
     egui::Panel::top("title_bar").exact_size(TITLE_BAR_H).frame(egui::Frame::NONE.fill(t.window)).show(ui, |ui| {
         let rect = ui.max_rect();
-        // Dragging the empty title area moves the window.
-        let bg = ui.interact(rect, ui.scope_id().with("drag_title"), Sense::click_and_drag());
+        // Dragging the empty title area moves the window (not a host's: NexusOffice embeds the app).
+        let bg = ui.interact(rect, ui.scope_id().with("drag_title"), if app.embedded { Sense::hover() } else { Sense::click_and_drag() });
         if bg.drag_started() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
         }
@@ -59,65 +59,8 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
                 app.toggle_autosave();
             }
             ui.add_space(6.0);
-            let __k = icon_button(ui, Icon::Home, t.text_dim, "Home", vec2(26.0, ch));
-            control_keytip(app, ui, &__k, "start");
-            if __k.clicked() {
-                app.open_dialog("start", json!({}));
-            }
-            if icon_button(ui, Icon::Save, t.text_dim, "Save", vec2(26.0, ch)).clicked()
-                // File operations must include the cell the user is still editing (as the File > Save menu item already does).
-                && app.commit_edit(0, 0, false, false)
-            {
-                app.run_or_alert("file.save", json!({}));
-            }
-            // The commands' own availability: there must be a step, and no undo group may be open on
-            // the document (an action that spans several calls is still running).
-            let can_undo = gridcraft_engine::cmd::can_undo(&app.session).is_ok();
-            let can_redo = gridcraft_engine::cmd::can_redo(&app.session).is_ok();
-            // Named and marked enabled or not for assistive technology (and the UI tests).
-            let undo = icon_button(ui, Icon::Undo, if can_undo { t.text_dim } else { t.text_disabled }, "Undo", vec2(26.0, ch));
-            undo.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, can_undo, "Undo"));
-            if undo.clicked() && can_undo {
-                app.run_or_alert("edit.undo", json!({}));
-            }
-            let undo_list = icon_button(ui, Icon::Chevron, t.text_dim, "Undo list", vec2(14.0, ch));
-            egui::Popup::menu(&undo_list).show(|ui| {
-                let labels: Vec<String> = if can_undo {
-                    app.session.active().map(|d| d.undo.iter().rev().take(20).map(|e| e.label.clone()).collect()).unwrap_or_default()
-                } else {
-                    Vec::new()
-                };
-                if labels.is_empty() {
-                    ui.label("Can't Undo");
-                }
-                for (i, l) in labels.iter().enumerate() {
-                    if ui.button(format!("Undo {l}")).clicked() {
-                        app.run_or_alert("edit.undo", json!({"steps": i + 1}));
-                    }
-                }
-            });
-            let redo = icon_button(ui, Icon::Redo, if can_redo { t.text_dim } else { t.text_disabled }, "Redo", vec2(26.0, ch));
-            redo.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, can_redo, "Redo"));
-            if redo.clicked() && can_redo {
-                app.run_or_alert("edit.redo", json!({}));
-            }
-            let more = icon_button(ui, Icon::More, t.text_dim, "More commands", vec2(26.0, ch));
-            egui::Popup::menu(&more).show(|ui| {
-                for (label, id) in [
-                    ("New Workbook", "file.new"),
-                    ("Open…", "file.open"),
-                    ("Save As…", "file.saveAs"),
-                    ("Sort A to Z", "data.sortAscending"),
-                    ("Calculate Now", "formulas.calculateNow"),
-                ] {
-                    if ui.button(label).clicked() {
-                        app.run_or_alert(id, json!({}));
-                    }
-                }
-                if ui.button("Print…").clicked() {
-                    app.print_now(json!({}));
-                }
-            });
+            // NexusOffice: the Quick Access Toolbar is shared with the WPS layout's top row.
+            quick_access(app, ui, ch, true);
             let left_end = ui.min_rect().right();
             let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
@@ -204,6 +147,79 @@ fn paint_title(ui: &Ui, center: egui::Pos2, title: &str, dirty: bool, max_w: f32
     if let Some(dot) = dot {
         ui.painter().galley(pos2(left + galley_w, top), dot, color);
     }
+}
+
+/// The Quick Access Toolbar: Home (the start page, when `start`), Save, Undo with its list, Redo
+/// and a menu of frequent commands. Upstream's title bar and the NexusOffice WPS top row show it.
+pub(crate) fn quick_access(app: &mut SheetApp, ui: &mut Ui, ch: f32, start: bool) {
+    let t = Tokens::get(ui.ctx());
+    if start {
+        let __k = icon_button(ui, Icon::Home, t.text_dim, "Home", vec2(26.0, ch));
+        control_keytip(app, ui, &__k, "start");
+        if __k.clicked() {
+            app.open_dialog("start", json!({}));
+        }
+    }
+    let lang = app.ui.language;
+    let save = icon_button(ui, Icon::Save, t.text_dim, "Save", vec2(26.0, ch));
+    // NexusOffice: named in the WPS top row (upstream's title bar leaves Save unnamed, as its tests expect).
+    if !start {
+        save.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, lang.tr("Save")));
+    }
+    if save.clicked()
+        // File operations must include the cell the user is still editing (as the File > Save menu item already does).
+        && app.commit_edit(0, 0, false, false)
+    {
+        app.run_or_alert("file.save", json!({}));
+    }
+    // The commands' own availability: there must be a step, and no undo group may be open on
+    // the document (an action that spans several calls is still running).
+    let can_undo = gridcraft_engine::cmd::can_undo(&app.session).is_ok();
+    let can_redo = gridcraft_engine::cmd::can_redo(&app.session).is_ok();
+    // Named and marked enabled or not for assistive technology (and the UI tests).
+    let undo = icon_button(ui, Icon::Undo, if can_undo { t.text_dim } else { t.text_disabled }, "Undo", vec2(26.0, ch));
+    undo.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, can_undo, "Undo"));
+    if undo.clicked() && can_undo {
+        app.run_or_alert("edit.undo", json!({}));
+    }
+    let undo_list = icon_button(ui, Icon::Chevron, t.text_dim, "Undo list", vec2(14.0, ch));
+    egui::Popup::menu(&undo_list).show(|ui| {
+        let labels: Vec<String> = if can_undo {
+            app.session.active().map(|d| d.undo.iter().rev().take(20).map(|e| e.label.clone()).collect()).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        if labels.is_empty() {
+            ui.label(lang.tr("Can't Undo"));
+        }
+        for (i, l) in labels.iter().enumerate() {
+            if ui.button(format!("{} {l}", lang.tr("Undo"))).clicked() {
+                app.run_or_alert("edit.undo", json!({"steps": i + 1}));
+            }
+        }
+    });
+    let redo = icon_button(ui, Icon::Redo, if can_redo { t.text_dim } else { t.text_disabled }, "Redo", vec2(26.0, ch));
+    redo.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, can_redo, "Redo"));
+    if redo.clicked() && can_redo {
+        app.run_or_alert("edit.redo", json!({}));
+    }
+    let more = icon_button(ui, Icon::More, t.text_dim, "More commands", vec2(26.0, ch));
+    egui::Popup::menu(&more).show(|ui| {
+        for (label, id) in [
+            ("New Workbook", "file.new"),
+            ("Open…", "file.open"),
+            ("Save As…", "file.saveAs"),
+            ("Sort A to Z", "data.sortAscending"),
+            ("Calculate Now", "formulas.calculateNow"),
+        ] {
+            if ui.button(lang.tr(label)).clicked() {
+                app.run_or_alert(id, json!({}));
+            }
+        }
+        if ui.button(lang.tr("Print…")).clicked() {
+            app.print_now(json!({}));
+        }
+    });
 }
 
 #[cfg(test)]

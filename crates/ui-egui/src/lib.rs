@@ -18,6 +18,7 @@ pub mod dialogs;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod doc_windows;
 pub mod editor;
+pub mod file_dialogs;
 mod floating_pictures;
 pub mod fonts;
 pub mod formula_bar;
@@ -28,6 +29,8 @@ pub mod icons;
 pub mod keymap;
 pub mod keytips;
 pub mod nexus;
+pub mod nexus_toolbar;
+pub mod nexus_wps;
 pub mod outline;
 pub mod panes;
 pub mod paper_view;
@@ -99,6 +102,15 @@ pub struct UiState {
     /// [`INTERFACE_SCALE_MIN`]..=[`INTERFACE_SCALE_MAX`]; a malformed saved value reads as 100.
     #[serde(deserialize_with = "lenient_interface_scale")]
     pub interface_scale: u16,
+    /// NexusOffice: the accent colour the user picked (`#RRGGBB`, File › Options); `None` is the
+    /// app's own Emerald. A value that isn't a colour reads as `None`.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient_accent")]
+    pub accent: Option<String>,
+}
+
+fn lenient_accent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    let v = Json::deserialize(d)?;
+    Ok(v.as_str().and_then(theme::parse_hex).map(theme::to_hex))
 }
 
 pub const INTERFACE_SCALE_MIN: u16 = 75;
@@ -131,6 +143,7 @@ impl Default for UiState {
             keytip_invoke: None,
             language: i18n::Language::En,
             interface_scale: 100,
+            accent: None,
         }
     }
 }
@@ -179,6 +192,8 @@ pub struct Notice {
     /// Optional button: `(label, dialog name)` — opens that dialog when clicked.
     pub action: Option<(String, String)>,
 }
+
+pub use file_dialogs::{FileDialogAnswer, FileDialogRequest};
 
 #[derive(Clone, Debug, Default)]
 pub struct Perf {
@@ -288,6 +303,19 @@ pub struct SheetApp {
     /// The update check, the startup prompt and a running self-update (desktop only).
     #[cfg(not(target_arch = "wasm32"))]
     updates_rt: updates_ui::Runtime,
+    /// NexusOffice layout: a menu bar and one tool row instead of the ribbon ([`nexus_toolbar`]).
+    /// The Nexus apps turn it on; off (the default) keeps upstream's ribbon.
+    pub toolbar: bool,
+    /// NexusOffice layout in the style of WPS Office ([`nexus_wps`]): no title bar; one row with
+    /// File, the Quick Access Toolbar, the ribbon tabs, the save state, Search, Comments and Share;
+    /// under it the current tab's groups as one flat strip whose trailing groups fold into a "…"
+    /// panel. Wins over [`toolbar`](Self::toolbar). Off keeps upstream's title bar and ribbon.
+    pub wps: bool,
+    /// Hosted inside another program's window (a tab of the NexusOffice window): the app leaves the
+    /// window's title alone and its top row doesn't move or maximise the window.
+    pub embedded: bool,
+    /// The host's file dialog being shown ([`file_dialogs`]).
+    pub(crate) file_dialog: Option<file_dialogs::PendingDialog>,
 }
 
 /// Strips the engine's error prefixes for message boxes.

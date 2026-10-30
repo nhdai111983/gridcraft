@@ -165,7 +165,7 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
     let lang = app.ui.language;
     let mut out = Outcome::default();
     let (nav_bg, nav_text, nav_sel) =
-        if t.dark { (t.accent_soft, t.text, Color32::from_white_alpha(30)) } else { (t.accent, Color32::WHITE, Color32::from_black_alpha(46)) };
+        if t.dark { (t.accent_soft, t.text, Color32::from_white_alpha(30)) } else { (t.accent, t.on_accent, Color32::from_black_alpha(46)) };
     egui::Panel::left("backstage_nav")
         .exact_size(NAV_W)
         .resizable(false)
@@ -743,6 +743,11 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
     };
     let title = app.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
     let stem = std::path::Path::new(&title).file_stem().and_then(std::ffi::OsStr::to_str).unwrap_or("Book1").to_string();
+    // NexusOffice: the host's dialog answers later; the copy is written then.
+    let copy = crate::file_dialogs::AfterPick::SaveCopy { command: id.into(), ext: fmt.into() };
+    if app.ask_file(crate::FileDialogRequest::Save { name: format!("{stem}.{fmt}"), types: vec![fmt.to_string()] }, copy) {
+        return true;
+    }
     if let Some(pick) = &app.services.pick_save {
         let Some(path) = pick(&format!("{stem}.{fmt}")) else { return false };
         // The picker may suggest a workbook extension; the export writes the chosen format.

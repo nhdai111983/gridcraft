@@ -60,6 +60,9 @@ pub fn start() {
                         bridge.connect(&mut services, inbox.clone(), cc.egui_ctx.clone());
                     }
                     let mut app = SheetApp::new(session, services);
+                    // NexusOffice layout in the style of WPS Office (no title bar, one row of tabs, a flat
+                    // command strip); `app.toolbar` keeps the menu bar layout behind its flag.
+                    app.wps = true;
                     app.ui.system_theme = true;
                     // `?chrome=none|notitlebar|nofiletab`: a host that embeds the sheet in its own window and owns the files
                     // can leave the title bar and/or the File tab undrawn (`Chrome`, #1877). An unknown value keeps

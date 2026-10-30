@@ -269,11 +269,24 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                     d.values.insert("path".into(), json!(path.clone()));
                     ok_cancel(ui, &mut confirm, &mut open);
                     if confirm {
+                        let id = match fmt.as_str() {
+                            "csv" => "file.exportCsv",
+                            "html" => "file.exportHtml",
+                            _ => "file.saveAs",
+                        };
+                        // NexusOffice: the host's dialog answers later; the copy is written then.
+                        let asked = path.is_empty()
+                            && app.ask_file(
+                                crate::FileDialogRequest::Save { name: format!("Copy.{fmt}"), types: vec![fmt.clone()] },
+                                crate::file_dialogs::AfterPick::SaveCopy { command: id.into(), ext: fmt.clone() },
+                            );
                         // A bare name has no folder: written as typed it would land in the
                         // process's working directory (`/` from the Finder, the install folder on
                         // Windows), never where the user looks. The picker chooses the folder.
                         let pick = app.services.pick_save.as_ref();
-                        let target = if path.is_empty() {
+                        let target = if asked {
+                            None
+                        } else if path.is_empty() {
                             pick.and_then(|f| f(&format!("Copy.{fmt}")))
                         } else if let Some(f) = pick.filter(|_| std::path::Path::new(&path).is_relative()) {
                             f(&if path.ends_with(&format!(".{fmt}")) { path } else { format!("{path}.{fmt}") })
@@ -281,23 +294,21 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                             Some(path)
                         };
                         if let Some(t) = target {
-                            let id = match fmt.as_str() {
-                                "csv" => "file.exportCsv",
-                                "html" => "file.exportHtml",
-                                _ => "file.saveAs",
-                            };
                             app.run_or_alert(id, json!({"path": t}));
                         }
                     }
                 }
                 "saveChanges" => {
-                    ui.label(format!("Do you want to save the changes you made to {}?", d.values.get("title").and_then(Json::as_str).unwrap_or("this workbook")));
+                    // NexusOffice: the question and its buttons in the interface's language.
+                    let lang = app.ui.language;
+                    let title = d.values.get("title").and_then(Json::as_str).unwrap_or("this workbook");
+                    ui.label(lang.tr("Do you want to save the changes you made to {title}?").replace("{title}", title));
                     let quitting = d.values.get("quit").and_then(Json::as_bool) == Some(true);
                     ui.horizontal(|ui| {
                         for (label, answer) in
                             [("Don't Save", crate::SaveAnswer::DontSave), ("Cancel", crate::SaveAnswer::Cancel), ("Save", crate::SaveAnswer::Save)]
                         {
-                            if ui.button(label).clicked() && app.answer_save_changes(answer, quitting, ui.ctx()) {
+                            if ui.button(lang.tr(label)).clicked() && app.answer_save_changes(answer, quitting, ui.ctx()) {
                                 open = false;
                             }
                         }

@@ -5,6 +5,8 @@ type OpenUrl = Box<dyn Fn(&str)>;
 type CopyHtml = Box<dyn FnMut(&str, &str) -> Result<(), String>>;
 type Download = Box<dyn Fn(&str, &[u8])>;
 type PrintPdf = Box<dyn Fn(&[u8])>;
+/// NexusOffice: the host's non-blocking Open/Save As dialog (see [`crate::file_dialogs`]).
+type HostFileDialog = Box<dyn Fn(crate::FileDialogRequest) -> std::sync::mpsc::Receiver<crate::FileDialogAnswer>>;
 
 /// Host services the platform shell provides (file pickers, opening URLs).
 #[derive(Default)]
@@ -41,6 +43,16 @@ pub struct Services {
     /// Web: hand PDF bytes to the browser's print flow directly (no download,
     /// no intermediate file) — opens the system print dialog on that PDF.
     pub print: Option<PrintPdf>,
+    /// NexusOffice: Open and Save As dialogs the host shows without blocking (its answer comes
+    /// later on the channel; see [`crate::file_dialogs`]). Wins over `pick_open` / `pick_save`.
+    pub file_dialog: Option<HostFileDialog>,
+    /// NexusOffice: a host with tabs takes File › New, Ctrl+N and the sample workbooks (the
+    /// `file.new` params) and opens a new tab; this workbook stays as it is.
+    pub new_document: Option<Box<dyn Fn(serde_json::Value)>>,
+    /// NexusOffice: a host with tabs opens a picked workbook in a tab of its own (or brings its tab
+    /// forward). Not asked when this window holds only an untouched blank workbook, which the
+    /// opened one replaces as upstream does.
+    pub open_document: Option<OpenUrl>,
 }
 
 /// Shared queue of files read asynchronously (browser file picker, drag and drop).

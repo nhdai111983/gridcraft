@@ -309,6 +309,11 @@ impl DocState {
     pub fn is_dirty(&self) -> bool {
         !Arc::ptr_eq(&self.wb, &self.saved)
     }
+    /// A new workbook nobody has touched: no file, no changes, nothing to undo, every sheet empty.
+    /// Opening a file replaces it, as Excel replaces an untouched Book1.
+    pub fn is_untouched_blank(&self) -> bool {
+        self.path.is_none() && !self.is_dirty() && self.undo.is_empty() && self.wb.sheets.iter().all(|sh| sh.cells.is_empty())
+    }
     pub fn sheet_index(&self) -> usize {
         self.wb.active_sheet()
     }
@@ -483,6 +488,9 @@ pub struct Session {
     /// Measures cell text for AutoFit Column Width. Without it (CLI, MCP) AutoFit uses
     /// [`cmd::format::approx_text_width`].
     pub text_width: Option<TextWidth>,
+    /// NexusOffice: what new sheets are called before their number, in the interface's language
+    /// ("Trang tính" → Trang tính1); empty is upstream's "Sheet". Set by the interface, not saved.
+    pub sheet_name_prefix: String,
 }
 
 impl Session {
@@ -547,8 +555,14 @@ impl Session {
     pub fn new_workbook(&mut self) -> usize {
         let n = (1..).find(|n| !self.docs.iter().any(|d| d.title == format!("Book{n}") && d.path.is_none())).unwrap_or(1);
         let mut wb = Workbook::new();
+        // NexusOffice: the first sheet is named in the interface's language too.
+        if !self.sheet_name_prefix.trim().is_empty()
+            && let Some(first) = wb.sheets.first_mut()
+        {
+            Arc::make_mut(first).name = format!("{}1", self.sheet_name_prefix);
+        }
         for _ in 1..self.prefs.sheets_in_new_workbook.clamp(1, 255) {
-            let name = wb.next_sheet_name();
+            let name = wb.next_sheet_name_with(&self.sheet_name_prefix);
             wb.sheets.push(Arc::new(gridcraft_model::Sheet::new(name)));
         }
         self.add_document(DocState::new(wb, None, format!("Book{n}"), Trust::Local))
@@ -631,7 +645,12 @@ impl Session {
         let marked = doc_uid.zip(start).map(|(uid, (_, len))| (uid, len));
         self.marks.extend(marked);
         self.depth = self.depth.saturating_add(1);
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (spec.run)(self, &params)));
+        // NexusOffice: sheets the command adds (Insert Sheet, PivotTable, Forecast, an import)
+        // are named in the interface's language.
+        let prefix = self.sheet_name_prefix.clone();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            gridcraft_model::workbook::with_sheet_prefix(&prefix, || (spec.run)(self, &params))
+        }));
         self.depth = self.depth.saturating_sub(1);
         if marked.is_some() {
             self.marks.pop();

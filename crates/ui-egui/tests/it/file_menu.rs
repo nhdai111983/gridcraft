@@ -160,7 +160,8 @@ fn file_account_shows_the_version_and_opens_about() {
     // The About dialog also shows the version; it must not be open yet.
     h.get_by_label(env!("CARGO_PKG_VERSION"));
     h.get_by_label(env!("CARGO_PKG_LICENSE"));
-    click(&mut h, "About GridCraft");
+    // NexusOffice: the button's label goes through `brand()` (About Nexus Sheet).
+    click(&mut h, "About Nexus Sheet");
     assert_eq!(h.state().dialog.as_ref().map(|d| d.name()), Some("about"));
     assert_eq!(page(&h), Some("account"), "About opens over the File view, like Protect Workbook on Info");
 }

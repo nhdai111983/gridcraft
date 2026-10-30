@@ -35,6 +35,42 @@ pub(super) fn options(app: &mut SheetApp, ui: &mut Ui) {
     dim(ui, lang.tr("Calculation settings are saved with the workbook."));
 }
 
+/// NexusOffice: the accent colour (selected tabs, buttons, the cell selection): the app's own
+/// Emerald, one of the palette's presets or any colour from the picker (`ui.accent`, saved with the
+/// preferences). Text on it stays readable whatever is picked (`theme::with_accent`).
+fn accent_picker(app: &mut SheetApp, ui: &mut Ui) {
+    let lang = app.ui.language;
+    let current = app.ui.accent.as_deref().and_then(crate::theme::parse_hex);
+    let t = crate::theme::Tokens::get(ui.ctx());
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        if ui.selectable_label(current.is_none(), crate::i18n::nexus_text(lang, "App colour", "Màu ứng dụng")).clicked() {
+            app.run_or_alert("ui.accent", json!({"value": null}));
+        }
+        for (name, c) in crate::theme::ACCENT_PRESETS {
+            let (r, resp) = ui.allocate_exact_size(vec2(22.0, 22.0), egui::Sense::click());
+            ui.painter().circle_filled(r.center(), 8.0, c);
+            let on = current == Some(c);
+            if on {
+                ui.painter().circle_stroke(r.center(), 10.0, egui::Stroke::new(2.0, t.text));
+            } else if resp.hovered() {
+                ui.painter().circle_stroke(r.center(), 10.0, egui::Stroke::new(1.0, t.text_dim));
+            }
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, on, name));
+            if resp.on_hover_text(name).clicked() {
+                app.run_or_alert("ui.accent", json!({"value": crate::theme::to_hex(c)}));
+            }
+        }
+        ui.add_space(4.0);
+        let c = current.unwrap_or(crate::theme::APP_COLOR);
+        let mut rgb = [c.r(), c.g(), c.b()];
+        let picker = ui.color_edit_button_srgb(&mut rgb);
+        if picker.on_hover_text(crate::i18n::nexus_text(lang, "Any colour", "Màu tuỳ chọn")).changed() {
+            app.run_or_alert("ui.accent", json!({"value": crate::theme::to_hex(egui::Color32::from_rgb(rgb[0], rgb[1], rgb[2]))}));
+        }
+    });
+}
+
 /// The display theme and interface language controls of the General section.
 fn general_options(app: &mut SheetApp, ui: &mut Ui, lang: Language) {
     egui::Grid::new("backstage_options_general").num_columns(2).spacing(vec2(18.0, 10.0)).show(ui, |ui| {
@@ -57,6 +93,10 @@ fn general_options(app: &mut SheetApp, ui: &mut Ui, lang: Language) {
             })
             .response
             .labelled_by(label.id);
+        ui.end_row();
+        // NexusOffice: the accent colour.
+        ui.label(crate::i18n::nexus_text(lang, "Accent colour", "Màu chủ đạo"));
+        accent_picker(app, ui);
         ui.end_row();
         let label = ui.label(lang.tr("Interface language"));
         craft_ui::ComboBox::from_id_salt("backstage_language")

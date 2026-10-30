@@ -1,12 +1,34 @@
 use super::{Rect, Sense, SheetApp, Stroke, StrokeKind, Style, Tokens, Ui, keytip_table, pos2, theme, vec2};
 
 pub(super) fn sep(ui: &mut Ui) {
+    // NexusOffice WPS strip: each group draws its own divider (`nexus_wps::group`).
+    if crate::nexus_wps::compact(ui) {
+        return;
+    }
     let t = Tokens::get(ui.ctx());
     let (r, _) = ui.allocate_exact_size(vec2(13.0, 72.0), Sense::hover());
     ui.painter().line_segment([pos2(r.center().x, r.top() + 6.0), pos2(r.center().x, r.bottom() - 6.0)], Stroke::new(1.0, t.separator));
 }
 
-pub(super) fn active_style(app: &SheetApp) -> Style {
+/// NexusOffice: a ribbon group (the controls between two separators). Upstream's ribbon draws it in
+/// place; the WPS strip ([`crate::nexus_wps`]) may leave it for its "…" panel, or draw it only there.
+pub(super) fn group(ui: &mut Ui, app: &mut SheetApp, title: &str, add: impl FnOnce(&mut Ui, &mut SheetApp)) {
+    if crate::nexus_wps::compact(ui) {
+        return crate::nexus_wps::group(ui, app, title, add);
+    }
+    add(ui, app);
+}
+
+/// NexusOffice: controls one under another (upstream's columns of small buttons); two rows, flowing
+/// left to right, in the WPS strip.
+pub(super) fn stack(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+    if crate::nexus_wps::compact(ui) {
+        return crate::nexus_wps::compact_stack(ui, add);
+    }
+    ui.vertical(add);
+}
+
+pub(crate) fn active_style(app: &SheetApp) -> Style {
     app.session
         .active()
         .and_then(|d| {
@@ -16,17 +38,17 @@ pub(super) fn active_style(app: &SheetApp) -> Style {
         .unwrap_or_default()
 }
 
-pub(super) fn theme_colors(app: &SheetApp) -> [u32; 12] {
+pub(crate) fn theme_colors(app: &SheetApp) -> [u32; 12] {
     app.session.active().map(|d| d.wb.theme.colors).unwrap_or(gridcraft_engine::model::Theme::default().colors)
 }
 
 /// Runs a command from a ribbon click (menu-style: no params may open a dialog).
-pub(super) fn act(app: &mut SheetApp, id: &str, params: serde_json::Value) {
+pub(crate) fn act(app: &mut SheetApp, id: &str, params: serde_json::Value) {
     app.run_or_alert(id, params);
 }
 
 /// Keytips are painted, not focusable widgets: the grid retains keyboard focus.
-pub(super) fn keytip(app: &SheetApp, ui: &Ui, sequence: &str, at: egui::Pos2) {
+pub(crate) fn keytip(app: &SheetApp, ui: &Ui, sequence: &str, at: egui::Pos2) {
     let Some(rest) = app.keytips.prefix().and_then(|prefix| sequence.strip_prefix(prefix)).filter(|s| !s.is_empty()) else { return };
     let t = Tokens::get(ui.ctx());
     let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("ribbon_keytips"))).with_clip_rect(ui.clip_rect());
@@ -265,7 +287,7 @@ fn combo_popup(
     result
 }
 
-pub(super) fn menu_items(app: &mut SheetApp, ui: &mut Ui, items: &[(&str, &str, serde_json::Value)]) {
+pub(crate) fn menu_items(app: &mut SheetApp, ui: &mut Ui, items: &[(&str, &str, serde_json::Value)]) {
     for (label, id, p) in items {
         if *label == "-" {
             ui.separator();

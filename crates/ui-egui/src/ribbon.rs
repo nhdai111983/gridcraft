@@ -27,15 +27,19 @@ mod view;
 use automate::automate;
 use contextual::{chart_design, table_design};
 pub(crate) use controls::{ComboResult, editable_combo};
-use controls::{act, keytip};
+pub(crate) use controls::{act, keytip};
+// NexusOffice: what the menu-bar and WPS layouts (`nexus_toolbar`, `nexus_wps`) reuse.
+pub(crate) use controls::{active_style, menu_items, theme_colors};
 use data::data;
 use formulas::formulas;
 pub use home::FONTS;
 use home::home;
+pub(crate) use home::{font_combo, size_combo};
 use insert::{draw, insert};
 use page_layout::page_layout;
 use review::review;
 pub use shortcuts::shortcut;
+pub(crate) use title_bar::quick_access;
 pub use title_bar::{MAC_CONTENT_LEFT, MAC_TITLE_BAR, TITLE_LEFT_PAD, title_bar};
 use title_bar::{TITLE_BAR_H, TITLE_CONTROL_H};
 use view::view;
@@ -141,21 +145,7 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
                 let scroll = area.show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing = vec2(2.0, 2.0);
-                        match app.ui.ribbon_tab.as_str() {
-                            "Home" => home(app, ui),
-                            "Insert" => insert(app, ui),
-                            "Draw" => draw(app, ui),
-                            "Page Layout" => page_layout(app, ui),
-                            "Formulas" => formulas(app, ui),
-                            "Data" => data(app, ui),
-                            "Review" => review(app, ui),
-                            "View" => view(app, ui),
-                            "Automate" => automate(app, ui),
-                            "Table Design" => table_design(app, ui),
-                            "Chart Design" => chart_design(app, ui),
-                            crate::paper_view::TAB => crate::paper_view::ribbon_tab(app, ui),
-                            _ => home(app, ui),
-                        }
+                        tab_groups(app, ui);
                     });
                 });
                 scroll_arrows(ui, &t, tab.as_str(), scroll);
@@ -244,6 +234,33 @@ fn scroll_arrows(ui: &mut Ui, t: &Tokens, tab: &str, scroll: egui::scroll_area::
     }
 }
 
+/// The current ribbon tab's groups, left to right (upstream's ribbon card, or the NexusOffice WPS
+/// strip and its "…" panel).
+pub(crate) fn tab_groups(app: &mut SheetApp, ui: &mut Ui) {
+    match app.ui.ribbon_tab.as_str() {
+        "Home" => home(app, ui),
+        "Insert" => insert(app, ui),
+        "Draw" => draw(app, ui),
+        "Page Layout" => page_layout(app, ui),
+        "Formulas" => formulas(app, ui),
+        "Data" => data(app, ui),
+        "Review" => review(app, ui),
+        "View" => view(app, ui),
+        "Automate" => automate(app, ui),
+        "Table Design" => table_design(app, ui),
+        "Chart Design" => chart_design(app, ui),
+        crate::paper_view::TAB => crate::paper_view::ribbon_tab(app, ui),
+        _ => home(app, ui),
+    }
+}
+
+/// The tabs shown now: the fixed ones, then the contextual ones the selection brings up.
+pub(crate) fn shown_tabs(app: &SheetApp) -> Vec<&'static str> {
+    let mut tabs: Vec<&'static str> = TABS.to_vec();
+    tabs.extend(contextual_tabs(app));
+    tabs
+}
+
 /// The File tab opens the Backstage view (New, Open, Info, Save As, Print, Export, Options…), like
 /// Excel's; the ribbon's tab and collapsed state are left as they were for when it closes.
 fn file_menu(app: &mut SheetApp, ui: &mut Ui) {
@@ -261,7 +278,7 @@ fn file_menu(app: &mut SheetApp, ui: &mut Ui) {
 }
 
 /// System / Light / Dark, as in the View tab's Display theme box (`view.theme`).
-fn theme_choices(app: &mut SheetApp, ui: &mut Ui) {
+pub(crate) fn theme_choices(app: &mut SheetApp, ui: &mut Ui) {
     let lang = app.ui.language;
     let mode = app.ui.theme_mode();
     for (value, label) in [("system", "System"), ("light", "Light"), ("dark", "Dark")] {
@@ -274,7 +291,7 @@ fn theme_choices(app: &mut SheetApp, ui: &mut Ui) {
 
 const CONTEXTUAL_TABS: [&str; 3] = ["Table Design", "Chart Design", crate::paper_view::TAB];
 
-fn contextual_tabs(app: &SheetApp) -> Vec<&'static str> {
+pub(crate) fn contextual_tabs(app: &SheetApp) -> Vec<&'static str> {
     let mut v = Vec::new();
     if let Some(d) = app.session.active()
         && let Some(sh) = d.wb.active()

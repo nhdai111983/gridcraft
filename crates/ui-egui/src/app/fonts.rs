@@ -60,6 +60,11 @@ impl SheetApp {
             self.fonts_ready = false;
             self.fonts_set = false;
         }
+        // NexusOffice: another editor in the host window (Nexus Docs) installed its own fonts,
+        // without this app's families: install them again (and skip the frame, as at startup).
+        if self.embedded && self.fonts_ready && !self.fonts_rebind && !self.fonts_installed(ctx) {
+            self.restyle();
+        }
         if !self.fonts_ready {
             self.start_font_setup(ctx);
         } else if self.fonts_rebind {
@@ -81,7 +86,9 @@ impl SheetApp {
             ctx.set_fonts(theme::pinned_font_definitions());
             theme::apply(ctx, self.ui.dark);
         } else {
-            SheetApp::setup_context_for_language(ctx, self.ui.dark, self.ui.language);
+            // NexusOffice: `set_fonts` keeps a host window's other editors' families (embedded).
+            self.set_fonts(ctx, theme::font_definitions_for_language(self.ui.language));
+            theme::apply(ctx, self.ui.dark);
         }
         self.fonts_set = true;
         // The rebuilt set has no workbook fonts yet: bind them again once it is active.
@@ -104,7 +111,7 @@ impl SheetApp {
         if used == self.fonts_bound {
             return;
         }
-        ctx.set_fonts(theme::font_definitions_with(self.ui.language, &used));
+        self.set_fonts(ctx, theme::font_definitions_with(self.ui.language, &used));
         self.fonts_bound = used;
         self.fonts_rebind = true;
         ctx.request_repaint();
