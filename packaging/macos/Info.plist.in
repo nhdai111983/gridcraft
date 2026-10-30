@@ -7,11 +7,11 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>Nexus Sheets</string>
+  <string>Nexus Sheet</string>
   <key>CFBundleName</key>
-  <string>Nexus Sheets</string>
+  <string>Nexus Sheet</string>
   <key>CFBundleExecutable</key>
-  <string>NexusSheets</string>
+  <string>NexusSheet</string>
   <key>CFBundleIdentifier</key>
   <string>vn.sonnytech.nexus.sheets</string>
   <key>CFBundleInfoDictionaryVersion</key>
@@ -29,7 +29,7 @@
   <key>GridCraftBuildCommit</key>
   <string>@BUILD_SHA@</string>
   <key>CFBundleIconFile</key>
-  <string>NexusSheets</string>
+  <string>NexusSheet</string>
   <key>LSApplicationCategoryType</key>
   <string>public.app-category.productivity</string>
   <!-- Must match MACOSX_DEPLOYMENT_TARGET in package.sh. Big Sur is the first release on
@@ -43,9 +43,9 @@
   <key>NSRequiresAquaSystemAppearance</key>
   <false/>
   <key>NSHumanReadableCopyright</key>
-  <string>Nexus Sheets © 2026 Sonnytech. Based on GridCraft by the ArtCraft team. MIT OR Apache-2.0.</string>
+  <string>Nexus Sheet © 2026 SonnyTech. Based on GridCraft by the ArtCraft team. MIT OR Apache-2.0.</string>
 
-  <!-- Files Nexus Sheets opens. Rank Alternate: it's offered under "Open With" without taking
+  <!-- Files Nexus Sheet opens. Rank Alternate: it's offered under "Open With" without taking
        over the default app (Numbers, another spreadsheet) for these types. -->
   <key>CFBundleDocumentTypes</key>
   <array>

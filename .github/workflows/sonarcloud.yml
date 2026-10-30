@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   sonarcloud:
-    # NexusOffices: upstream's SonarCloud project only. On the fork this would hand every secret
+    # NexusOffice: upstream's SonarCloud project only. On the fork this would hand every secret
     # (`secrets: inherit`) to a workflow tracked at another org's @main.
     if: github.repository == 'storytold/gridcraft'
     # Tracked at @main so org-wide CI improvements propagate without PR churn.

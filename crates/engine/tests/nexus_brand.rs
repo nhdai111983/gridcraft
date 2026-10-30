@@ -1,4 +1,4 @@
-//! NexusOffices: what the engine writes into the user's files names Nexus Sheets, not upstream's
+//! NexusOffice: what the engine writes into the user's files names Nexus Sheet, not upstream's
 //! product (spec §4.4: default author, `<Application>`, PDF Producer/Creator, `INFO`). File-format
 //! keys (`gridcraft://`, `GRIDCRAFT_*`, the MCP server's machine name) are deliberately unchanged.
 
@@ -9,7 +9,7 @@ use serde_json::json;
 
 /// A fresh directory for one test (tests run in parallel), removed by the test when it ends.
 fn tmp_dir(test: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("nexus-sheets-brand-{}-{test}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("nexus-sheet-brand-{}-{test}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -38,7 +38,7 @@ fn all_parts(xlsx: &std::path::Path) -> String {
 fn default_author_is_nexus() {
     let mut s = Session::new();
     s.new_workbook();
-    assert_eq!(s.prefs.user_name, "Nexus Sheets User");
+    assert_eq!(s.prefs.user_name, "Nexus Sheet User");
     s.execute("cell.set", json!({"cell": "A1", "input": "Xin chào"})).unwrap();
     // A note added without an author is signed with the default user name.
     s.execute("review.newNote", json!({"cell": "A1", "text": "ghi chú"})).unwrap();
@@ -47,9 +47,9 @@ fn default_author_is_nexus() {
     s.execute("file.saveAs", json!({"path": path.to_str().unwrap()})).unwrap();
 
     let app = part(&path, "docProps/app.xml");
-    assert!(app.contains("<Application>Nexus Sheets</Application>"), "{app}");
+    assert!(app.contains("<Application>Nexus Sheet</Application>"), "{app}");
     let all = all_parts(&path);
-    assert!(all.contains("Nexus Sheets User"), "the note's author is the Nexus default");
+    assert!(all.contains("Nexus Sheet User"), "the note's author is the Nexus default");
     assert!(!all.contains("GridCraft"), "no upstream product name in a saved workbook");
 
     // Reopened, the note keeps its author.
@@ -57,7 +57,7 @@ fn default_author_is_nexus() {
     reopened.execute("file.open", json!({"path": path.to_str().unwrap()})).unwrap();
     let doc = reopened.doc().unwrap();
     let authors: Vec<&str> = doc.wb.active().unwrap().comments.values().map(|c| c.author.as_str()).collect();
-    assert_eq!(authors, ["Nexus Sheets User"]);
+    assert_eq!(authors, ["Nexus Sheet User"]);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -71,8 +71,8 @@ fn pdf_export_names_nexus_sheets() {
     s.execute("file.saveAs", json!({"path": path.to_str().unwrap()})).unwrap();
     let pdf = std::fs::read(&path).unwrap();
     let has = |needle: &[u8]| pdf.windows(needle.len()).any(|w| w == needle);
-    assert!(has(b"/Producer (Nexus Sheets PDF)"));
-    assert!(has(b"/Creator (Nexus Sheets)"));
+    assert!(has(b"/Producer (Nexus Sheet PDF)"));
+    assert!(has(b"/Creator (Nexus Sheet)"));
     assert!(!has(b"GridCraft"));
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -82,5 +82,5 @@ fn info_osversion_names_nexus_sheets() {
     let mut s = Session::new();
     s.new_workbook();
     s.execute("cell.set", json!({"cell": "A1", "input": "=INFO(\"osversion\")"})).unwrap();
-    assert_eq!(s.execute("cell.get", json!({"cell": "A1"})).unwrap()["value"], json!("Nexus Sheets"));
+    assert_eq!(s.execute("cell.get", json!({"cell": "A1"})).unwrap()["value"], json!("Nexus Sheet"));
 }

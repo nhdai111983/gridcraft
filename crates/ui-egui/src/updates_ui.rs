@@ -23,7 +23,7 @@ impl Default for Runtime {
     }
 }
 
-/// NexusOffices: Nexus Sheets is updated by the NexusOffices installer, never on its own, so it
+/// NexusOffice: Nexus Sheet is updated by the NexusOffice installer, never on its own, so it
 /// never asks GridCraft's releases (no network call, no self-update into GridCraft). Help ▸ Check
 /// for Updates… says where updates come from instead.
 pub(crate) fn start(app: &mut SheetApp, manual: bool) {

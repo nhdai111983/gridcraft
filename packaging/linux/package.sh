@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Build and package Nexus Sheets for Linux (<arch> is x86_64 or aarch64, or riscv64 when cross-compiling):
+# Build and package Nexus Sheet for Linux (<arch> is x86_64 or aarch64, or riscv64 when cross-compiling):
 #
-#   $DIST/NexusSheets-<version>-linux-<arch>.AppImage  any distro with glibc >= the build host's
-#   $DIST/NexusSheets-<version>-linux-<arch>.AppImage.zsync  delta updates (needs zsyncmake)
-#   $DIST/NexusSheets-<version>-linux-<arch>.deb       Debian, Ubuntu, Mint, Pop!_OS, ...
-#   $DIST/NexusSheets-<version>-linux-<arch>.rpm       Fedora, openSUSE, RHEL, ...
-#   $DIST/NexusSheets-<version>-linux-<arch>.tar.gz    plain FHS-style tree (bin/, share/)
+#   $DIST/NexusSheet-<version>-linux-<arch>.AppImage  any distro with glibc >= the build host's
+#   $DIST/NexusSheet-<version>-linux-<arch>.AppImage.zsync  delta updates (needs zsyncmake)
+#   $DIST/NexusSheet-<version>-linux-<arch>.deb       Debian, Ubuntu, Mint, Pop!_OS, ...
+#   $DIST/NexusSheet-<version>-linux-<arch>.rpm       Fedora, openSUSE, RHEL, ...
+#   $DIST/NexusSheet-<version>-linux-<arch>.tar.gz    plain FHS-style tree (bin/, share/)
 #
 # Usage: packaging/linux/package.sh [--skip-build] [--formats "appimage deb rpm tar"]
 #
@@ -19,7 +19,7 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 HERE="$ROOT/packaging/linux"
 APP_ID=vn.sonnytech.nexus.sheets
-# NexusOffices: the shared MIME definitions stay upstream's file (installed under APP_ID's name).
+# NexusOffice: the shared MIME definitions stay upstream's file (installed under APP_ID's name).
 MIME_XML=ai.storyteller.gridcraft.mime.xml
 
 SKIP_BUILD=0
@@ -40,10 +40,10 @@ case "$ARCH" in
   aarch64 | arm64) ARCH=aarch64; DEB_ARCH=arm64 ;;
   *) echo "unsupported architecture $ARCH" >&2; exit 2 ;;
 esac
-export GRIDCRAFT_MAINTAINER="${GRIDCRAFT_MAINTAINER:-Sonnytech <nhdai111983@users.noreply.github.com>}"
-BASENAME="NexusSheets-$VERSION-linux-$ARCH"
+export GRIDCRAFT_MAINTAINER="${GRIDCRAFT_MAINTAINER:-SonnyTech <nhdai111983@users.noreply.github.com>}"
+BASENAME="NexusSheet-$VERSION-linux-$ARCH"
 
-echo "==> Nexus Sheets $VERSION for Linux $ARCH ($FORMATS)"
+echo "==> Nexus Sheet $VERSION for Linux $ARCH ($FORMATS)"
 
 if [[ "$SKIP_BUILD" = 0 ]]; then
   if [[ -n "${CROSS_TARGET:-}" ]]; then
@@ -58,9 +58,9 @@ STAGE="$WORK/root"
 rm -rf "$WORK"
 
 # ---- stage an FHS tree (shared by every format) -------------------------------------------------
-install -Dm755 "$BIN/gridcraft" "$STAGE/usr/bin/nexus-sheets"
-install -Dm755 "$BIN/gridcraft-cli" "$STAGE/usr/bin/nexus-sheets-cli"
-"${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/nexus-sheets" "$STAGE/usr/bin/nexus-sheets-cli" 2>/dev/null || true
+install -Dm755 "$BIN/gridcraft" "$STAGE/usr/bin/nexus-sheet"
+install -Dm755 "$BIN/gridcraft-cli" "$STAGE/usr/bin/nexus-sheet-cli"
+"${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/nexus-sheet" "$STAGE/usr/bin/nexus-sheet-cli" 2>/dev/null || true
 install -Dm644 "$HERE/$APP_ID.desktop" "$STAGE/usr/share/applications/$APP_ID.desktop"
 install -Dm644 "$HERE/$MIME_XML" "$STAGE/usr/share/mime/packages/$APP_ID.xml"
 mkdir -p "$STAGE/usr/share/metainfo"
@@ -68,8 +68,8 @@ sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$GRIDCRAFT_BUILD_DATE/g" \
   "$HERE/$APP_ID.metainfo.xml.in" >"$STAGE/usr/share/metainfo/$APP_ID.metainfo.xml"
 mkdir -p "$STAGE/usr/share/icons"
 cp -R "$ROOT/nexus/assets/hicolor" "$STAGE/usr/share/icons/"
-mkdir -p "$STAGE/usr/share/doc/nexus-sheets"
-copy_docs "$STAGE/usr/share/doc/nexus-sheets"
+mkdir -p "$STAGE/usr/share/doc/nexus-sheet"
+copy_docs "$STAGE/usr/share/doc/nexus-sheet"
 
 if command -v desktop-file-validate >/dev/null; then
   desktop-file-validate "$STAGE/usr/share/applications/$APP_ID.desktop"
@@ -131,10 +131,10 @@ if has appimage; then
     printf '%s  %s\n' "$sha256" "$path" | sha256sum -c -
     return
   }
-  APPDIR="$WORK/NexusSheets.AppDir"
+  APPDIR="$WORK/NexusSheet.AppDir"
   cp -R "$STAGE" "$APPDIR"
-  # NexusOffices: usr/share/doc (licences, NOTICE, ATTRIBUTION.md, OFL texts) stays inside the AppImage.
-  ln -s usr/bin/nexus-sheets "$APPDIR/AppRun"
+  # NexusOffice: usr/share/doc (licences, NOTICE, ATTRIBUTION.md, OFL texts) stays inside the AppImage.
+  ln -s usr/bin/nexus-sheet "$APPDIR/AppRun"
   cp "$HERE/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
   cp "$ROOT/nexus/assets/hicolor/256x256/apps/$APP_ID.png" "$APPDIR/$APP_ID.png"
   ln -s "$APP_ID.png" "$APPDIR/.DirIcon"
@@ -174,7 +174,7 @@ if has appimage; then
   # each AppImage on GitHub Releases. `latest` is the newest published release that is not a
   # pre-release. A fork's builds point at its own releases through GITHUB_REPOSITORY.
   REPO="${GITHUB_REPOSITORY:-nhdai111983/gridcraft}"
-  UPDATE_INFO="gh-releases-zsync|${REPO%%/*}|${REPO#*/}|latest|NexusSheets-*-linux-$ARCH.AppImage.zsync"
+  UPDATE_INFO="gh-releases-zsync|${REPO%%/*}|${REPO#*/}|latest|NexusSheet-*-linux-$ARCH.AppImage.zsync"
   # Extract-and-run: works without FUSE (containers, CI). The output embeds the static runtime,
   # so users don't need libfuse2 either. With zsyncmake on the host (CI installs the zsync
   # package) appimagetool also writes the .zsync, into its working directory, hence the cd.
@@ -188,9 +188,9 @@ if has appimage; then
 fi
 
 if [[ -z "${CROSS_TARGET:-}" ]]; then
-  "$STAGE/usr/bin/nexus-sheets-cli" --version
+  "$STAGE/usr/bin/nexus-sheet-cli" --version
 elif [[ -n "${EMULATOR:-}" ]]; then
-  "$EMULATOR" "$STAGE/usr/bin/nexus-sheets-cli" --version
+  "$EMULATOR" "$STAGE/usr/bin/nexus-sheet-cli" --version
 fi
 echo "==> done"
 ls -lh "$DIST"

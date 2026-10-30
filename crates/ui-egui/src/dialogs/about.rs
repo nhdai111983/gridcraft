@@ -14,7 +14,7 @@ pub(super) fn about(ui: &mut egui::Ui, d: &mut Dialog) {
     match d.tab.as_str() {
         "Contributors" => crate::credits::contributors_ui(ui),
         "Models" => crate::credits::models_ui(ui),
-        // NexusOffices: About is the fork's own (no ArtCraft logo or links; attribution in text).
+        // NexusOffice: About is the fork's own (no ArtCraft logo or links; attribution in text).
         _ => crate::nexus::about_ui(ui, crate::i18n::current(ui.ctx())),
     }
 }

@@ -183,13 +183,13 @@ pub fn set(wb: &mut Workbook, key: &str, text: &str) -> Result<()> {
     };
     if let Some(n) = wb.names.iter().find(taken) {
         return Err(EngineError::Other(format!(
-            "The workbook has a defined name '{}', which Nexus Sheets needs for its own data. Rename it first.",
+            "The workbook has a defined name '{}', which Nexus Sheet needs for its own data. Rename it first.",
             n.name
         )));
     }
     remove(wb, key);
     for (i, formula) in formulas.into_iter().enumerate() {
-        wb.names.push(DefinedName { name: format!("{PREFIX}{key}_{i}"), scope: None, formula, comment: "Nexus Sheets data".into(), hidden: true });
+        wb.names.push(DefinedName { name: format!("{PREFIX}{key}_{i}"), scope: None, formula, comment: "Nexus Sheet data".into(), hidden: true });
     }
     Ok(())
 }
