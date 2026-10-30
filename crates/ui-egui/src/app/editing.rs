@@ -21,7 +21,7 @@ impl SheetApp {
         if text.is_none() && sh.cell_pictures.contains_key(&at) {
             return;
         }
-        let locale = self.ui.language.formula_locale();
+        let locale = self.ui.formula_locale();
         let current = if sh.cell_pictures.contains_key(&at) {
             String::new()
         } else {

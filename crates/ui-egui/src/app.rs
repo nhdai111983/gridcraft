@@ -223,6 +223,8 @@ impl SheetApp {
         }
         // The language the widgets translate with this frame (see `i18n::current`).
         i18n::set_current(&ctx, self.ui.language);
+        // NexusOffice: the formula syntax the region gives (File › Options › Region).
+        crate::nexus_region::set_current(&ctx, self.ui.formula_locale());
         #[cfg(not(target_arch = "wasm32"))]
         updates_ui::show(self, &ctx);
         let t = theme::Tokens::get(&ctx);

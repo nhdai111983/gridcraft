@@ -87,7 +87,7 @@ impl SheetApp {
         // Workbooks show in the interface language's regional format (vi-VN: 1.234,5, dd/mm/yyyy);
         // cheap when nothing changed, and an undone step that comes back with another locale gets
         // this one again.
-        self.session.set_locale(self.ui.language.regional_format());
+        self.session.set_locale(self.ui.regional_format());
         theme::set_accent(ctx, self.ui.accent.as_deref().and_then(theme::parse_hex));
     }
 }

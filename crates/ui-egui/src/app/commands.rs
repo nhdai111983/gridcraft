@@ -232,6 +232,8 @@ impl SheetApp {
                 }
                 Ok(json!({"page": self.backstage.as_ref().map(|b| b.page.id())}))
             }
+            // NexusOffice: File › Options › Region (`{"value": "vi-VN" | "en-US" | ""}`).
+            "ui.region" => crate::nexus_region::command(&mut self.ui, p),
             "ui.accent" => {
                 // NexusOffice: `{"value": "#RRGGBB"}` sets the accent colour, `""` or `null` goes
                 // back to the app's own; no value reads it. Applied on the next frame (`logic`).
@@ -288,7 +290,7 @@ impl SheetApp {
                     let text = text.map(|text| {
                         self.session
                             .active()
-                            .map(|d| formula_locale::display_template(&text, self.ui.language.formula_locale(), &d.wb, d.wb.active_sheet()))
+                            .map(|d| formula_locale::display_template(&text, self.ui.formula_locale(), &d.wb, d.wb.active_sheet()))
                             .unwrap_or(text)
                     });
                     self.begin_edit(text, false);

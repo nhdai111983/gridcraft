@@ -374,3 +374,35 @@ fn csv_in_vietnamese() {
     let en = CsvOptions { delimiter: 0, ..Default::default() };
     assert_eq!(read_csv(b"1.5,2\n", &en).unwrap().sheets[0].value(CellRef::new(0, 0)), Value::Number(1.5));
 }
+
+/// NexusOffice (vi-VN sniffer): a title line with no separator above a comma or tab table, with
+/// an unquoted `;` inside a text cell, splits at the commas (tabs), not at the stray `;`.
+#[test]
+fn csv_in_vietnamese_title_line_and_stray_semicolon() {
+    use gridcraft_core::Locale::{EnUs, ViVn};
+    assert_eq!(sniff_delimiter_in("Report\nName,Note\nA,x; y\n", '"', ViVn), b',');
+    assert_eq!(sniff_delimiter_in("Report\r\n\r\nName,Note\r\nA,x; y", '"', ViVn), b',');
+    assert_eq!(sniff_delimiter_in("Report\nName\tNote\nA\tx; y\n", '"', ViVn), b'\t');
+    assert_eq!(sniff_delimiter_in("Báo cáo\nBáo cáo tháng 10\nTên,Ghi chú\nAn,x; y\nBình,z\n", '"', ViVn), b',');
+    let vi = CsvOptions { delimiter: 0, locale: ViVn, ..Default::default() };
+    let wb = read_csv(b"Report\nName,Note\nA,x; y\n", &vi).unwrap();
+    assert_eq!(wb.csv_delimiter, Some(b','));
+    assert_eq!(wb.sheets[0].value(CellRef::new(0, 0)), Value::Text("Report".into()));
+    assert_eq!(wb.sheets[0].value(CellRef::new(2, 1)), Value::Text("x; y".into()));
+    let wb = read_csv(b"Report\nName\tNote\nA\tx; y\n", &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(2, 1)), Value::Text("x; y".into()));
+    // The cases a title line used to decide still read the same way.
+    assert_eq!(sniff_delimiter_in("Báo cáo\nTên;Giá\nAn;1,5\n", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("Báo cáo, tháng 10\nTên;Giá\nAn;1,5\n", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("Giá\n1,5\n2\n", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("Tên\nAn\nBình\n", '"', ViVn), sniff_delimiter("Tên\nAn\nBình\n", '"'));
+    // en-US is unchanged.
+    for t in ["Report\nName,Note\nA,x; y\n", "Report\nName\tNote\nA\tx; y\n", "a;b\n"] {
+        assert_eq!(sniff_delimiter_in(t, '"', EnUs), sniff_delimiter(t, '"'), "{t:?}");
+    }
+    // Hostile text never panics.
+    for t in ["\n\n\n", "\"", "\"\n;", ";\n,\n\t", "\u{0},;\t\"", &"x\n".repeat(50), &";,".repeat(40_000)] {
+        let _ = sniff_delimiter_in(t, '"', ViVn);
+        let _ = read_csv(t.as_bytes(), &vi);
+    }
+}

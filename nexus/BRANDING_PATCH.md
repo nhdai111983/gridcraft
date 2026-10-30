@@ -191,6 +191,33 @@ Sinh bằng `python3 -c "import uuid; print(uuid.uuid4())"` ngày 2026-10-16.
 | `crates/ui-egui/src/grid.rs` | NX-VI.1: số General trong lưới theo vùng; nhớ id widget lưới (`focus_id`) cho `keep_keyboard` | Nên PR upstream |
 | `crates/ui-egui/src/ribbon.rs` | NX-VI.1: Currency trong danh sách Number Format = đồng khi tiếng Việt (`number_format_code`) | Có — tiền tệ mặc định theo vùng |
 | `crates/ui-egui/src/nexus_toolbar.rs` | NX-VI.1: Currency = đồng khi tiếng Việt | Có |
+| `crates/core/src/locale.rs` (thêm NX-VI.4) | `coercion_locale`/`coercion_scope`: vùng mà phép ép kiểu chữ ↔ số dùng trong lúc tính công thức (thread-local có guard, mặc định en-US) | — (file của fork) |
+| `crates/core/src/value.rs` | NX-VI.4: `Value::to_number_in` đọc chữ theo `coercion_locale` (`="1,5"+1`), `Value::to_text` viết số theo nó (`=1.5&""` → `1,5`) | Nên PR upstream |
+| `crates/core/src/parse.rs` (thêm NX-VI.4) | `parse_number_text` theo `coercion_locale` (tiêu chí COUNTIF…, D-functions, COUNT), `coerce_number_text` | Nên PR upstream |
+| `crates/core/src/lib.rs` (thêm NX-VI.4) | xuất `coercion_locale`, `coercion_scope` | Nên PR upstream |
+| `crates/functions/src/text.rs`, `crates/functions/src/database.rs` (thêm NX-VI.4, review) | VALUETOTEXT/ARRAYTOTEXT viết số theo vùng như `&` (ARRAYTOTEXT dùng `\`/`;`/`; ` ở vi-VN); nhãn trường số của hàm D- theo vùng | Nên PR upstream |
+| `crates/engine/src/cmd/edit.rs`, `crates/engine/src/cmd/file.rs`, `crates/engine/src/cmd/extra.rs` (thêm NX-VI.4, review) | Undo/redo đưa ảnh chụp về vùng hiện tại (`adopt_locale`); mở/tạo sổ/mẫu/cửa sổ mới đặt `wb.locale` trước `DocState::new` (chỉ tính một lần, cả sổ tính thủ công) | Nên PR upstream |
+| `docs/localization-parity.md` | NX-VI.1–NX-VI.4: mục Regional formats (vi-VN), cơ chế, nợ còn lại, lịch sử | Không (tài liệu tiến độ của fork) |
+| `crates/functions/src/date.rs` | NX-VI.4: DATEVALUE/TIMEVALUE đọc chữ theo vùng của workbook (`25/10/2026`) | Nên PR upstream |
+| `crates/calc/src/eval.rs` (thêm NX-VI.4) | `Evaluator::eval` ngoài cùng đặt `coercion_scope(workbook.locale)` | Nên PR upstream |
+| `crates/engine/src/lib.rs` (thêm NX-VI.4) | `adopt_locale` (dùng chung cho `add_document`, `set_locale`, undo/redo); `new_workbook` đặt vùng trước khi tính; `locale_sensitive` = sổ có công thức bất kỳ (ép kiểu/tiêu chí phụ thuộc vùng) → đổi vùng/mở file ở vi-VN tính lại mọi sổ có công thức | Nên PR upstream |
+| `crates/numfmt/src/parse.rs` (thêm NX-VI.4) | `respell_code` chung cho `delocalize_code` và `localize_code_separators` (mới); số trong điều kiện `[<1000,5]` cũng đổi dấu | Nên PR upstream |
+| `crates/numfmt/src/lib.rs` (thêm NX-VI.4) | `localize_code` (mã hiển thị trong Format Cells: dấu tách vi-VN, ngày hệ thống 14/22 → `dd/mm/yyyy`); xuất `localize_code_separators` | Nên PR upstream |
+| `crates/chart/src/lib.rs` | NX-VI.4: `ChartData::locale` (`serde(skip)`) | Nên PR upstream |
+| `crates/chart/src/resolve.rs` | NX-VI.4: `resolve` đặt `locale = wb.locale`; nhãn hạng mục ngày/số và tên chuỗi dạng số theo vùng | Nên PR upstream |
+| `crates/chart/src/axis.rs` | NX-VI.4: `Fmt::new_in(code, locale)` — nhãn trục/nhãn dữ liệu theo vùng (General đổi dấu thập phân) | Nên PR upstream |
+| `crates/chart/src/render.rs` | NX-VI.4: 14 chỗ `Fmt::new` → `Fmt::new_in(.., data.locale)`; `sanitize` giữ `locale`; khoảng histogram tách bằng dấu danh sách (`[1,5; 2,5]`) | Nên PR upstream |
+| `crates/chart/src/tests.rs` | NX-VI.4: literal `ChartData {..}` thêm `locale: Default::default()` (trường mới) | Đi cùng `lib.rs` |
+| `crates/xlsx/src/csv.rs` (thêm NX-VI.4) | `sniff_delimiter_in` bỏ qua dòng tiêu đề đầu không có tab/`;`/`,` (`Report\nName,Note\nA,x; y` → `,`) | Nên PR upstream |
+| `crates/xlsx/src/tests/csv_tests.rs` | NX-VI.3/NX-VI.4: test CSV vi-VN (sniffer, dòng tiêu đề, `;` lạc trong ô chữ) | Đi cùng `csv.rs` |
+| `crates/ui-egui/src/nexus_region.rs` | File mới (NX-VI.4): Vùng tách khỏi ngôn ngữ giao diện — `UiState::regional_format`/`formula_locale`, lệnh `ui.region`, hàng File › Tùy chọn › Vùng, lưu `region` trong `ui.json` (đọc lỏng), `CodeEdit` (mã định dạng hiển thị theo vùng, lưu en-US), `category_code` (Currency = đồng ở vi-VN) | — (file mới) |
+| `crates/ui-egui/src/lib.rs` (thêm NX-VI.4) | `pub mod nexus_region;`, `UiState::region`, lệnh `ui.region`, mỗi khung hình `set_locale(ui.regional_format())` và `nexus_region::set_current` | Có — hook vùng |
+| `crates/ui-egui/src/dialogs.rs` (thêm NX-VI.4) | Format Cells › Number: mã/nút mẫu hiển thị theo vùng (`CodeEdit`), lưu en-US; Currency theo vùng; `ui.regional_format()` thay `language.regional_format()` | Nên PR upstream |
+| `crates/ui-egui/src/backstage.rs` (thêm NX-VI.4) | Hàng "Vùng (số và ngày)" trong File › Tùy chọn › Chung | Có |
+| `crates/ui-egui/src/control.rs` (thêm NX-VI.4) | `engine.commands` liệt kê `ui.region` | Có |
+| `crates/ui-egui/src/formula_bar.rs`, `crates/ui-egui/src/grid.rs` (thêm NX-VI.4) | Cú pháp công thức theo vùng (`ui.formula_locale()`, `nexus_region::current`) thay theo ngôn ngữ | Có |
+| `crates/ui-egui/examples/snapshot.rs` (thêm NX-VI.4) | Cờ `--select B5` (chọn ô trước khi chụp) và `--region vi-VN|en-US` (vùng tách khỏi ngôn ngữ) — chụp được Format Cells/biểu đồ tiếng Việt mà không cần JSON | Có |
+| `crates/ui-egui/src/ribbon.rs`, `crates/ui-egui/src/nexus_toolbar.rs` (thêm NX-VI.4) | Currency/nút kế toán đồng theo vùng thay theo ngôn ngữ (`number_format_code(region, …)`) | Có |
 
 ## Rà soát gọi mạng (guard §5)
 `rg -n -i "artcraft|storytold|storyteller|discord|telemetry|update|crash|sentry|posthog|https?://"`:

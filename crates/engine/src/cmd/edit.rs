@@ -180,6 +180,7 @@ fn coalesce(cells: &[CellRef]) -> Vec<RangeRef> {
 
 fn undo(s: &mut Session, p: &Json) -> Result<Json> {
     let steps = u32_param(p, "steps").unwrap_or(1).max(1);
+    let locale = s.locale;
     let d = s.doc_mut()?;
     let mut label = String::new();
     let now = d.wb.clone();
@@ -195,12 +196,16 @@ fn undo(s: &mut Session, p: &Json) -> Result<Json> {
     }
     super::extra::keep_watch_list(&now, &mut d.wb);
     d.calc.rebuild(&d.wb);
+    // NexusOffice: a snapshot taken in another regional format is shown, and recalculated, in
+    // the session's current one.
+    crate::adopt_locale(d, locale);
     d.revision += 1;
     Ok(json!({"undone": label}))
 }
 
 fn redo(s: &mut Session, p: &Json) -> Result<Json> {
     let steps = u32_param(p, "steps").unwrap_or(1).max(1);
+    let locale = s.locale;
     let d = s.doc_mut()?;
     let mut label = String::new();
     let now = d.wb.clone();
@@ -215,6 +220,9 @@ fn redo(s: &mut Session, p: &Json) -> Result<Json> {
     }
     super::extra::keep_watch_list(&now, &mut d.wb);
     d.calc.rebuild(&d.wb);
+    // NexusOffice: a snapshot taken in another regional format is shown, and recalculated, in
+    // the session's current one.
+    crate::adopt_locale(d, locale);
     d.revision += 1;
     Ok(json!({"redone": label}))
 }

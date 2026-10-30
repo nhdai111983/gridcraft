@@ -497,15 +497,32 @@ pub struct Session {
     pub locale: gridcraft_core::Locale,
 }
 
-/// Whether a formula of the workbook calls a function whose result depends on the regional format
-/// (`TEXT`, `VALUE`, `NUMBERVALUE`, and the names that contain them), so a locale change needs a
-/// recalculation. A cheap scan of the formula texts instead of a recalculation of every workbook.
+/// Whether a locale change can change a result of the workbook: whether it has a formula at all.
+/// Formulas coerce text and numbers in the workbook's regional format (`="1,5"+1`, `">"&B1` in a
+/// criterion, a cell holding the text `1,5`), and `TEXT`, `VALUE` and `NUMBERVALUE` read and write
+/// it, so almost any formula may depend on it. A cheap scan that stops at the first formula.
 fn locale_sensitive(wb: &Workbook) -> bool {
-    // Stored formulas are canonical: function names are upper case, so no case folding (and no
-    // allocation) per formula.
-    let calls = |text: &str| text.contains("TEXT(") || text.contains("VALUE(");
-    wb.names.iter().any(|n| calls(&n.formula))
-        || wb.sheets.iter().any(|sh| sh.cells.iter().any(|(_, c)| c.formula.as_ref().is_some_and(|f| calls(&f.text))))
+    wb.sheets.iter().any(|sh| sh.cells.iter().any(|(_, c)| c.formula.is_some()))
+}
+
+/// NexusOffice: shows `d` in `locale`, recalculating it there when the locale changes (unless it
+/// calculates manually and has formulas to redo). A workbook with no unsaved changes stays saved:
+/// the locale is not part of the file. Used when a workbook joins the session, when the session's
+/// locale changes and when undo or redo brings back a snapshot taken in another locale.
+pub(crate) fn adopt_locale(d: &mut DocState, locale: gridcraft_core::Locale) {
+    if d.wb.locale == locale {
+        return;
+    }
+    let clean = !d.is_dirty();
+    let mut wb = (*d.wb).clone();
+    wb.locale = locale;
+    if wb.calc.mode != gridcraft_model::CalcMode::Manual && locale_sensitive(&wb) {
+        d.calc.recalc_all(&mut wb);
+    }
+    d.wb = Arc::new(wb);
+    if clean {
+        d.saved = d.wb.clone();
+    }
 }
 
 impl Session {
@@ -548,20 +565,9 @@ impl Session {
     /// Opens a workbook in a new window, which becomes the active one.
     pub fn add_document(&mut self, mut d: DocState) -> usize {
         // NexusOffice: a new or opened workbook takes the session's regional format at once, and is
-        // recalculated in it (`TEXT`, `VALUE`, `NUMBERVALUE` follow the locale; the file's cached
-        // results are en-US ones), without becoming unsaved.
-        if d.wb.locale != self.locale {
-            let clean = !d.is_dirty();
-            let mut wb = (*d.wb).clone();
-            wb.locale = self.locale;
-            if wb.calc.mode != gridcraft_model::CalcMode::Manual && locale_sensitive(&wb) {
-                d.calc.recalc_all(&mut wb);
-            }
-            d.wb = Arc::new(wb);
-            if clean {
-                d.saved = d.wb.clone();
-            }
-        }
+        // recalculated in it (coercion, criteria, `TEXT`, `VALUE`, `NUMBERVALUE` follow the
+        // locale; the file's cached results are en-US ones), without becoming unsaved.
+        adopt_locale(&mut d, self.locale);
         let uid = d.uid;
         self.docs.push(d);
         let w = self.push_window(uid);
@@ -582,24 +588,13 @@ impl Session {
         }
     }
     /// Shows every open workbook in `locale` and recalculates the ones whose regional format
-    /// changes (`TEXT`, `VALUE` and `NUMBERVALUE` follow it), unless they calculate manually. A
-    /// workbook with no unsaved changes stays saved: the locale is not part of the file.
+    /// changes (coercion, criteria, `TEXT`, `VALUE` and `NUMBERVALUE` follow it), unless they
+    /// calculate manually. A workbook with no unsaved changes stays saved: the locale is not part
+    /// of the file.
     pub fn set_locale(&mut self, locale: gridcraft_core::Locale) {
         self.locale = locale;
         for d in &mut self.docs {
-            if d.wb.locale == locale {
-                continue;
-            }
-            let clean = !d.is_dirty();
-            let mut wb = (*d.wb).clone();
-            wb.locale = locale;
-            if wb.calc.mode != gridcraft_model::CalcMode::Manual && locale_sensitive(&wb) {
-                d.calc.recalc_all(&mut wb);
-            }
-            d.wb = Arc::new(wb);
-            if clean {
-                d.saved = d.wb.clone();
-            }
+            adopt_locale(d, locale);
         }
     }
 
@@ -617,6 +612,8 @@ impl Session {
             let name = wb.next_sheet_name_with(&self.sheet_name_prefix);
             wb.sheets.push(Arc::new(gridcraft_model::Sheet::new(name)));
         }
+        // NexusOffice: calculated once, in the session's regional format (`add_document`).
+        wb.locale = self.locale;
         self.add_document(DocState::new(wb, None, format!("Book{n}"), Trust::Local))
     }
 

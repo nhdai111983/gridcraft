@@ -112,6 +112,8 @@ fn general_options(app: &mut SheetApp, ui: &mut Ui, lang: Language) {
             .response
             .labelled_by(label.id);
         ui.end_row();
+        // NexusOffice: File › Options › Region, apart from the language.
+        crate::nexus_region::options_row(app, ui);
     });
 }
 

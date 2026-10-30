@@ -1,7 +1,7 @@
 //! Value-axis scaling ("nice numbers") and label formatting.
 
-use gridcraft_core::{DateSystem, Value, number_to_text};
-use gridcraft_numfmt::{NumberFormat, format_value};
+use gridcraft_core::{DateSystem, Locale, Value, number_to_text};
+use gridcraft_numfmt::{NumberFormat, format_value_in};
 
 /// Largest magnitude we plot; bigger values are clamped so ranges stay finite.
 pub(crate) const MAX_ABS: f64 = 1e300;
@@ -116,13 +116,19 @@ pub(crate) fn fixed_scale(min: f64, max: f64, step: f64) -> Scale {
 pub(crate) struct Fmt {
     general: bool,
     fmt: NumberFormat,
+    /// NexusOffice: the regional format labels are spelled in (the workbook's).
+    locale: Locale,
 }
 
 impl Fmt {
     pub fn new(code: &str) -> Fmt {
+        Fmt::new_in(code, Locale::EnUs)
+    }
+    /// [`Fmt::new`] for labels in a regional format (`1.234,5`, `25/10/2026`).
+    pub fn new_in(code: &str, locale: Locale) -> Fmt {
         let t = code.trim();
         let general = t.is_empty() || t.eq_ignore_ascii_case("general");
-        Fmt { general, fmt: NumberFormat::parse_cached(if general { "General" } else { t }) }
+        Fmt { general, fmt: NumberFormat::parse_cached(if general { "General" } else { t }), locale }
     }
     /// Formats `v`; `step` (axis labels) fixes the decimals for General.
     pub fn format(&self, v: f64, step: Option<f64>) -> String {
@@ -134,9 +140,9 @@ impl Fmt {
             v = 0.0;
         }
         if self.general {
-            return general_text(v, step);
+            return self.locale.localize_number(&general_text(v, step));
         }
-        let mut t = format_value(&Value::Number(v), &self.fmt, DateSystem::D1900).text;
+        let mut t = format_value_in(&Value::Number(v), &self.fmt, DateSystem::D1900, self.locale).text;
         if t.chars().count() > 40 {
             t = t.chars().take(40).collect();
         }

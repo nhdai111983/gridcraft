@@ -382,3 +382,122 @@ fn more_entry_points_read_the_regional_format() {
     let e = s.execute("data.fromTextCsv", json!({"text": "[1,", "locale": "vi-VN"})).unwrap_err().to_string();
     assert!(e.contains("data.fromTextCsv"), "{e}");
 }
+
+/// Criteria and coercion follow the workbook's regional format (Excel uses the system's): a
+/// locale switch recalculates every formula, the formula text is stored unchanged, and a file
+/// opened in vi-VN is recalculated in it (its cached results are the file's).
+#[test]
+fn criteria_and_coercion_follow_the_workbooks_locale() {
+    let mut s = session();
+    for (a1, v) in [("A1", "1"), ("A2", "1.5"), ("A3", "2.5")] {
+        set(&mut s, a1, v, None);
+    }
+    set(&mut s, "B1", "=COUNTIF(A1:A3,\">1,5\")", None);
+    set(&mut s, "B2", "=COUNTIF(A1:A3,\">\"&A2)", None);
+    set(&mut s, "B3", "=\"1,5\"+1", None);
+    set(&mut s, "B4", "=A2&\"\"", None);
+    set(&mut s, "B5", "=SUMIFS(A1:A3,A1:A3,\"<=1,5\")", None);
+    let en = [value(&s, "B1"), value(&s, "B2"), value(&s, "B3"), value(&s, "B4"), value(&s, "B5")];
+    assert_eq!(en[1], Value::Number(1.0));
+    assert_eq!(en[3], Value::text("1.5"));
+    s.active_mut().unwrap().saved = s.active().unwrap().wb.clone();
+    s.set_locale(Locale::ViVn);
+    assert!(!s.active().unwrap().is_dirty());
+    assert_eq!(value(&s, "B1"), Value::Number(1.0));
+    assert_eq!(value(&s, "B2"), Value::Number(1.0));
+    assert_eq!(value(&s, "B3"), Value::Number(2.5));
+    assert_eq!(value(&s, "B4"), Value::text("1,5"));
+    assert_eq!(value(&s, "B5"), Value::Number(2.5));
+    // Stored with the string literal as written; it is read in the workbook's locale.
+    set(&mut s, "C1", "=COUNTIF(A1:A3,\">=1,5\")", None);
+    assert_eq!(value(&s, "C1"), Value::Number(2.0));
+    let f = s.active().unwrap().wb.active().unwrap().cell(at("C1")).unwrap().formula.clone().unwrap();
+    assert_eq!(f.text.to_string(), "COUNTIF(A1:A3,\">=1,5\")");
+    // The XLSX keeps the formula as written; reopened in en-US it calculates the en-US way.
+    let saved = s.execute("file.saveBytes", json!({"format": "xlsx"})).unwrap();
+    let bytes = gridcraft_engine::io::base64_decode(saved["base64"].as_str().unwrap()).unwrap();
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes.clone())).unwrap();
+    let mut sheet = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("xl/worksheets/sheet1.xml").unwrap(), &mut sheet).unwrap();
+    assert!(sheet.contains("COUNTIF(A1:A3,\"&gt;1,5\")") || sheet.contains("COUNTIF(A1:A3,&quot;&gt;1,5&quot;)"), "{sheet}");
+    assert!(sheet.contains("<v>1.5</v>"), "values stay en-US: {sheet}");
+    // Back to en-US: the en-US results again.
+    s.set_locale(Locale::EnUs);
+    assert_eq!([value(&s, "B1"), value(&s, "B2"), value(&s, "B3"), value(&s, "B4"), value(&s, "B5")], en);
+    // Opened in a vi-VN session, the file is recalculated in vi-VN and stays saved.
+    let mut vi = Session::new();
+    vi.set_locale(Locale::ViVn);
+    vi.execute("file.open", json!({"name": "en.xlsx", "base64": saved["base64"]})).unwrap();
+    assert_eq!(value(&vi, "B3"), Value::Number(2.5));
+    assert_eq!(value(&vi, "B4"), Value::text("1,5"));
+    assert!(!vi.active().unwrap().is_dirty());
+    // The API (no `locale`) stays en-US for what it types.
+    set(&mut vi, "D1", "1.5", None);
+    assert_eq!(value(&vi, "D1"), Value::Number(1.5));
+}
+
+fn xlsx_base64(s: &mut Session) -> serde_json::Value {
+    s.execute("file.saveBytes", json!({"format": "xlsx"})).unwrap()["base64"].clone()
+}
+
+/// Review fix: a workbook is calculated once when it opens, in the session's regional format —
+/// also one that calculates manually, whose results used to stay the en-US ones.
+#[test]
+fn opening_calculates_once_in_the_sessions_locale() {
+    // Manual calculation: `="1,5"+1` shows the vi-VN result as soon as it opens in vi-VN.
+    let mut en = session();
+    set(&mut en, "A1", "=\"1,5\"+1", None);
+    en.execute("formulas.calculationOptions", json!({"mode": "manual"})).unwrap();
+    let manual = xlsx_base64(&mut en);
+    let mut vi = Session::new();
+    vi.set_locale(Locale::ViVn);
+    vi.execute("file.open", json!({"name": "manual.xlsx", "base64": manual})).unwrap();
+    assert_eq!(vi.active().unwrap().wb.calc.mode, gridcraft_engine::model::CalcMode::Manual);
+    assert_eq!(value(&vi, "A1"), Value::Number(2.5));
+    assert_eq!(text(&vi, "A1"), "2,5");
+    assert!(!vi.active().unwrap().is_dirty());
+    // One calculation per open: `RAND()` draws the same first number as an en-US open does
+    // (each calculation pass advances the generator).
+    let mut en = session();
+    set(&mut en, "A1", "=RAND()", None);
+    let auto = xlsx_base64(&mut en);
+    let mut en2 = Session::new();
+    en2.execute("file.open", json!({"name": "auto.xlsx", "base64": auto.clone()})).unwrap();
+    let mut vi = Session::new();
+    vi.set_locale(Locale::ViVn);
+    vi.execute("file.open", json!({"name": "auto.xlsx", "base64": auto})).unwrap();
+    assert_eq!(value(&vi, "A1"), value(&en2, "A1"), "one calculation, not two");
+    // New workbooks and samples too.
+    let mut vi = Session::new();
+    vi.set_locale(Locale::ViVn);
+    vi.new_workbook();
+    assert_eq!(vi.active().unwrap().wb.locale, Locale::ViVn);
+    vi.execute("file.new", json!({"sample": "sales"})).unwrap();
+    assert_eq!(vi.active().unwrap().wb.locale, Locale::ViVn);
+}
+
+/// Review fix: undo and redo across a region switch keep the session's current regional format
+/// (the snapshot's results are recalculated in it).
+#[test]
+fn undo_and_redo_keep_the_current_locale() {
+    let mut s = session();
+    set(&mut s, "A1", "=\"1,5\"+1", None);
+    set(&mut s, "B1", "x", None);
+    let en_a1 = value(&s, "A1");
+    s.set_locale(Locale::ViVn);
+    assert_eq!(value(&s, "A1"), Value::Number(2.5));
+    s.execute("edit.undo", json!({})).unwrap();
+    assert_eq!(value(&s, "B1"), Value::Empty);
+    assert_eq!(s.active().unwrap().wb.locale, Locale::ViVn);
+    assert_eq!(value(&s, "A1"), Value::Number(2.5));
+    s.execute("edit.redo", json!({})).unwrap();
+    assert_eq!(value(&s, "B1"), Value::text("x"));
+    assert_eq!(s.active().unwrap().wb.locale, Locale::ViVn);
+    assert_eq!(value(&s, "A1"), Value::Number(2.5));
+    s.set_locale(Locale::EnUs);
+    s.execute("edit.undo", json!({"steps": 5})).unwrap();
+    assert_eq!(s.active().unwrap().wb.locale, Locale::EnUs);
+    assert_eq!(value(&s, "A1"), Value::Empty);
+    s.execute("edit.redo", json!({})).unwrap();
+    assert_eq!(value(&s, "A1"), en_a1);
+}

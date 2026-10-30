@@ -662,7 +662,7 @@ impl Dialog {
                 }
                 // The saved model's numbers are en-US; the dialog shows and sends them the way
                 // the interface types them (`locale` goes with the command).
-                localize_solver_numbers(&mut values, app.ui.language.regional_format());
+                localize_solver_numbers(&mut values, app.ui.regional_format());
                 let mut d = Dialog::custom("solver", "Solver Parameters", values);
                 d.command = Some("data.solver");
                 d

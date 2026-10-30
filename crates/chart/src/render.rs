@@ -117,6 +117,7 @@ fn sanitize(d: &ChartData) -> ChartData {
                 number_format: s.number_format.clone(),
             })
             .collect(),
+        locale: d.locale,
     }
 }
 

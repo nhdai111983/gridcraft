@@ -29,6 +29,7 @@ pub mod icons;
 pub mod keymap;
 pub mod keytips;
 pub mod nexus;
+pub mod nexus_region;
 pub mod nexus_save_prompt;
 pub mod nexus_toolbar;
 pub mod nexus_wps;
@@ -107,6 +108,10 @@ pub struct UiState {
     /// app's own Emerald. A value that isn't a colour reads as `None`.
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient_accent")]
     pub accent: Option<String>,
+    /// NexusOffice: the regional format chosen in File › Options (`ui.region`); `None` follows the
+    /// interface language ([`nexus_region`]). Saved as its tag (`"vi-VN"`); junk reads as `None`.
+    #[serde(skip_serializing_if = "Option::is_none", serialize_with = "nexus_region::serialize", deserialize_with = "nexus_region::lenient")]
+    pub region: Option<gridcraft_engine::core::Locale>,
 }
 
 fn lenient_accent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
@@ -145,6 +150,7 @@ impl Default for UiState {
             language: i18n::Language::En,
             interface_scale: 100,
             accent: None,
+            region: None,
         }
     }
 }

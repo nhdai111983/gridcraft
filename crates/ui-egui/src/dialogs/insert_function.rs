@@ -10,7 +10,8 @@ pub(super) fn insert_function(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dia
         let r = ui.add(egui::TextEdit::singleline(&mut d.search).desired_width(300.0).hint_text(language.tr("e.g. lookup, average, date")));
         r.request_focus();
     });
-    let locale = language.formula_locale();
+    // NexusOffice: the formula syntax follows the region (File › Options › Region).
+    let locale = app.ui.formula_locale();
     let list = gridcraft_engine::cmd::formulas::function_list();
     // The names and descriptions searched are the ones shown, so in the interface language.
     let q = d.search.to_lowercase();

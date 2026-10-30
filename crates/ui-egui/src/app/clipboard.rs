@@ -42,7 +42,7 @@ impl SheetApp {
         let html = self.services.paste_html.as_mut().and_then(|read| read());
         // NexusOffice: text from another app is read in the interface's regional format
         // (1.234,5 in vi-VN), as typing it would be.
-        let locale = self.ui.language.regional_format().tag();
+        let locale = self.ui.regional_format().tag();
         let params = match html {
             Some(html) => json!({"text": text, "html": html, "locale": locale}),
             None => json!({"text": text, "locale": locale}),

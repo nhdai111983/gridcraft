@@ -656,14 +656,39 @@ pub(crate) fn parse_sections(code: &str) -> Vec<Section> {
 
 /// Respells a format code written in a regional format (`#.##0,00` in Vietnamese, where `,` is
 /// the decimal separator and `.` groups digits) as the en-US code files store (`#,##0.00`).
-/// Quoted text, `\` escapes, `_`/`*` and `[...]` tags are kept. In date and time sections `.` and
-/// `,` are literal characters, so only the decimal separator before fractional seconds (`ss,00`)
-/// changes. en-US codes are returned unchanged.
+/// Quoted text, `\` escapes, `_`/`*` and `[...]` tags are kept, except the number of a condition
+/// (`[<1000,5]` → `[<1000.5]`: the two separators trade places there too, so every code
+/// round-trips through [`localize_code_separators`]). In date and time sections `.` and `,` are literal characters, so
+/// only the decimal separator before fractional seconds (`ss,00`) changes. en-US codes are
+/// returned unchanged.
 pub fn delocalize_code(code: &str, loc: gridcraft_core::Locale) -> String {
+    respell_code(code, loc, false)
+}
+
+/// The inverse of [`delocalize_code`]: an en-US code (`#,##0.00 [$₫-42A]`) as a regional format
+/// spells it (`#.##0,00 [$₫-42A]`), for showing and editing codes in the interface.
+/// `delocalize_code(&localize_code_separators(c, l), l) == c` for every code.
+pub fn localize_code_separators(code: &str, loc: gridcraft_core::Locale) -> String {
+    respell_code(code, loc, true)
+}
+
+fn respell_code(code: &str, loc: gridcraft_core::Locale, to_local: bool) -> String {
     let (dec, group) = (loc.decimal_separator(), loc.group_separator());
     if dec == '.' {
         return code.to_string();
     }
+    // The two separators trade places everywhere they are separators (number sections, the
+    // number of a condition, `ss.00`), which is its own inverse: delocalizing a localized code
+    // gives back the code byte for byte, so an edit elsewhere in it never changes this part.
+    let swap = |c: char| -> char {
+        if c == dec {
+            if to_local { group } else { '.' }
+        } else if c == group {
+            if to_local { dec } else { ',' }
+        } else {
+            c
+        }
+    };
     let sections = split_sections(code);
     let mut out = String::with_capacity(code.len());
     for (k, sec) in sections.iter().enumerate() {
@@ -690,9 +715,11 @@ pub fn delocalize_code(code: &str, loc: gridcraft_core::Locale) -> String {
                 }
                 '[' if !quoted && cs.get(i..).is_some_and(|r| r.contains(&']')) => {
                     out.push(c);
+                    // A condition (`[<1000,5]`) holds a number; other tags are names and codes.
+                    let condition = cs.get(i).is_some_and(|d| matches!(d, '<' | '>' | '='));
                     while let Some(&d) = cs.get(i) {
                         i += 1;
-                        out.push(d);
+                        out.push(if condition { swap(d) } else { d });
                         if d == ']' {
                             break;
                         }
@@ -701,11 +728,9 @@ pub fn delocalize_code(code: &str, loc: gridcraft_core::Locale) -> String {
                 _ if quoted => out.push(c),
                 _ if date => {
                     let after_s = i >= 2 && cs.get(i - 2).is_some_and(|p| p.eq_ignore_ascii_case(&'s'));
-                    if c == dec && after_s && cs.get(i) == Some(&'0') { out.push('.') } else { out.push(c) }
+                    if (c == '.' || c == ',') && after_s && cs.get(i) == Some(&'0') { out.push(swap(c)) } else { out.push(c) }
                 }
-                _ if c == dec => out.push('.'),
-                _ if c == group => out.push(','),
-                _ => out.push(c),
+                _ => out.push(swap(c)),
             }
         }
     }

@@ -53,7 +53,7 @@ pub(super) fn formulas(app: &mut SheetApp, ui: &mut Ui) {
                         if f["category"].as_str() == Some(cat)
                             && let Some(n) = f["name"].as_str()
                         {
-                            let locale = app.ui.language.formula_locale();
+                            let locale = app.ui.formula_locale();
                             let name = app
                                 .session
                                 .active()

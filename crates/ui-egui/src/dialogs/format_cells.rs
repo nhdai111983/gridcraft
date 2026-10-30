@@ -1,5 +1,5 @@
 use super::show::ok_cancel;
-use super::{Dialog, SheetApp, json, theme};
+use super::{Dialog, Json, SheetApp, json, theme};
 
 /// Draws the six-tab Format Cells editor (number, alignment, font, border, fill, protection); the Number tab shows a sample preview, and the style draft updates.
 pub(super) fn format_cells(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: &mut bool) {
@@ -26,23 +26,34 @@ pub(super) fn format_cells(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog
     let sample = app.session.active().and_then(|doc| doc.wb.active().map(|s| s.value(doc.selection.active))).unwrap_or_default();
     match d.tab.as_str() {
         "Number" => {
-            let mut code = st.num_fmt.as_str().to_string();
+            // NexusOffice: codes are shown and typed in the regional format (`#.##0,00`,
+            // `dd/mm/yyyy`) and stored en-US, as Excel's dialog shows the system's
+            // (`nexus_region::CodeEdit`, kept across frames in the dialog's values).
+            let region = app.ui.regional_format();
+            let mut code = crate::nexus_region::CodeEdit::new(st.num_fmt.as_str(), region);
+            if let (Some(shown), Some(stored)) = (d.values.get("codeShown").and_then(Json::as_str), d.values.get("codeStored").and_then(Json::as_str))
+                && stored == code.stored
+            {
+                code.shown = shown.to_string();
+            }
             ui.columns(2, |cols| {
                 cols[0].label(egui::RichText::new(lang.tr("Category:")).strong());
-                for name in
-                    ["General", "Number", "Currency", "Accounting", "Short Date", "Long Date", "Time", "Percentage", "Fraction", "Scientific", "Text"]
-                {
-                    let c = gridcraft_engine::cmd::format::format_code_for(name).to_string();
-                    if cols[0].selectable_label(code == c, lang.tr(name)).clicked() {
-                        code = c;
+                for name in crate::nexus_region::CATEGORIES {
+                    let c = crate::nexus_region::category_code(region, name);
+                    if cols[0].selectable_label(code.stored == c, lang.tr(name)).clicked() {
+                        code.pick(c, region);
                     }
                 }
                 cols[1].label(egui::RichText::new(lang.tr("Sample")).strong());
-                let preview = app.session.active().map(|doc| gridcraft_engine::display::format(&sample, &code, &doc.wb).text).unwrap_or_default();
+                let preview =
+                    app.session.active().map(|doc| gridcraft_engine::display::format(&sample, &code.stored, &doc.wb).text).unwrap_or_default();
                 cols[1].label(egui::RichText::new(preview).font(theme::ui_font(15.0)));
                 cols[1].add_space(8.0);
                 let label = cols[1].label(lang.tr("Type (custom format code):"));
-                cols[1].text_edit_singleline(&mut code).labelled_by(label.id);
+                let typed = cols[1].text_edit_singleline(&mut code.shown).labelled_by(label.id);
+                if typed.changed() {
+                    code.edited(region);
+                }
                 for c in [
                     "0",
                     "0.00",
@@ -61,12 +72,14 @@ pub(super) fn format_cells(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog
                     "[h]:mm:ss",
                     "@",
                 ] {
-                    if cols[1].small_button(c).clicked() {
-                        code = c.to_string();
+                    if cols[1].small_button(crate::nexus_region::show(c, region)).clicked() {
+                        code.pick(c, region);
                     }
                 }
             });
-            st.num_fmt = gridcraft_engine::model::NumFmt::new(&code);
+            st.num_fmt = gridcraft_engine::model::NumFmt::new(&code.stored);
+            d.values.insert("codeStored".into(), json!(st.num_fmt.as_str()));
+            d.values.insert("codeShown".into(), json!(code.shown));
         }
         "Alignment" => {
             use gridcraft_engine::model::{HAlign, VAlign};

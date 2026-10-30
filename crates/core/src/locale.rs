@@ -161,9 +161,77 @@ impl Locale {
     }
 }
 
+// ---------------------------------------------------------------- coercion while a formula runs
+
+thread_local! {
+    /// The regional format formulas coerce in on this thread (see [`coercion_locale`]).
+    static COERCION: std::cell::Cell<Locale> = const { std::cell::Cell::new(Locale::EnUs) };
+}
+
+/// The regional format that text ↔ number coercion uses right now: the workbook's while one of
+/// its formulas is being evaluated ([`coercion_scope`]), en-US everywhere else.
+///
+/// Excel coerces with the system's regional format: with vi-VN settings `="1,5"+1` is 2.5,
+/// `=1.5&""` is `"1,5"`, and the criterion `">1,5"` of COUNTIF means 1.5. The coercions
+/// ([`crate::Value::to_number`], [`crate::Value::to_text`], [`crate::parse::parse_number_text`])
+/// sit far below the evaluator, in hundreds of function bodies that have no context to ask, so
+/// the evaluator states the workbook's locale for the duration of an evaluation instead of
+/// threading it through every signature. Code that runs outside an evaluation (commands, file
+/// I/O, the control channel) sees en-US and stays locale-neutral.
+pub fn coercion_locale() -> Locale {
+    COERCION.with(|c| c.get())
+}
+
+/// Coerces in `locale` until the returned guard drops (also when a panic unwinds through it),
+/// then restores the previous locale. Scopes nest.
+///
+/// The scope belongs to the calling thread. Evaluation is single-threaded today; any future
+/// parallel recalculation (worker threads, a thread pool, async tasks moved across threads) must
+/// enter `coercion_scope(workbook.locale)` again in every worker before it evaluates, or those
+/// formulas coerce in en-US.
+#[must_use = "the locale applies only while the guard lives"]
+pub fn coercion_scope(locale: Locale) -> CoercionScope {
+    let previous = COERCION.with(|c| c.replace(locale));
+    CoercionScope { previous }
+}
+
+/// Guard of [`coercion_scope`].
+#[derive(Debug)]
+pub struct CoercionScope {
+    previous: Locale,
+}
+
+impl Drop for CoercionScope {
+    fn drop(&mut self) {
+        COERCION.with(|c| c.set(self.previous));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn coercion_scopes_nest_and_restore() {
+        assert_eq!(coercion_locale(), Locale::EnUs);
+        {
+            let _vi = coercion_scope(Locale::ViVn);
+            assert_eq!(coercion_locale(), Locale::ViVn);
+            {
+                let _en = coercion_scope(Locale::EnUs);
+                assert_eq!(coercion_locale(), Locale::EnUs);
+            }
+            assert_eq!(coercion_locale(), Locale::ViVn);
+        }
+        assert_eq!(coercion_locale(), Locale::EnUs);
+        // A panic inside the scope still restores it.
+        let r = std::panic::catch_unwind(|| {
+            let _vi = coercion_scope(Locale::ViVn);
+            panic!("boom");
+        });
+        assert!(r.is_err());
+        assert_eq!(coercion_locale(), Locale::EnUs);
+    }
 
     #[test]
     fn tags() {

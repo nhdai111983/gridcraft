@@ -1,9 +1,9 @@
 //! Pulls chart data (names, categories, values, formats, colours) out of a workbook.
 
 use gridcraft_calc::evaluate;
-use gridcraft_core::{CellRef, RangeRef, Value, category_levels, number_to_text};
+use gridcraft_core::{CellRef, Locale, RangeRef, Value, category_levels, number_to_text};
 use gridcraft_model::{Chart, ChartKind, Theme, Workbook, style::apply_tint};
-use gridcraft_numfmt::{NumberFormat, format_value};
+use gridcraft_numfmt::{NumberFormat, format_value_in};
 
 use crate::{ChartData, Rgba, SeriesData, TrendlineData};
 
@@ -122,14 +122,15 @@ fn ref_format(wb: &Workbook, sheet: usize, formula: &str) -> String {
         .unwrap_or_else(|| "General".into())
 }
 
-fn value_text(v: &Value) -> String {
+/// A value as a label, numbers spelled in the workbook's regional format (`1,5` in vi-VN).
+fn value_text(v: &Value, locale: Locale) -> String {
     match v {
         Value::Empty => String::new(),
-        Value::Number(n) => number_to_text(*n),
+        Value::Number(n) => locale.localize_number(&number_to_text(*n)),
         Value::Text(t) => t.to_string(),
         Value::Bool(b) => if *b { "TRUE" } else { "FALSE" }.into(),
         Value::Error(e) => e.as_str().into(),
-        Value::Array(a) => a.get(0, 0).map(value_text).unwrap_or_default(),
+        Value::Array(a) => a.get(0, 0).map(|x| value_text(x, locale)).unwrap_or_default(),
     }
 }
 
@@ -151,11 +152,11 @@ fn category_table(wb: &Workbook, sheet: usize, formula: &str, values: &str) -> (
                 if let Some(c) = at {
                     let code = &wb.styles.get(s.style_id(c)).num_fmt.0;
                     if !code.eq_ignore_ascii_case("general") {
-                        return format_value(v, &NumberFormat::parse_cached(code), wb.date_system).text;
+                        return format_value_in(v, &NumberFormat::parse_cached(code), wb.date_system, wb.locale).text;
                     }
                 }
             }
-            value_text(v)
+            value_text(v, wb.locale)
         })
         .collect();
     let Some((_, r)) = src else { return (texts, vec![]) };
@@ -194,7 +195,7 @@ fn series_name(wb: &Workbook, sheet: usize, name: &str) -> String {
     }
     if t.starts_with('=') || parse_ref(wb, sheet, t).is_some() && t.contains('!') || is_defined_name(wb, sheet, t) {
         let vals = eval_list(wb, sheet, t);
-        let parts: Vec<String> = vals.iter().map(value_text).filter(|s| !s.is_empty()).take(8).collect();
+        let parts: Vec<String> = vals.iter().map(|v| value_text(v, wb.locale)).filter(|s| !s.is_empty()).take(8).collect();
         return parts.join(" ");
     }
     t.to_string()
@@ -274,5 +275,5 @@ pub fn resolve(wb: &Workbook, sheet: usize, chart: &Chart) -> ChartData {
     let n = series.iter().map(|s| s.values.len()).max().unwrap_or(0);
     let categories = categories.unwrap_or_else(|| (1..=n).map(|i| i.to_string()).collect());
     let palette = default_palette(&wb.theme, n.min(PALETTE_CYCLE));
-    ChartData { categories, category_levels, series, palette }
+    ChartData { categories, category_levels, series, palette, locale: wb.locale }
 }

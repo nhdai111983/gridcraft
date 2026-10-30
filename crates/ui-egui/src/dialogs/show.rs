@@ -380,7 +380,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
         if super::nexus_locale::LOCALE_COMMANDS.contains(&cmd)
             && let Some(m) = params.as_object_mut()
         {
-            m.insert("locale".into(), json!(app.ui.language.regional_format().tag()));
+            m.insert("locale".into(), json!(app.ui.regional_format().tag()));
         }
         match app.run(cmd, params) {
             Ok(r) => {

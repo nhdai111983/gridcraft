@@ -132,6 +132,10 @@ pub struct ChartData {
     /// Workbook-theme colours for the points of pie-like charts, repeating (point `j` uses entry `j % len`); empty uses the default theme.
     #[serde(default)]
     pub palette: Vec<Rgba>,
+    /// NexusOffice: the workbook's regional format, which number and date labels are spelled in
+    /// (`1.234,5` in vi-VN). Not serialized: en-US unless set by [`resolve`].
+    #[serde(skip)]
+    pub locale: gridcraft_core::Locale,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
