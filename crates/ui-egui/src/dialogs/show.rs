@@ -106,6 +106,11 @@ pub(crate) fn build_params(d: &Dialog) -> Json {
 /// Takes and draws the active dialog, dispatches its body by name, consumes picture-inbox results, runs OK/confirm commands, handles Esc/close and restores the back-dialog stack.
 pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
     let Some(mut d) = app.dialog.take() else { return };
+    // NexusOffice: as a tab of the NexusOffice window, the prompt every Nexus app shows.
+    if app.embedded && d.name == "saveChanges" {
+        super::nexus_save::embedded_save_prompt(app, ctx, d);
+        return;
+    }
     let home = app.ui_window();
     if d.name == "pasteSpecial" {
         paste_special_shortcuts(&mut d, ctx);

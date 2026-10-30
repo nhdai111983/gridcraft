@@ -85,6 +85,7 @@ impl SheetApp {
             toolbar: false,
             wps: false,
             embedded: false,
+            drawn_in: egui::Rect::NOTHING,
             file_dialog: None,
         }
     }
@@ -193,6 +194,8 @@ impl SheetApp {
     /// Lays out the whole window.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        // NexusOffice: the tab "Lưu thay đổi?" dims and centres on, when embedded.
+        self.drawn_in = ui.max_rect();
         // NexusOffice: keys the grid and the cell editor own stay theirs (see `keep_keyboard`).
         self.keep_keyboard(&ctx);
         if !self.fonts_ready || self.fonts_rebind {

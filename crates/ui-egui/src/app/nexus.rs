@@ -48,6 +48,7 @@ impl SheetApp {
     /// proportional and monospace faces) are kept and this app's named families added, so the
     /// editors in a host window's tabs don't take each other's fonts away.
     pub(super) fn set_fonts(&self, ctx: &egui::Context, defs: egui::FontDefinitions) {
+        let defs = with_ui_fallback(defs);
         if !self.embedded {
             return ctx.set_fonts(defs);
         }
@@ -58,7 +59,8 @@ impl SheetApp {
                 merged.families.insert(family, chain);
             }
         }
-        ctx.set_fonts(merged);
+        // The host's Proportional faces stay first; ours follow for the letters they lack.
+        ctx.set_fonts(with_ui_fallback(merged));
     }
 
     /// The grid and the cell editor own Tab, the arrows and Escape, but egui learns that only from
@@ -88,4 +90,18 @@ impl SheetApp {
         self.session.set_locale(self.ui.language.regional_format());
         theme::set_accent(ctx, self.ui.accent.as_deref().and_then(theme::parse_hex));
     }
+}
+
+/// NexusOffice: egui's own Proportional family falls back on the interface's faces, so text drawn
+/// in it (the shared "Lưu thay đổi?" prompt, `FontId::proportional`) has the Vietnamese letters the
+/// bundled face lacks (`ủ`, `ộ`…) instead of boxes.
+fn with_ui_fallback(mut defs: egui::FontDefinitions) -> egui::FontDefinitions {
+    let Some(ui) = defs.families.get(&egui::FontFamily::Name(theme::UI.into())).cloned() else { return defs };
+    let chain = defs.families.entry(egui::FontFamily::Proportional).or_default();
+    for face in ui {
+        if !chain.contains(&face) {
+            chain.push(face);
+        }
+    }
+    defs
 }

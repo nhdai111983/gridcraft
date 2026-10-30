@@ -26,6 +26,8 @@ mod macros;
 mod names;
 // NexusOffice: numbers typed the interface's regional way.
 mod nexus_locale;
+// NexusOffice: the shared "Lưu thay đổi?" prompt when embedded.
+mod nexus_save;
 mod paste;
 mod show;
 mod spelling;
