@@ -5,8 +5,8 @@ use super::cell_paint::{
 use super::geo::Geo;
 use super::tables::{filter_button_rect, paint_filter_button};
 use super::{
-    CellRef, CfCache, CfLook, Color32, FontId, HAlign, MAX_COLS, Painter, Pos2, RangeRef, Rect, Sheet, Stroke, StrokeKind, Tokens, Underline, Value,
-    Workbook, pos2, theme, vec2,
+    CellRef, CfCache, CfLook, Color32, FontId, HAlign, MAX_COLS, Painter, Pos2, RangeRef, Rect, Sheet, Stroke, StrokeKind, Tokens, Underline, VAlign,
+    Value, Workbook, pos2, theme, vec2,
 };
 
 /// Mirror what the grid painted into `layer` (the shape indices in `range`) for a right-to-left
@@ -458,7 +458,12 @@ fn paint_cell(q: &QuadrantPaint<'_>, painted: &(CellRef, Rect, Look, Option<CfLo
         _ => text_left + pad + indent,
     };
     let gh = galley.size().y;
-    let y = cell_text_y(st.align.v, *rect, gh, z);
+    // NexusOffice (Henry, 03/11): Middle centres the letters (ascent to descent), not the row
+    // with the line gap egui adds below them, as Excel does.
+    let y = match st.align.v {
+        VAlign::Center => cell_text_y(st.align.v, *rect, (gh - crate::nexus::line_gap(p.ctx(), &font)).max(0.0), z),
+        _ => cell_text_y(st.align.v, *rect, gh, z),
+    };
     let cp = p.with_clip_rect(clip.intersect(p.clip_rect()));
     if rotated {
         let angle = -(st.align.rotation as f32).to_radians();

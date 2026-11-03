@@ -71,9 +71,69 @@ pub fn about_ui(ui: &mut egui::Ui, language: Language) {
     ui.label(egui::RichText::new("Nexus Sheet © 2026 SonnyTech.").small().weak());
 }
 
+/// The line gap (`hhea` line gap / OS/2 typo line gap, as skrifa reads it) of `font_id`'s first
+/// face, in points at its size: the room egui adds *below* the text in a row
+/// (`row_height = ascent - descent + line_gap`, baseline at the ascent).
+///
+/// Henry, 03/11: Middle-aligned cell text sat high (Calibri's line gap is 0.22 em), because the
+/// whole row was centred, not the letters. Excel centres the ascent-to-descent box; leaving the
+/// gap out of the height does the same. 0 when the family or its face isn't known.
+pub(crate) fn line_gap(ctx: &egui::Context, font_id: &egui::FontId) -> f32 {
+    use skrifa::MetadataProvider as _;
+    use std::collections::HashMap;
+    use std::sync::{Mutex, PoisonError};
+    /// The line gap per face name, as a fraction of the em.
+    static GAP_EM: Mutex<Option<HashMap<String, f32>>> = Mutex::new(None);
+    let face = ctx.fonts(|f| {
+        let defs = f.definitions();
+        let name = defs.families.get(&font_id.family)?.first()?.clone();
+        let data = defs.font_data.get(&name)?.clone();
+        Some((name, data))
+    });
+    let Some((name, data)) = face else { return 0.0 };
+    let mut cache = GAP_EM.lock().unwrap_or_else(PoisonError::into_inner);
+    let gaps = cache.get_or_insert_with(HashMap::new);
+    let em = *gaps.entry(name).or_insert_with(|| {
+        skrifa::FontRef::from_index(data.bytes(), data.index)
+            .ok()
+            .map(|font| {
+                let m = font.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
+                let upem = f32::from(m.units_per_em.max(1));
+                (m.leading / upem).clamp(0.0, 1.0)
+            })
+            .unwrap_or(0.0)
+    });
+    let gap = em * font_id.size;
+    if gap.is_finite() { gap.max(0.0) } else { 0.0 }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Henry, 03/11: the gap egui leaves under a row is measured from the face itself (Hack has
+    /// none, Ubuntu has one), so Middle can centre the letters and not the row.
+    #[test]
+    fn line_gap_comes_from_the_face() {
+        let ctx = egui::Context::default();
+        let mut defs = egui::FontDefinitions::empty();
+        for (name, bytes) in [("hack", epaint_default_fonts::HACK_REGULAR), ("ubuntu", epaint_default_fonts::UBUNTU_LIGHT)] {
+            defs.font_data.insert(name.into(), std::sync::Arc::new(egui::FontData::from_static(bytes)));
+            defs.families.insert(egui::FontFamily::Name(name.into()), vec![name.into()]);
+        }
+        ctx.set_fonts(defs);
+        let mut out = ctx.run_ui(Default::default(), |_| {});
+        out.textures_delta.clear();
+        let at = |family: &str| line_gap(&ctx, &egui::FontId::new(20.0, egui::FontFamily::Name(family.into())));
+        for (family, bytes) in [("hack", epaint_default_fonts::HACK_REGULAR), ("ubuntu", epaint_default_fonts::UBUNTU_LIGHT)] {
+            use skrifa::MetadataProvider as _;
+            let m = skrifa::FontRef::new(bytes).unwrap().metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
+            let want = m.leading / f32::from(m.units_per_em) * 20.0;
+            assert!((at(family) - want).abs() < 1e-3, "{family}: {} vs {want}", at(family));
+        }
+        assert!(at("ubuntu") > 0.0, "Ubuntu has a line gap (Calibri's is 0.22 em)");
+        assert_eq!(at("no such family"), 0.0);
+    }
 
     #[test]
     fn updates_come_from_the_suite_not_upstream() {
