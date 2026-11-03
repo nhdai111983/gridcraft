@@ -270,6 +270,25 @@ fn status_bar_is_vietnamese() {
     assert!(shown.iter().all(|l| !l.starts_with("Sum:") && !l.starts_with("Count:") && !l.starts_with("Average:")), "{shown:?}");
 }
 
+/// Test tay 02/11: the Data tab's strip showed "Advanced" and "Settings" in English.
+#[test]
+fn data_tab_is_vietnamese() {
+    let mut h = harness();
+    let base = labels(&h);
+    h.state_mut().ui.ribbon_tab = "Data".into();
+    h.run_steps(4);
+    let shown = labels(&h);
+    // The strip's own words, as `small_button` translates them.
+    assert_eq!(Language::Vi.tr("Advanced"), "Nâng cao");
+    assert_eq!(Language::Vi.tr("Settings"), "Thiết lập");
+    // A small button's accessible name is its tooltip ("Advanced Filter", "Outline Settings").
+    for want in ["Lọc nâng cao", "Thiết lập phân cấp"] {
+        assert!(shown.contains(want), "{want} missing: {shown:?}");
+    }
+    let bad: Vec<&String> = shown.difference(&base).filter(|l| english(l)).collect();
+    assert!(bad.is_empty(), "English on the Data tab: {bad:?}");
+}
+
 /// QC-SHT-03: the sheet tab's context menu.
 #[test]
 fn sheet_tab_menu_is_vietnamese() {
