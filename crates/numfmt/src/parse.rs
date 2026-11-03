@@ -438,7 +438,7 @@ fn date_part(t: &Tok) -> Option<DatePart> {
 }
 
 fn analyze(raw: Raw) -> Section {
-    let Raw { mut toks, color, cond, currency } = raw;
+    let Raw { toks, color, cond, currency } = raw;
     let is_date = toks.iter().any(|t| matches!(t, Tok::Date(_)));
     let has_general = toks.iter().any(|t| matches!(t, Tok::General));
     let mut sec = Section {
@@ -458,69 +458,85 @@ fn analyze(raw: Raw) -> Section {
     };
     if is_date {
         sec.kind = SecKind::Date;
-        // m/mm after hours or before seconds means minutes.
-        for i in 0..toks.len() {
-            let Some(Tok::Date(DatePart::Month(n))) = toks.get(i) else { continue };
-            let n = *n;
-            if n > 2 {
-                continue;
-            }
-            let prev = toks.get(..i).and_then(|s| s.iter().rev().find_map(date_part));
-            let next = toks.get(i + 1..).and_then(|s| s.iter().find_map(date_part));
-            let after_h = matches!(prev, Some(DatePart::Hour(_) | DatePart::ElapsedH(_)));
-            let before_s = matches!(next, Some(DatePart::Second(_) | DatePart::ElapsedS(_)));
-            if (after_h || before_s)
-                && let Some(t) = toks.get_mut(i)
-            {
-                *t = Tok::Date(DatePart::Minute(n));
-            }
-        }
-        let mut out = Vec::with_capacity(toks.len());
-        let mut i = 0;
-        while let Some(t) = toks.get(i) {
-            if matches!(t, Tok::Point) && toks.get(i + 1) == Some(&Tok::Digit('0')) {
-                let mut n = 0usize;
-                while toks.get(i + 1 + n) == Some(&Tok::Digit('0')) {
-                    n += 1;
-                }
-                out.push(Tok::Date(DatePart::SubSec(n.min(255) as u8)));
-                i += 1 + n;
-                continue;
-            }
-            match t {
-                Tok::Date(_) | Tok::Fill(_) => out.push(t.clone()),
-                other => push_lit(&mut out, &other.literal_text()),
-            }
-            i += 1;
-        }
-        sec.toks = out;
-        return sec;
+        return analyze_date(toks, sec);
     }
     if has_general {
         sec.kind = SecKind::General;
-        let mut out = Vec::with_capacity(toks.len());
-        for t in &toks {
-            match t {
-                Tok::General | Tok::Fill(_) => out.push(t.clone()),
-                other => push_lit(&mut out, &other.literal_text()),
-            }
-        }
-        sec.toks = out;
-        return sec;
+        return analyze_general(toks, sec);
     }
     sec.has_digits = toks.iter().any(|t| matches!(t, Tok::Digit(_)));
     if sec.has_at && !sec.has_digits {
         sec.kind = SecKind::Text;
-        let mut out = Vec::with_capacity(toks.len());
-        for t in &toks {
-            match t {
-                Tok::At | Tok::Fill(_) => out.push(t.clone()),
-                other => push_lit(&mut out, &other.literal_text()),
-            }
-        }
-        sec.toks = out;
-        return sec;
+        return analyze_text(toks, sec);
     }
+    analyze_number(toks, sec)
+}
+
+fn analyze_date(mut toks: Vec<Tok>, mut sec: Section) -> Section {
+    // m/mm after hours or before seconds means minutes.
+    for i in 0..toks.len() {
+        let Some(Tok::Date(DatePart::Month(n))) = toks.get(i) else { continue };
+        let n = *n;
+        if n > 2 {
+            continue;
+        }
+        let prev = toks.get(..i).and_then(|s| s.iter().rev().find_map(date_part));
+        let next = toks.get(i + 1..).and_then(|s| s.iter().find_map(date_part));
+        let after_h = matches!(prev, Some(DatePart::Hour(_) | DatePart::ElapsedH(_)));
+        let before_s = matches!(next, Some(DatePart::Second(_) | DatePart::ElapsedS(_)));
+        if (after_h || before_s)
+            && let Some(t) = toks.get_mut(i)
+        {
+            *t = Tok::Date(DatePart::Minute(n));
+        }
+    }
+    let mut out = Vec::with_capacity(toks.len());
+    let mut i = 0;
+    while let Some(t) = toks.get(i) {
+        if matches!(t, Tok::Point) && toks.get(i + 1) == Some(&Tok::Digit('0')) {
+            let mut n = 0usize;
+            while toks.get(i + 1 + n) == Some(&Tok::Digit('0')) {
+                n += 1;
+            }
+            out.push(Tok::Date(DatePart::SubSec(n.min(255) as u8)));
+            i += 1 + n;
+            continue;
+        }
+        match t {
+            Tok::Date(_) | Tok::Fill(_) => out.push(t.clone()),
+            other => push_lit(&mut out, &other.literal_text()),
+        }
+        i += 1;
+    }
+    sec.toks = out;
+    sec
+}
+
+fn analyze_general(toks: Vec<Tok>, mut sec: Section) -> Section {
+    let mut out = Vec::with_capacity(toks.len());
+    for t in &toks {
+        match t {
+            Tok::General | Tok::Fill(_) => out.push(t.clone()),
+            other => push_lit(&mut out, &other.literal_text()),
+        }
+    }
+    sec.toks = out;
+    sec
+}
+
+fn analyze_text(toks: Vec<Tok>, mut sec: Section) -> Section {
+    let mut out = Vec::with_capacity(toks.len());
+    for t in &toks {
+        match t {
+            Tok::At | Tok::Fill(_) => out.push(t.clone()),
+            other => push_lit(&mut out, &other.literal_text()),
+        }
+    }
+    sec.toks = out;
+    sec
+}
+
+fn analyze_number(mut toks: Vec<Tok>, mut sec: Section) -> Section {
     // Number section.
     let mut seen_point = false;
     let mut seen_exp = false;
@@ -638,9 +654,113 @@ pub(crate) fn parse_sections(code: &str) -> Vec<Section> {
     split_sections(code).iter().map(|s| analyze(tokenize(s))).collect()
 }
 
+/// Respells a format code written in a regional format (`#.##0,00` in Vietnamese, where `,` is
+/// the decimal separator and `.` groups digits) as the en-US code files store (`#,##0.00`).
+/// Quoted text, `\` escapes, `_`/`*` and `[...]` tags are kept, except the number of a condition
+/// (`[<1000,5]` → `[<1000.5]`: the two separators trade places there too, so every code
+/// round-trips through [`localize_code_separators`]). In date and time sections `.` and `,` are literal characters, so
+/// only the decimal separator before fractional seconds (`ss,00`) changes. en-US codes are
+/// returned unchanged.
+pub fn delocalize_code(code: &str, loc: gridcraft_core::Locale) -> String {
+    respell_code(code, loc, false)
+}
+
+/// The inverse of [`delocalize_code`]: an en-US code (`#,##0.00 [$₫-42A]`) as a regional format
+/// spells it (`#.##0,00 [$₫-42A]`), for showing and editing codes in the interface.
+/// `delocalize_code(&localize_code_separators(c, l), l) == c` for every code.
+pub fn localize_code_separators(code: &str, loc: gridcraft_core::Locale) -> String {
+    respell_code(code, loc, true)
+}
+
+fn respell_code(code: &str, loc: gridcraft_core::Locale, to_local: bool) -> String {
+    let (dec, group) = (loc.decimal_separator(), loc.group_separator());
+    if dec == '.' {
+        return code.to_string();
+    }
+    // The two separators trade places everywhere they are separators (number sections, the
+    // number of a condition, `ss.00`), which is its own inverse: delocalizing a localized code
+    // gives back the code byte for byte, so an edit elsewhere in it never changes this part.
+    let swap = |c: char| -> char {
+        if c == dec {
+            if to_local { group } else { '.' }
+        } else if c == group {
+            if to_local { dec } else { ',' }
+        } else {
+            c
+        }
+    };
+    let sections = split_sections(code);
+    let mut out = String::with_capacity(code.len());
+    for (k, sec) in sections.iter().enumerate() {
+        if k > 0 {
+            out.push(';');
+        }
+        let date = analyze(tokenize(sec)).kind == SecKind::Date;
+        let cs: Vec<char> = sec.chars().collect();
+        let mut quoted = false;
+        let mut i = 0usize;
+        while let Some(&c) = cs.get(i) {
+            i += 1;
+            match c {
+                '"' => {
+                    quoted = !quoted;
+                    out.push(c);
+                }
+                '\\' | '_' | '*' if !quoted => {
+                    out.push(c);
+                    if let Some(&d) = cs.get(i) {
+                        out.push(d);
+                        i += 1;
+                    }
+                }
+                '[' if !quoted && cs.get(i..).is_some_and(|r| r.contains(&']')) => {
+                    out.push(c);
+                    // A condition (`[<1000,5]`) holds a number; other tags are names and codes.
+                    let condition = cs.get(i).is_some_and(|d| matches!(d, '<' | '>' | '='));
+                    while let Some(&d) = cs.get(i) {
+                        i += 1;
+                        out.push(if condition { swap(d) } else { d });
+                        if d == ']' {
+                            break;
+                        }
+                    }
+                }
+                _ if quoted => out.push(c),
+                _ if date => {
+                    let after_s = i >= 2 && cs.get(i - 2).is_some_and(|p| p.eq_ignore_ascii_case(&'s'));
+                    if (c == '.' || c == ',') && after_s && cs.get(i) == Some(&'0') { out.push(swap(c)) } else { out.push(c) }
+                }
+                _ => out.push(swap(c)),
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vietnamese_codes_read_as_en_us() {
+        use gridcraft_core::Locale::{EnUs, ViVn};
+        for (vi, en) in [
+            ("#.##0,00", "#,##0.00"),
+            ("0,0%", "0.0%"),
+            ("#.##0 [$₫-42A];-#.##0 [$₫-42A]", "#,##0 [$₫-42A];-#,##0 [$₫-42A]"),
+            ("\"1.000,5\" 0,0", "\"1.000,5\" 0.0"),
+            ("\\. 0,00", "\\. 0.00"),
+            ("dd.mm.yyyy", "dd.mm.yyyy"),
+            ("dd/mm/yyyy hh:mm:ss,00", "dd/mm/yyyy hh:mm:ss.00"),
+            ("0,00E+00", "0.00E+00"),
+            ("[<1000]0,0;#.##0", "[<1000]0.0;#,##0"),
+            ("[", "["),
+            ("", ""),
+        ] {
+            assert_eq!(delocalize_code(vi, ViVn), en, "{vi}");
+        }
+        assert_eq!(delocalize_code("#.##0,00", EnUs), "#.##0,00");
+    }
 
     #[test]
     fn sections_split() {

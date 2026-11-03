@@ -1,4 +1,4 @@
-//! NexusOffices: what the engine writes into the user's files names Nexus Sheets, not upstream's
+//! NexusOffice: what the engine writes into the user's files names Nexus Sheet, not upstream's
 //! product (spec §4.4: default author, `<Application>`, PDF Producer/Creator, `INFO`). File-format
 //! keys (`gridcraft://`, `GRIDCRAFT_*`, the MCP server's machine name) are deliberately unchanged.
 
@@ -9,7 +9,7 @@ use serde_json::json;
 
 /// A fresh directory for one test (tests run in parallel), removed by the test when it ends.
 fn tmp_dir(test: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("nexus-sheets-brand-{}-{test}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("nexus-sheet-brand-{}-{test}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -38,7 +38,7 @@ fn all_parts(xlsx: &std::path::Path) -> String {
 fn default_author_is_nexus() {
     let mut s = Session::new();
     s.new_workbook();
-    assert_eq!(s.prefs.user_name, "Nexus Sheets User");
+    assert_eq!(s.prefs.user_name, "Nexus Sheet User");
     s.execute("cell.set", json!({"cell": "A1", "input": "Xin chào"})).unwrap();
     // A note added without an author is signed with the default user name.
     s.execute("review.newNote", json!({"cell": "A1", "text": "ghi chú"})).unwrap();
@@ -47,9 +47,9 @@ fn default_author_is_nexus() {
     s.execute("file.saveAs", json!({"path": path.to_str().unwrap()})).unwrap();
 
     let app = part(&path, "docProps/app.xml");
-    assert!(app.contains("<Application>Nexus Sheets</Application>"), "{app}");
+    assert!(app.contains("<Application>Nexus Sheet</Application>"), "{app}");
     let all = all_parts(&path);
-    assert!(all.contains("Nexus Sheets User"), "the note's author is the Nexus default");
+    assert!(all.contains("Nexus Sheet User"), "the note's author is the Nexus default");
     assert!(!all.contains("GridCraft"), "no upstream product name in a saved workbook");
 
     // Reopened, the note keeps its author.
@@ -57,7 +57,7 @@ fn default_author_is_nexus() {
     reopened.execute("file.open", json!({"path": path.to_str().unwrap()})).unwrap();
     let doc = reopened.doc().unwrap();
     let authors: Vec<&str> = doc.wb.active().unwrap().comments.values().map(|c| c.author.as_str()).collect();
-    assert_eq!(authors, ["Nexus Sheets User"]);
+    assert_eq!(authors, ["Nexus Sheet User"]);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -71,8 +71,8 @@ fn pdf_export_names_nexus_sheets() {
     s.execute("file.saveAs", json!({"path": path.to_str().unwrap()})).unwrap();
     let pdf = std::fs::read(&path).unwrap();
     let has = |needle: &[u8]| pdf.windows(needle.len()).any(|w| w == needle);
-    assert!(has(b"/Producer (Nexus Sheets PDF)"));
-    assert!(has(b"/Creator (Nexus Sheets)"));
+    assert!(has(b"/Producer (Nexus Sheet PDF)"));
+    assert!(has(b"/Creator (Nexus Sheet)"));
     assert!(!has(b"GridCraft"));
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -82,5 +82,47 @@ fn info_osversion_names_nexus_sheets() {
     let mut s = Session::new();
     s.new_workbook();
     s.execute("cell.set", json!({"cell": "A1", "input": "=INFO(\"osversion\")"})).unwrap();
-    assert_eq!(s.execute("cell.get", json!({"cell": "A1"})).unwrap()["value"], json!("Nexus Sheets"));
+    assert_eq!(s.execute("cell.get", json!({"cell": "A1"})).unwrap()["value"], json!("Nexus Sheet"));
+}
+
+/// NexusOffice: new sheets are named in the interface's language when it sets a prefix
+/// (Vietnamese: Trang tính1, Trang tính2); upstream's Sheet1 otherwise.
+#[test]
+fn sheets_take_the_interface_languages_name() {
+    let mut s = gridcraft_engine::Session::new();
+    s.new_workbook();
+    assert_eq!(s.active().unwrap().wb.sheets[0].name, "Sheet1");
+    s.sheet_name_prefix = "Trang tính".into();
+    s.prefs.sheets_in_new_workbook = 2;
+    s.new_workbook();
+    let names: Vec<String> = s.active().unwrap().wb.sheets.iter().map(|sh| sh.name.clone()).collect();
+    assert_eq!(names, ["Trang tính1", "Trang tính2"]);
+    s.execute("home.insertSheet", serde_json::json!({})).unwrap();
+    assert!(s.active().unwrap().wb.sheets.iter().any(|sh| sh.name == "Trang tính3"));
+    s.sheet_name_prefix = "  ".into();
+    assert_eq!(s.active().unwrap().wb.next_sheet_name_with(&s.sheet_name_prefix), "Sheet1", "a blank prefix is Sheet");
+}
+
+/// Every command that adds a sheet without a name the user gave (Forecast Sheet here; PivotTable,
+/// Analysis ToolPak, ODS import go through the same `next_sheet_name`) names it in the
+/// interface's language, and the prefix doesn't outlive the command.
+#[test]
+fn sheets_commands_add_take_the_interface_languages_name() {
+    let mut s = gridcraft_engine::Session::new();
+    s.new_workbook();
+    s.execute("cell.set", serde_json::json!({"cell": "A1", "input": "Kỳ"})).unwrap();
+    s.execute("cell.set", serde_json::json!({"cell": "B1", "input": "Doanh thu"})).unwrap();
+    for i in 1..=16 {
+        s.execute("cell.set", serde_json::json!({"cell": format!("A{}", i + 1), "input": i.to_string()})).unwrap();
+        s.execute("cell.set", serde_json::json!({"cell": format!("B{}", i + 1), "input": (100 + i * 7).to_string()})).unwrap();
+    }
+    s.sheet_name_prefix = "Trang tính".into();
+    s.execute("data.forecastSheet", serde_json::json!({"range": "A1:B17", "periods": 3})).unwrap();
+    let names: Vec<String> = s.active().unwrap().wb.sheets.iter().map(|sh| sh.name.clone()).collect();
+    assert!(names.iter().any(|n| n == "Trang tính1"), "{names:?}");
+    assert_eq!(gridcraft_engine::model::workbook::sheet_prefix(), "", "the prefix is the command's only");
+    let wb = gridcraft_engine::model::Workbook::new();
+    let named = gridcraft_engine::model::workbook::with_sheet_prefix("Trang tính", || wb.next_sheet_name());
+    assert_eq!(named, "Trang tính1");
+    assert_eq!(wb.next_sheet_name(), "Sheet2");
 }

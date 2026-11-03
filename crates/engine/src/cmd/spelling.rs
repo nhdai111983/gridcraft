@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 use gridcraft_core::{RangeRef, Value};
 use serde_json::{Value as Json, json};
 
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_param, cell_param, cmd, has_doc, ok, str_param, target_range, target_sheet};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -123,7 +123,7 @@ fn suggestions(w: &str) -> Vec<String> {
 
 fn spelling(s: &mut Session, p: &Json) -> Result<Json> {
     if dictionary().is_empty() {
-        return Err(EngineError::Other("No dictionary is available on this system (Nexus Sheets uses the system word list).".into()));
+        return Err(EngineError::Other("No dictionary is available on this system (Nexus Sheet uses the system word list).".into()));
     }
     let si = target_sheet(s, p)?;
     let d = s.doc()?;

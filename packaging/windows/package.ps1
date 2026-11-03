@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-  Build, sign and package Nexus Sheets (NexusOffices, by Sonnytech) for Windows.
+  Build, sign and package Nexus Sheet (NexusOffice, by SonnyTech) for Windows.
 
 .DESCRIPTION
   Produces, in $env:DIST (default: dist/release):
-    NexusSheets-<version>-windows-<arch>.msi            per-machine installer (WiX v5)
-    NexusSheets-<version>-windows-<arch>-portable.zip   nexus-sheets.exe + nexus-sheets-cli.exe
+    NexusSheet-<version>-windows-<arch>.msi            per-machine installer (WiX v5)
+    NexusSheet-<version>-windows-<arch>-portable.zip   nexus-sheet.exe + nexus-sheet-cli.exe
 
   The binaries link the C runtime statically (+crt-static), so neither the MSI nor the portable
   zip needs the Visual C++ redistributable. Signing is delegated to sign.ps1 (skipped with a
@@ -53,7 +53,7 @@ New-Item -ItemType Directory -Force -Path $Dist | Out-Null
 if (-not $env:GRIDCRAFT_BUILD_SHA) { $env:GRIDCRAFT_BUILD_SHA = (git -C $Root rev-parse HEAD 2>$null) }
 if (-not $env:GRIDCRAFT_BUILD_DATE) { $env:GRIDCRAFT_BUILD_DATE = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd') }
 
-Write-Output "Nexus Sheets $Version for Windows $Arch ($Target)"
+Write-Output "Nexus Sheet $Version for Windows $Arch ($Target)"
 
 if (-not $SkipBuild) {
   # Static CRT: no VC++ redistributable needed. Scoped to the target so host build scripts and
@@ -87,12 +87,12 @@ $Stage = Join-Path $TargetDir "windows-package\$Arch"
 Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Stage | Out-Null
 Copy-Item (Join-Path $Bin 'gridcraft.exe'), (Join-Path $Bin 'gridcraft-cli.exe') $Stage
-# NexusOffices: the licences, NOTICE (Apache-2.0 §4(d)) and ATTRIBUTION.md travel beside the
+# NexusOffice: the licences, NOTICE (Apache-2.0 §4(d)) and ATTRIBUTION.md travel beside the
 # binaries: the MSI installs them from here and the portable zip copies them below.
 foreach ($f in 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md') {
   Copy-Item (Join-Path $Root $f) $Stage
 }
-# NexusOffices: the OFL texts of every font the binaries embed go in licenses\ (the MSI installs it
+# NexusOffice: the OFL texts of every font the binaries embed go in licenses\ (the MSI installs it
 # as licenses\, the portable zip puts its files beside the exes): craft-fonts' fonts\<family>\OFL.txt
 # as OFL-<family>.txt, the name the Linux and macOS packages use, and the repo's own
 # assets\fonts\OFL-*.txt under their own names. Names must be unique ignoring case (Windows).
@@ -126,10 +126,10 @@ $FontLicences = if ($LicenceSources.Count) { 'yes' } else { 'no' }
 & (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'gridcraft.exe') (Join-Path $Stage 'gridcraft-cli.exe')
 
 # ---- MSI ---------------------------------------------------------------------------------------
-$Msi = Join-Path $Dist "NexusSheets-$Version-windows-$Arch.msi"
+$Msi = Join-Path $Dist "NexusSheet-$Version-windows-$Arch.msi"
 Invoke-Native 'wix build' {
   wix build (Join-Path $PSScriptRoot 'gridcraft.wxs') -arch $Arch `
-    -d "Version=$MsiVersion" -d "BinDir=$Stage" -d "IconPath=$(Join-Path $Root 'nexus\assets\nexus-sheets.ico')" `
+    -d "Version=$MsiVersion" -d "BinDir=$Stage" -d "IconPath=$(Join-Path $Root 'nexus\assets\nexus-sheet.ico')" `
     -d "FontLicences=$FontLicences" `
     -o $Msi
 }
@@ -138,19 +138,19 @@ Remove-Item -Force -ErrorAction SilentlyContinue ([IO.Path]::ChangeExtension($Ms
 & (Join-Path $PSScriptRoot 'sign.ps1') $Msi
 
 # ---- portable zip ------------------------------------------------------------------------------
-$Portable = Join-Path $TargetDir "windows-package\NexusSheets-$Version-windows-$Arch-portable"
+$Portable = Join-Path $TargetDir "windows-package\NexusSheet-$Version-windows-$Arch-portable"
 Remove-Item -Recurse -Force $Portable -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Portable | Out-Null
-# NexusOffices: the same binary names the MSI installs.
-Copy-Item (Join-Path $Stage 'gridcraft.exe') (Join-Path $Portable 'nexus-sheets.exe')
-Copy-Item (Join-Path $Stage 'gridcraft-cli.exe') (Join-Path $Portable 'nexus-sheets-cli.exe')
+# NexusOffice: the same binary names the MSI installs.
+Copy-Item (Join-Path $Stage 'gridcraft.exe') (Join-Path $Portable 'nexus-sheet.exe')
+Copy-Item (Join-Path $Stage 'gridcraft-cli.exe') (Join-Path $Portable 'nexus-sheet-cli.exe')
 foreach ($f in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md') {
   $p = Join-Path $Root $f
   if (Test-Path $p) { Copy-Item $p $Portable }
 }
-# NexusOffices: the font licences staged in licenses\ (craft-fonts and the repo's own), as in the MSI.
+# NexusOffice: the font licences staged in licenses\ (craft-fonts and the repo's own), as in the MSI.
 Copy-Item (Join-Path $Licenses '*') $Portable
-$Zip = Join-Path $Dist "NexusSheets-$Version-windows-$Arch-portable.zip"
+$Zip = Join-Path $Dist "NexusSheet-$Version-windows-$Arch-portable.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $Portable -DestinationPath $Zip
 

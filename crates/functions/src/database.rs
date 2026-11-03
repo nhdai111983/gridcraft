@@ -21,7 +21,8 @@ fn find_column(db: &Array, label: &str) -> Option<usize> {
     let label = label.trim();
     (0..db.cols).find(|&c| match db.get(0, c) {
         Some(Value::Text(t)) => text_eq(t.trim(), label),
-        Some(Value::Number(n)) => gridcraft_core::number_to_text(*n) == label,
+        // NexusOffice: a number label is spelled as `&` spells it, in the evaluation's regional format.
+        Some(Value::Number(n)) => Value::Number(*n).to_text().is_ok_and(|t| t == label),
         _ => false,
     })
 }
@@ -35,10 +36,11 @@ fn field_index(db: &Array, a: &[Arg]) -> R<Option<usize>> {
     match v {
         Value::Number(n) => {
             let i = n.trunc();
-            if i < 1.0 || i > db.cols as f64 {
+            // NaN too: it would pass both comparisons and become index 0 (#2163).
+            if i.is_nan() || i < 1.0 || i > db.cols as f64 {
                 return Err(CellError::Value);
             }
-            Ok(Some(i as usize - 1))
+            Ok(Some((i as usize).saturating_sub(1)))
         }
         Value::Text(t) => find_column(db, &t).map(Some).ok_or(CellError::Value),
         Value::Bool(_) => Err(CellError::Value),
@@ -65,11 +67,15 @@ fn cell_criterion(v: &Value) -> Option<Criterion> {
     }
 }
 
+/// A criteria row: its index and its conditions (criteria column, database column or `None`
+/// when the label is unknown, criterion).
+type CriteriaRow = (usize, Vec<(usize, Option<usize>, Criterion)>);
+
 /// Rows (1-based within the database, excluding the header) of matching records.
 fn matching_records(db: &Array, crit: &Array, ctx: &mut dyn Ctx) -> Vec<usize> {
     // Per criteria row: its index and a list of (criteria column, database column or None when
     // the label is unknown, criterion).
-    let mut rows: Vec<(usize, Vec<(usize, Option<usize>, Criterion)>)> = Vec::new();
+    let mut rows: Vec<CriteriaRow> = Vec::new();
     for r in 1..crit.rows {
         let mut conds = Vec::new();
         for c in 0..crit.cols {
@@ -77,7 +83,7 @@ fn matching_records(db: &Array, crit: &Array, ctx: &mut dyn Ctx) -> Vec<usize> {
             let Some(cr) = cell_criterion(cell) else { continue };
             let col = match crit.get(0, c) {
                 Some(Value::Text(t)) => find_column(db, t),
-                Some(Value::Number(n)) => find_column(db, &gridcraft_core::number_to_text(*n)),
+                Some(Value::Number(n)) => find_column(db, &Value::Number(*n).to_text().unwrap_or_default()),
                 _ => None,
             };
             conds.push((c, col, cr));
@@ -85,12 +91,13 @@ fn matching_records(db: &Array, crit: &Array, ctx: &mut dyn Ctx) -> Vec<usize> {
         rows.push((r, conds));
     }
     let all_match = rows.is_empty();
+    let coll = ctx.collation();
     (1..db.rows)
         .filter(|&rec| {
             all_match
                 || rows.iter().any(|(r, conds)| {
                     conds.iter().all(|(c, col, cr)| match col {
-                        Some(f) => cr.matches(db.get(rec, *f).unwrap_or(&Value::Empty)),
+                        Some(f) => cr.matches(db.get(rec, *f).unwrap_or(&Value::Empty), coll),
                         // Under a label that names no field, only a formula (a computed
                         // criterion) can hold.
                         None => ctx.computed_criterion(*r, *c, db, rec).unwrap_or(false),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render every Nexus Sheets icon from nexus/assets/nexus-sheets.svg (Sonnytech, CC0-1.0).
+"""Render every Nexus Sheet icon from nexus/assets/nexus-sheet.svg (SonnyTech, CC0-1.0).
 
 Needs: pip install resvg-py pillow. The outputs are committed, so builds never need these tools.
 
@@ -13,7 +13,7 @@ import resvg_py
 from PIL import Image
 
 HERE = pathlib.Path(__file__).resolve().parent
-SVG = HERE / "nexus-sheets.svg"
+SVG = HERE / "nexus-sheet.svg"
 APP_ID = "vn.sonnytech.nexus.sheets"
 
 
@@ -28,8 +28,8 @@ def main() -> None:
     mac = svg.replace('viewBox="0 0 512 512"', 'viewBox="-62.136 -62.136 636.272 636.272"')
     assert mac != svg, "expected viewBox=\"0 0 512 512\""
 
-    render(svg, 256).save(HERE / "nexus-sheets-256.png")
-    render(mac, 512).save(HERE / "nexus-sheets-macos-512.png")
+    render(svg, 256).save(HERE / "nexus-sheet-256.png")
+    render(mac, 512).save(HERE / "nexus-sheet-macos-512.png")
 
     for s in (16, 24, 32, 48, 64, 128, 256, 512):
         d = HERE / "hicolor" / f"{s}x{s}" / "apps"
@@ -39,8 +39,8 @@ def main() -> None:
     d.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(SVG, d / f"{APP_ID}.svg")
 
-    render(svg, 256).save(HERE / "nexus-sheets.ico", sizes=[(s, s) for s in (16, 20, 24, 32, 40, 48, 64, 128, 256)])
-    render(mac, 1024).save(HERE / "nexus-sheets.icns")
+    render(svg, 256).save(HERE / "nexus-sheet.ico", sizes=[(s, s) for s in (16, 20, 24, 32, 40, 48, 64, 128, 256)])
+    render(mac, 1024).save(HERE / "nexus-sheet.icns")
     print(f"icons written to {HERE}")
 
 

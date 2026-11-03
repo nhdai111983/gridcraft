@@ -1,4 +1,4 @@
-//! Nexus Sheets: COUNTIF tests of fix/text-compare-canonical (M3-SCOLL.2), which upstream keeps in
+//! Nexus Sheet: COUNTIF tests of fix/text-compare-canonical (M3-SCOLL.2), which upstream keeps in
 //! `crates/functions/src/math.rs`. They live here so the port does not modify math.rs (patch budget);
 //! they use only the crate's public API (`lookup` + `call`).
 

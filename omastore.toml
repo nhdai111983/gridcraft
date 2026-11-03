@@ -3,9 +3,9 @@ categories = ["Office"]
 icon = "nexus/assets/hicolor/256x256/apps/vn.sonnytech.nexus.sheets.png"
 
 [linux.x86_64]
-asset = "NexusSheets-{version}-linux-x86_64.tar.gz"
-exec = "NexusSheets-{version}-linux-x86_64/bin/nexus-sheets"
+asset = "NexusSheet-{version}-linux-x86_64.tar.gz"
+exec = "NexusSheet-{version}-linux-x86_64/bin/nexus-sheet"
 
 [linux.aarch64]
-asset = "NexusSheets-{version}-linux-aarch64.tar.gz"
-exec = "NexusSheets-{version}-linux-aarch64/bin/nexus-sheets"
+asset = "NexusSheet-{version}-linux-aarch64.tar.gz"
+exec = "NexusSheet-{version}-linux-aarch64/bin/nexus-sheet"

@@ -1,7 +1,7 @@
-use gridcraft_core::{CellRef, DateSystem, Value};
+use gridcraft_core::{CellRef, DateSystem, MAX_COLS, Value};
 use gridcraft_model::{Sheet, Workbook};
 
-use crate::csv::{decode_text, sniff_delimiter};
+use crate::csv::{decode_text, parse_records, sniff_delimiter, sniff_delimiter_in};
 use crate::{CsvOptions, Format, IoError, read_csv, sniff, write_csv, write_csv_limited};
 
 fn v(wb: &Workbook, r: u32, c: u32) -> Value {
@@ -69,6 +69,101 @@ fn encodings() {
 }
 
 #[test]
+fn windows_1256_table_matches_the_unicode_mapping() {
+    let at = |b: u8| crate::csv::CP1256.get(usize::from(b - 0x80)).and_then(|&c| char::from_u32(c));
+    let expected = [
+        (0x80, '€'),
+        (0x81, 'پ'),
+        (0x8D, 'چ'),
+        (0x98, 'ک'),
+        (0x9D, '\u{200C}'),
+        (0xA1, '،'),
+        (0xBA, '؛'),
+        (0xBF, '؟'),
+        (0xC7, 'ا'),
+        (0xC8, 'ب'),
+        (0xDC, 'ـ'),
+        (0xE1, 'ل'),
+        (0xE3, 'م'),
+        (0xE9, 'é'),
+        (0xFD, '\u{200E}'),
+        (0xFE, '\u{200F}'),
+        (0xFF, 'ے'),
+    ];
+    for (b, c) in expected {
+        assert_eq!(at(b), Some(c), "0x{b:02X}");
+    }
+}
+
+#[test]
+fn arabic_csv_in_windows_1256_reads_as_arabic() {
+    let bytes = [
+        0xC7, 0xE1, 0xC7, 0xD3, 0xE3, b',', 0xC7, 0xE1, 0xDE, 0xED, 0xE3, 0xC9, b'\n', 0xE3, 0xD1, 0xCD, 0xC8, 0xC7, b' ', b'1', b'2', b'3', 0xA1,
+        b' ', b'4', b'2', 0xBF, b',', 0xC8, 0xED, 0xC7, 0xE4, 0xC7, 0xCA, b' ', b'7', b'\n',
+    ];
+    let wb = read_csv(&bytes, &CsvOptions::default()).unwrap();
+    assert_eq!(v(&wb, 0, 0), Value::text("الاسم"));
+    assert_eq!(v(&wb, 0, 1), Value::text("القيمة"));
+    assert_eq!(v(&wb, 1, 0), Value::text("مرحبا 123، 42؟"));
+    assert_eq!(v(&wb, 1, 1), Value::text("بيانات 7"));
+}
+
+fn reads_as_arabic(bytes: &[u8]) -> bool {
+    decode_text(bytes).chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c))
+}
+
+#[test]
+fn western_1252_text_stays_latin() {
+    let french = [
+        b'C', b'r', 0xE8, b'm', b'e', b' ', b'b', b'r', 0xFB, b'l', 0xE9, b'e', b',', b' ', 0xE0, b' ', b'c', 0xF4, b't', 0xE9, b',', b' ', 0xE9,
+        b't', 0xE9,
+    ];
+    let german = [
+        b'G', b'r', 0xF6, 0xDF, b'e', b',', b' ', 0xDC, b'b', b'e', b'r', b'm', b'a', 0xDF, b',', b' ', b'F', b'u', 0xDF, b'g', 0xE4, b'n', b'g',
+        b'e', b'r',
+    ];
+    assert_eq!(decode_text(&french), "Crème brûlée, à côté, été");
+    assert_eq!(decode_text(&german), "Größe, Übermaß, Fußgänger");
+    let portuguese = [
+        b'A', 0xC7, 0xC3, b'O', b',', b' ', b'i', b'n', b'f', b'o', b'r', b'm', b'a', 0xE7, 0xE3, b'o', b',', b' ', b's', b'i', b't', b'u', b'a',
+        0xE7, 0xE3, b'o', b',', b' ', b'P', 0xE3, b'o',
+    ];
+    assert_eq!(decode_text(&portuguese), "AÇÃO, informação, situação, Pão");
+    let nordic = [
+        0xC6, b'r', 0xF8, b',', 0xD8, b's', b't', b',', 0xC5, b's', b'e', b',', 0xDE, 0xF3, b'r', 0xF0, b'u', b'r', b',', b'G', b'u', 0xF0, b'r',
+        0xFA, b'n', b',', 0xC4, 0xD6, 0xDC,
+    ];
+    assert_eq!(decode_text(&nordic), "Ærø,Øst,Åse,Þórður,Guðrún,ÄÖÜ");
+    let ordinals = [b'1', 0xBA, b',', b'2', 0xBA, b',', b'3', 0xBA, b'\n', b'1', 0xAA, b',', b'2', 0xAA];
+    assert_eq!(decode_text(&ordinals), "1º,2º,3º\n1ª,2ª");
+    let inside_words = [b'K', 0xE4, b's', b'e', b',', b'B', 0xE4, b'c', b'k', b'e', b'r'];
+    assert_eq!(decode_text(&inside_words), "Käse,Bäcker");
+}
+
+#[test]
+fn short_arabic_words_read_as_arabic() {
+    assert_eq!(decode_text(&[0xDD, 0xED, b',', 0xE3, 0xE4, b',', 0xDA, 0xE4, b'\n']), "في,من,عن\n");
+    assert_eq!(decode_text(&[0xE4, 0xDA, 0xE3, b',', 0xE1, 0xC7, b'\n', 0xE1, 0xC7, b',', 0xE4, 0xDA, 0xE3, b'\n']), "نعم,لا\nلا,نعم\n");
+    assert_eq!(decode_text(&[0x98, 0xCA, 0xC7, 0xC8, b' ', 0x81, 0xC7, 0xD1, 0xD3, 0xED]), "کتاب پارسي");
+    let with_marks = [
+        0xDF, 0xCA, 0xC7, 0xC8, 0x9D, 0xE5, 0xC7, b',', 0xCE, 0xC7, 0xE4, 0xE5, 0x9D, 0xE5, 0xC7, b',', 0xE3, 0xCD, 0xE3, 0xCF, 0xFE, b',', 0xDA,
+        0xE1, 0xED, 0xFE,
+    ];
+    assert_eq!(decode_text(&with_marks), "كتاب\u{200C}ها,خانه\u{200C}ها,محمد\u{200F},علي\u{200F}");
+}
+
+#[test]
+fn hebrew_1255_bytes_are_not_read_as_arabic() {
+    let plain = [0xF9, 0xEC, 0xE5, 0xED, b',', 0xF2, 0xE5, 0xEC, 0xED];
+    let pointed = [0xF9, 0xC8, 0xD1, 0xEC, 0xE5, 0xC9, 0xED, b' ', 0xF2, 0xE5, 0xC9, 0xEC, 0xC8, 0xED];
+    let maqaf = [0xFA, 0xEC, 0xCE, 0xE0, 0xE1, 0xE9, 0xE1, b',', 0xE1, 0xEF, 0xCE, 0xE2, 0xE5, 0xF8, 0xE9, 0xE5, 0xEF];
+    let gershayim = [0xF6, 0xE4, 0xD8, 0xEC, b',', 0xE3, 0xD8, 0xF8];
+    for bytes in [&plain[..], &pointed, &maqaf, &gershayim] {
+        assert!(!reads_as_arabic(bytes), "{:?}", decode_text(bytes));
+    }
+}
+
+#[test]
 fn delimiter_sniffing() {
     assert_eq!(sniff_delimiter("a;b;c\n1;2;3\n", '"'), b';');
     assert_eq!(sniff_delimiter("a\tb\n1\t2\n", '"'), b'\t');
@@ -110,14 +205,15 @@ fn writing() {
         Value::Array(_) => String::new(),
     };
     let out = String::from_utf8(write_csv(sh, b',', raw).unwrap()).unwrap();
-    assert_eq!(out, "\"a,b\",\"q\"\"t\",\r\n0.1,FALSE,\r\n#DIV/0!,,\"x\ny\"\r\n");
+    // The first cell is B2: the file starts at A1, so the leading empty row and column stay.
+    assert_eq!(out, ",,,\r\n,\"a,b\",\"q\"\"t\",\r\n,0.1,FALSE,\r\n,#DIV/0!,,\"x\ny\"\r\n");
     let semi = String::from_utf8(write_csv(sh, b';', raw).unwrap()).unwrap();
-    assert!(semi.starts_with("a,b;"));
+    assert!(semi.starts_with(";;;\r\n;a,b;"));
     assert!(write_csv(&Sheet::new("E"), b',', raw).unwrap().is_empty());
     // Round trip.
     let back = read_csv(out.as_bytes(), &CsvOptions::default()).unwrap();
-    assert_eq!(v(&back, 0, 0), Value::text("a,b"));
-    assert_eq!(v(&back, 2, 2), Value::text("x\ny"));
+    assert_eq!(v(&back, 1, 1), Value::text("a,b"));
+    assert_eq!(v(&back, 3, 3), Value::text("x\ny"));
 }
 
 #[test]
@@ -186,7 +282,127 @@ fn the_cap_counts_the_bytes_the_cells_hold_and_accepted_exports_keep_every_posit
     let err = write_csv_limited(&long, b',', 1000, text_of(&long)).unwrap_err();
     assert!(err.to_string().contains("stopped at row"), "{err}");
     assert!(write_csv_limited(&long, b',', 50 * 102, text_of(&long)).is_ok());
+    // Within one row the cap is checked before each field is written: a wide row of long and
+    // quote-heavy fields is refused at the field that crosses it, without asking for the rest.
+    let mut wide = Sheet::new("W");
+    for c in 0..10u32 {
+        wide.set_value(CellRef::new(0, c), Value::text("\"".repeat(100)));
+    }
+    let mut asked = 0;
+    let err = write_csv_limited(&wide, b',', 500, |c| {
+        asked += 1;
+        text_of(&wide)(c)
+    })
+    .unwrap_err();
+    assert!(err.to_string().contains("stopped at row 1"), "{err}");
+    assert_eq!(asked, 3, "each field is 202 bytes; the third passes 500");
+    // Exact boundary: a quoted field of 202 bytes plus CRLF fits in 204 and not in 203.
+    let mut one = Sheet::new("O");
+    one.set_value(CellRef::new(0, 0), Value::text("\"".repeat(100)));
+    assert_eq!(write_csv_limited(&one, b',', 204, text_of(&one)).unwrap().len(), 204);
+    assert!(write_csv_limited(&one, b',', 203, text_of(&one)).is_err());
     // A tab is one byte, like a comma.
     let tabs = write_csv_limited(&s, b'\t', 14, text_of(&s)).unwrap();
     assert_eq!(tabs.len(), 14);
+}
+
+#[test]
+fn parser_stops_collecting_fields_at_max_cols() {
+    let extra = 50;
+    // MAX_COLS + extra fields on the first row (the last one filled), then a short second row.
+    let mut text = ",".repeat((MAX_COLS + extra) as usize - 1);
+    text.push_str("end\nx,y\n");
+    let mut lens = vec![];
+    parse_records(&text, ',', '"', |rec| {
+        lens.push(rec.len());
+        true
+    });
+    assert_eq!(lens, vec![MAX_COLS as usize, 2]);
+    // An unterminated last row is capped the same way.
+    let mut lens = vec![];
+    parse_records(&",".repeat(MAX_COLS as usize + extra as usize), ',', '"', |rec| {
+        lens.push(rec.len());
+        true
+    });
+    assert_eq!(lens, vec![MAX_COLS as usize]);
+}
+
+/// NexusOffice: a CSV read in vi-VN takes its values the vi-VN way, and `;` (the list separator
+/// there) as the delimiter whenever it appears; commas that only sit between digits are decimal
+/// commas, not field separators. en-US reading is unchanged.
+#[test]
+fn csv_in_vietnamese() {
+    use gridcraft_core::Locale::{EnUs, ViVn};
+    let vi = CsvOptions { delimiter: 0, locale: ViVn, ..Default::default() };
+    let wb = read_csv("1.234,5;24/10/2026;1.234 ₫;Hà Nội\r\n".as_bytes(), &vi).unwrap();
+    let sh = &wb.sheets[0];
+    assert_eq!(sh.value(CellRef::new(0, 0)), Value::Number(1234.5));
+    assert_eq!(sh.value(CellRef::new(0, 1)), Value::Number(46319.0));
+    assert_eq!(sh.value(CellRef::new(0, 2)), Value::Number(1234.0));
+    assert_eq!(sh.value(CellRef::new(0, 3)), Value::Text("Hà Nội".into()));
+    assert_eq!(wb.csv_delimiter, Some(b';'));
+    // One column of decimal-comma numbers is not split at the commas.
+    let wb = read_csv(b"1,5\n2,25\n", &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 0)), Value::Number(2.25));
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 1)), Value::Empty);
+    // Commas between words still separate fields (an en-US export).
+    let wb = read_csv("Tên,Số\nAn,5\n".as_bytes(), &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 1)), Value::Number(5.0));
+    assert_eq!(sniff_delimiter_in("1,5\n", '"', EnUs), b',');
+    assert_eq!(sniff_delimiter_in("\"a;b\",1\n", '"', ViVn), b',');
+    // A `;` on one line only doesn't outvote a consistent comma (or tab) layout.
+    assert_eq!(sniff_delimiter_in("a,b,c\nx;y,1,2\nd,e,f\n", '"', ViVn), b',');
+    assert_eq!(sniff_delimiter_in("a\tb\nc;d\te\n", '"', ViVn), b'\t');
+    // `;` on every line wins over more decimal commas.
+    assert_eq!(sniff_delimiter_in("1,5;2,5;3,5\n4,5;5,5;6,5\n", '"', ViVn), b';');
+    // A title line without `;` above a `;` table; a header and whole numbers in a decimal-comma column.
+    let wb = read_csv("Báo cáo\nTên;Giá\nAn;1,5\n".as_bytes(), &vi).unwrap();
+    assert_eq!(wb.csv_delimiter, Some(b';'));
+    assert_eq!(wb.sheets[0].value(CellRef::new(2, 1)), Value::Number(1.5));
+    let wb = read_csv("Giá\n1,5\n2\n".as_bytes(), &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 0)), Value::Number(1.5));
+    assert_eq!(wb.sheets[0].value(CellRef::new(2, 0)), Value::Number(2.0));
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 1)), Value::Empty);
+    // Quoted fields, a single row, an empty file.
+    assert_eq!(sniff_delimiter_in("\"a,b\";\"c\"\n", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("a;b", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("", '"', ViVn), sniff_delimiter("", '"'));
+    // Several commas per line, all between digits: an en-US numeric export, split at the commas.
+    let wb = read_csv(b"1,2,3\n4,5,6\n", &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(1, 2)), Value::Number(6.0));
+    assert_eq!(wb.csv_delimiter, Some(b','), "saving it keeps the commas");
+    let en = CsvOptions { delimiter: 0, ..Default::default() };
+    assert_eq!(read_csv(b"1.5,2\n", &en).unwrap().sheets[0].value(CellRef::new(0, 0)), Value::Number(1.5));
+}
+
+/// NexusOffice (vi-VN sniffer): a title line with no separator above a comma or tab table, with
+/// an unquoted `;` inside a text cell, splits at the commas (tabs), not at the stray `;`.
+#[test]
+fn csv_in_vietnamese_title_line_and_stray_semicolon() {
+    use gridcraft_core::Locale::{EnUs, ViVn};
+    assert_eq!(sniff_delimiter_in("Report\nName,Note\nA,x; y\n", '"', ViVn), b',');
+    assert_eq!(sniff_delimiter_in("Report\r\n\r\nName,Note\r\nA,x; y", '"', ViVn), b',');
+    assert_eq!(sniff_delimiter_in("Report\nName\tNote\nA\tx; y\n", '"', ViVn), b'\t');
+    assert_eq!(sniff_delimiter_in("Báo cáo\nBáo cáo tháng 10\nTên,Ghi chú\nAn,x; y\nBình,z\n", '"', ViVn), b',');
+    let vi = CsvOptions { delimiter: 0, locale: ViVn, ..Default::default() };
+    let wb = read_csv(b"Report\nName,Note\nA,x; y\n", &vi).unwrap();
+    assert_eq!(wb.csv_delimiter, Some(b','));
+    assert_eq!(wb.sheets[0].value(CellRef::new(0, 0)), Value::Text("Report".into()));
+    assert_eq!(wb.sheets[0].value(CellRef::new(2, 1)), Value::Text("x; y".into()));
+    let wb = read_csv(b"Report\nName\tNote\nA\tx; y\n", &vi).unwrap();
+    assert_eq!(wb.sheets[0].value(CellRef::new(2, 1)), Value::Text("x; y".into()));
+    // The cases a title line used to decide still read the same way.
+    assert_eq!(sniff_delimiter_in("Báo cáo\nTên;Giá\nAn;1,5\n", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("Báo cáo, tháng 10\nTên;Giá\nAn;1,5\n", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("Giá\n1,5\n2\n", '"', ViVn), b';');
+    assert_eq!(sniff_delimiter_in("Tên\nAn\nBình\n", '"', ViVn), sniff_delimiter("Tên\nAn\nBình\n", '"'));
+    // en-US is unchanged.
+    for t in ["Report\nName,Note\nA,x; y\n", "Report\nName\tNote\nA\tx; y\n", "a;b\n"] {
+        assert_eq!(sniff_delimiter_in(t, '"', EnUs), sniff_delimiter(t, '"'), "{t:?}");
+    }
+    // Hostile text never panics.
+    for t in ["\n\n\n", "\"", "\"\n;", ";\n,\n\t", "\u{0},;\t\"", &"x\n".repeat(50), &";,".repeat(40_000)] {
+        let _ = sniff_delimiter_in(t, '"', ViVn);
+        let _ = read_csv(t.as_bytes(), &vi);
+    }
 }

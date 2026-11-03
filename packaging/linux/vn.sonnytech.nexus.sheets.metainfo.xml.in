@@ -1,35 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- AppStream metadata for Nexus Sheets (NexusOffices, by Sonnytech). Template: package.sh
+<!-- AppStream metadata for Nexus Sheet (NexusOffice, by SonnyTech). Template: package.sh
      substitutes @VERSION@ and @DATE@ from Cargo.toml and the build date. -->
 <component type="desktop-application">
   <id>vn.sonnytech.nexus.sheets</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
-  <name>Nexus Sheets</name>
+  <name>Nexus Sheet</name>
   <summary>Calculate, analyse and chart data in workbooks</summary>
   <developer id="vn.sonnytech">
-    <name>Sonnytech</name>
+    <name>SonnyTech</name>
   </developer>
   <description>
     <p>
-      Nexus Sheets is an open-source, native spreadsheet, part of the NexusOffices office suite
-      by Sonnytech. It opens and saves .xlsx workbooks and CSV/TSV files, evaluates hundreds of
+      Nexus Sheet is an open-source, native spreadsheet, part of the NexusOffice office suite
+      by SonnyTech. It opens and saves .xlsx workbooks and CSV/TSV files, evaluates hundreds of
       worksheet functions, and formats, sorts, filters and charts your data.
     </p>
     <p>
-      Every action is a command that the included nexus-sheets-cli tool and AI agents (over MCP)
+      Every action is a command that the included nexus-sheet-cli tool and AI agents (over MCP)
       can run too, so workbooks can be built and checked without opening a window.
     </p>
     <p>
-      Nexus Sheets is developed from the open-source GridCraft by the ArtCraft team
+      Nexus Sheet is developed from the open-source GridCraft by the ArtCraft team
       (MIT/Apache-2.0).
     </p>
   </description>
   <launchable type="desktop-id">vn.sonnytech.nexus.sheets.desktop</launchable>
   <icon type="stock">vn.sonnytech.nexus.sheets</icon>
   <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
-  <url type="homepage">https://github.com/nhdai111983/gridcraft</url>
-  <url type="bugtracker">https://github.com/nhdai111983/gridcraft/issues</url>
+  <url type="homepage">https://github.com/sonnytech-vn/gridcraft</url>
+  <url type="bugtracker">https://github.com/sonnytech-vn/gridcraft/issues</url>
   <categories>
     <category>Office</category>
     <category>Spreadsheet</category>
@@ -53,8 +53,8 @@
     <control>pointing</control>
   </supports>
   <provides>
-    <binary>nexus-sheets</binary>
-    <binary>nexus-sheets-cli</binary>
+    <binary>nexus-sheet</binary>
+    <binary>nexus-sheet-cli</binary>
     <mediatype>application/vnd.openxmlformats-officedocument.spreadsheetml.sheet</mediatype>
     <mediatype>application/vnd.ms-excel.sheet.macroEnabled.12</mediatype>
     <mediatype>application/vnd.ms-excel.sheet.binary.macroEnabled.12</mediatype>

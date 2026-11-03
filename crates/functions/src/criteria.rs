@@ -1,9 +1,10 @@
 //! Excel criteria (COUNTIF, SUMIFS, DCOUNT…) and wildcard matching.
 
+use std::cell::OnceCell;
 use std::cmp::Ordering;
 
 use gridcraft_core::parse::parse_number_text;
-use gridcraft_core::{CellError, Value, compare_numbers, compare_text, fold_key, text_eq_prefolded};
+use gridcraft_core::{CellError, Collation, TextProbe, Value, compare_numbers, compare_text, compare_text_with, fold_key, text_eq_prefolded};
 
 /// Longest text criterion COUNTIF and its relatives accept, in UTF-16 code units as Excel
 /// counts them (😀 is two units); a longer one is `#VALUE!`.
@@ -48,16 +49,20 @@ pub(crate) struct Criterion {
     operand: Operand,
     /// The criterion was a bare `""` (or empty cell text): matches blanks and empty strings.
     bare_empty: bool,
+    /// A text operand prepared for `<`, `<=`, `>` and `>=` (its key built once, on the first
+    /// non-ASCII comparison), so a cell is ordered against it without rebuilding the operand's
+    /// key, and usually without building its own.
+    key: OnceCell<TextProbe>,
 }
 
 impl Criterion {
     /// Parses a criterion value the way COUNTIF does.
     pub(crate) fn parse(v: &Value) -> Criterion {
         match v {
-            Value::Number(n) => Criterion { op: Op::Eq, operand: Operand::Number(*n), bare_empty: false },
-            Value::Bool(b) => Criterion { op: Op::Eq, operand: Operand::Bool(*b), bare_empty: false },
-            Value::Error(e) => Criterion { op: Op::Eq, operand: Operand::Error(*e), bare_empty: false },
-            Value::Empty => Criterion { op: Op::Eq, operand: Operand::Number(0.0), bare_empty: false },
+            Value::Number(n) => Criterion { op: Op::Eq, operand: Operand::Number(*n), bare_empty: false, key: OnceCell::new() },
+            Value::Bool(b) => Criterion { op: Op::Eq, operand: Operand::Bool(*b), bare_empty: false, key: OnceCell::new() },
+            Value::Error(e) => Criterion { op: Op::Eq, operand: Operand::Error(*e), bare_empty: false, key: OnceCell::new() },
+            Value::Empty => Criterion { op: Op::Eq, operand: Operand::Number(0.0), bare_empty: false, key: OnceCell::new() },
             Value::Array(a) => Criterion::parse(a.data.first().unwrap_or(&Value::Empty)),
             Value::Text(t) => Criterion::parse_text(t),
         }
@@ -94,7 +99,7 @@ impl Criterion {
                         }
                         // The cut falls between the two halves of `c`.
                         let (op, rest) = split_op(&t[..i]);
-                        return Criterion { op, operand: Operand::CutText(rest.to_string()), bare_empty: false };
+                        return Criterion { op, operand: Operand::CutText(rest.to_string()), bare_empty: false, key: OnceCell::new() };
                     }
                     units += c.len_utf16();
                 }
@@ -106,7 +111,7 @@ impl Criterion {
 
     fn parse_text(t: &str) -> Criterion {
         if t.is_empty() {
-            return Criterion { op: Op::Eq, operand: Operand::Blank, bare_empty: true };
+            return Criterion { op: Op::Eq, operand: Operand::Blank, bare_empty: true, key: OnceCell::new() };
         }
         let (op, rest) = split_op(t);
         let operand = if rest.is_empty() {
@@ -124,11 +129,70 @@ impl Criterion {
             let plain = !rest.contains(['*', '?', '~']);
             Operand::Text(rest.to_string(), plain.then(|| fold_key(rest)))
         };
-        Criterion { op, operand, bare_empty: false }
+        Criterion { op, operand, bare_empty: false, key: OnceCell::new() }
     }
 
-    /// Whether a cell value satisfies the criterion.
-    pub(crate) fn matches(&self, v: &Value) -> bool {
+    fn matches_blank(&self, v: &Value, coll: Collation) -> bool {
+        let blank = matches!(v, Value::Empty);
+        match self.op {
+            Op::Eq => blank,
+            Op::Ne => !blank,
+            // "<" / ">" with nothing: Excel compares against "" for text cells, but an
+            // empty string never matches ("<=" and ">=" count it in neither).
+            _ => match v {
+                Value::Text(t) if !t.is_empty() => cmp_op(self.op, compare_text_with(t, "", coll)),
+                _ => false,
+            },
+        }
+    }
+
+    fn matches_number(&self, v: &Value, n: f64) -> bool {
+        let cell = match v {
+            Value::Number(x) => Some(*x),
+            // Numeric text matches only for equality (COUNTIF("1") counts text "1").
+            Value::Text(t) if matches!(self.op, Op::Eq | Op::Ne) => parse_number_text(t),
+            _ => None,
+        };
+        match cell {
+            Some(x) => cmp_op(self.op, compare_numbers(x, n)),
+            None => self.op == Op::Ne,
+        }
+    }
+
+    fn matches_text(&self, v: &Value, pat: &str, folded: Option<&str>, coll: Collation) -> bool {
+        match self.op {
+            Op::Eq | Op::Ne => {
+                // Blank cells hold no text: `"*"` skips them and `"<>*"` counts them.
+                // Without wildcards the equality is the canonical one of `compare_text`
+                // (NFC = NFD, accents kept); patterns with wildcards keep matching per char.
+                let m = match v {
+                    Value::Text(t) => match folded {
+                        Some(f) => text_eq_prefolded(t, f),
+                        None => wildcard_match(pat, t),
+                    },
+                    _ => false,
+                };
+                if self.op == Op::Eq { m } else { !m }
+            }
+            _ => match v {
+                Value::Text(t) => cmp_op(self.op, self.order(t, pat, coll)),
+                _ => false,
+            },
+        }
+    }
+
+    fn matches_cut_text(&self, v: &Value, kept: &str, coll: Collation) -> bool {
+        match self.op {
+            Op::Eq => false,
+            Op::Ne => true,
+            Op::Lt | Op::Le => matches!(v, Value::Text(t) if self.order(t, kept, coll) != Ordering::Greater),
+            Op::Gt | Op::Ge => matches!(v, Value::Text(t) if self.order(t, kept, coll) == Ordering::Greater),
+        }
+    }
+
+    /// Whether a cell value satisfies the criterion. `<`, `<=`, `>` and `>=` order text by `coll`
+    /// (the workbook's collation); `=`, `<>` and wildcards do not depend on it.
+    pub(crate) fn matches(&self, v: &Value, coll: Collation) -> bool {
         let v = match v {
             Value::Array(a) => a.data.first().cloned().unwrap_or(Value::Empty),
             other => other.clone(),
@@ -137,31 +201,8 @@ impl Criterion {
             return matches!(&v, Value::Empty) || matches!(&v, Value::Text(t) if t.is_empty());
         }
         match &self.operand {
-            Operand::Blank => {
-                let blank = matches!(v, Value::Empty);
-                match self.op {
-                    Op::Eq => blank,
-                    Op::Ne => !blank,
-                    // "<" / ">" with nothing: Excel compares against "" for text cells, but an
-                    // empty string never matches ("<=" and ">=" count it in neither).
-                    _ => match &v {
-                        Value::Text(t) if !t.is_empty() => cmp_op(self.op, compare_text(t, "")),
-                        _ => false,
-                    },
-                }
-            }
-            Operand::Number(n) => {
-                let cell = match &v {
-                    Value::Number(x) => Some(*x),
-                    // Numeric text matches only for equality (COUNTIF("1") counts text "1").
-                    Value::Text(t) if matches!(self.op, Op::Eq | Op::Ne) => parse_number_text(t),
-                    _ => None,
-                };
-                match cell {
-                    Some(x) => cmp_op(self.op, compare_numbers(x, *n)),
-                    None => self.op == Op::Ne,
-                }
-            }
+            Operand::Blank => self.matches_blank(&v, coll),
+            Operand::Number(n) => self.matches_number(&v, *n),
             Operand::Bool(b) => match &v {
                 Value::Bool(x) => cmp_op(self.op, x.cmp(b)),
                 _ => self.op == Op::Ne,
@@ -170,32 +211,20 @@ impl Criterion {
                 Value::Error(x) => cmp_op(self.op, x.code().cmp(&e.code())),
                 _ => self.op == Op::Ne,
             },
-            Operand::Text(pat, folded) => match self.op {
-                Op::Eq | Op::Ne => {
-                    // Blank cells hold no text: `"*"` skips them and `"<>*"` counts them.
-                    // Without wildcards the equality is the canonical one of `compare_text`
-                    // (NFC = NFD, accents kept); patterns with wildcards keep matching per char.
-                    let m = match &v {
-                        Value::Text(t) => match folded {
-                            Some(f) => text_eq_prefolded(t, f),
-                            None => wildcard_match(pat, t),
-                        },
-                        _ => false,
-                    };
-                    if self.op == Op::Eq { m } else { !m }
-                }
-                _ => match &v {
-                    Value::Text(t) => cmp_op(self.op, compare_text(t, pat)),
-                    _ => false,
-                },
-            },
-            Operand::CutText(kept) => match self.op {
-                Op::Eq => false,
-                Op::Ne => true,
-                Op::Lt | Op::Le => matches!(&v, Value::Text(t) if compare_text(t, kept) != Ordering::Greater),
-                Op::Gt | Op::Ge => matches!(&v, Value::Text(t) if compare_text(t, kept) == Ordering::Greater),
-            },
+            Operand::Text(pat, folded) => self.matches_text(&v, pat, folded.as_deref(), coll),
+            Operand::CutText(kept) => self.matches_cut_text(&v, kept, coll),
         }
+    }
+
+    /// `compare_text_with(t, operand, coll)`, where `operand` is this criterion's text: two ASCII
+    /// strings take the byte fast path, otherwise the operand's [`TextProbe`], built once and
+    /// kept (a call in another collation than the probe's compares directly).
+    fn order(&self, t: &str, operand: &str, coll: Collation) -> Ordering {
+        if t.is_ascii() && operand.is_ascii() {
+            return compare_text_with(t, operand, coll);
+        }
+        let probe = self.key.get_or_init(|| TextProbe::new(operand, coll));
+        if probe.collation() == coll { probe.order(t) } else { compare_text_with(t, operand, coll) }
     }
 }
 
@@ -272,15 +301,27 @@ pub(crate) fn has_wildcards(pattern: &str) -> bool {
 pub(crate) fn wildcard_match(pattern: &str, text: &str) -> bool {
     let p = tokenize(pattern);
     let t = lower_chars(text);
-    match_from(&p, &t, true).is_some()
+    let mut budget = MAX_STEPS;
+    match_from(&p, &t, true, &mut budget).is_some()
 }
 
+/// Steps one `match_from` call may take. An honest match against Excel's 32,767-character
+/// cell ceiling costs a few hundred thousand; a hostile one (star churn) is capped instead
+/// of quadratic — a call that spends more gives up and reports no match, quiet degradation
+/// like the other work caps on far-past-realistic input.
+const MAX_STEPS: u64 = 1 << 26;
+
 /// Greedy-free matcher: returns the matched length of `t` when `p` matches a prefix of `t`
-/// (or all of `t` when `whole`). Iterative with backtracking on the last star (linear-ish).
-fn match_from(p: &[Tok], t: &[char], whole: bool) -> Option<usize> {
+/// (or all of `t` when `whole`). Iterative with backtracking on the last star (linear-ish,
+/// quadratic at worst). `(budget, whole)`: the budget is spent one per loop step; a call that
+/// would spend more than it has gives up and reports no match — quiet degradation, as with the
+/// other work caps on far-past-realistic input (an honest match against Excel's 32,767-char
+/// cell ceiling costs a few hundred thousand steps).
+fn match_from(p: &[Tok], t: &[char], whole: bool, budget: &mut u64) -> Option<usize> {
     let (mut pi, mut ti) = (0usize, 0usize);
     let mut star: Option<(usize, usize)> = None;
     loop {
+        *budget = budget.checked_sub(1)?;
         if pi == p.len() && (!whole || ti == t.len()) {
             return Some(ti);
         }
@@ -315,14 +356,38 @@ fn match_from(p: &[Tok], t: &[char], whole: bool) -> Option<usize> {
 pub(crate) fn wildcard_find(pattern: &str, text: &str, start: usize) -> Option<usize> {
     let p = tokenize(pattern);
     let t = lower_chars(text);
+    // A leading run of stars never matters for a prefix match (it consumes nothing), so
+    // dropping it lets the anchor below skip linearly through the text (#2382).
+    let skip = p.iter().take_while(|tk| matches!(tk, Tok::Star)).count();
+    let p = &p[skip.min(p.len())..];
     if p.is_empty() {
         return if start <= t.len() { Some(start) } else { None };
     }
-    (start..t.len()).find(|&i| t.get(i..).is_some_and(|rest| match_from(&p, rest, false).is_some()))
+    // The first token that consumes a character anchors the scan: a literal skips straight
+    // to its occurrences, and after leading `?`s each attempt only pays for the `?` run and
+    // one suffix try. Every attempt shares one budget, so the total work stays flat.
+    let anys = p.iter().take_while(|tk| matches!(tk, Tok::Any)).count();
+    let anchor = p.get(anys);
+    let mut budget = MAX_STEPS;
+    let mut i = start;
+    while i < t.len() {
+        let hit = match (anchor, t.get(i + anys)) {
+            (Some(Tok::Char(c)), Some(rest)) => *rest == *c && match_from(p, &t[i..], false, &mut budget).is_some(),
+            (Some(Tok::Char(_)), None) => break, // the anchor char no longer exists ahead
+            _ => match_from(p, &t[i..], false, &mut budget).is_some(),
+        };
+        if hit {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
 }
 
 /// Exact-or-wildcard equality used by MATCH/VLOOKUP/XLOOKUP exact modes: text with wildcards
-/// matches by pattern (only when `wild`), otherwise values compare case-insensitively.
+/// matches by pattern (only when `wild`), otherwise values compare case-insensitively. Numbers
+/// compare exactly, not at the 15 digits of `=` and the criteria functions (Excel 365:
+/// `MATCH(0.1+0.2,{0.3},0)` is #N/A while `0.1+0.2=0.3` is TRUE).
 pub(crate) fn lookup_equal(needle: &Value, hay: &Value, wild: bool) -> bool {
     match (needle, hay) {
         (Value::Text(p), Value::Text(t)) => {
@@ -332,7 +397,7 @@ pub(crate) fn lookup_equal(needle: &Value, hay: &Value, wild: bool) -> bool {
                 compare_text(p, t) == Ordering::Equal
             }
         }
-        (Value::Number(a), Value::Number(b)) => compare_numbers(*a, *b) == Ordering::Equal,
+        (Value::Number(a), Value::Number(b)) => a == b,
         (Value::Bool(a), Value::Bool(b)) => a == b,
         (Value::Error(a), Value::Error(b)) => a == b,
         (Value::Empty, Value::Empty) => true,
@@ -345,11 +410,11 @@ mod tests {
     use super::*;
 
     fn m(c: &str, v: Value) -> bool {
-        Criterion::parse(&Value::from(c)).matches(&v)
+        Criterion::parse(&Value::from(c)).matches(&v, Collation::Root)
     }
 
     #[test]
-    fn criteria() {
+    fn text_criteria() {
         assert!(m(">5", Value::Number(6.0)));
         assert!(!m(">5", Value::Number(5.0)));
         assert!(m(">=5", Value::Number(5.0)));
@@ -362,6 +427,10 @@ mod tests {
         assert!(m("?pple", Value::from("apple")));
         assert!(m("~*", Value::from("*")));
         assert!(!m("~*", Value::from("x")));
+    }
+
+    #[test]
+    fn blank_criteria() {
         assert!(m("", Value::Empty));
         assert!(m("", Value::from("")));
         assert!(!m("", Value::Number(0.0)));
@@ -369,16 +438,21 @@ mod tests {
         assert!(!m("=", Value::from("a")));
         assert!(m("<>", Value::from("a")));
         assert!(!m("<>", Value::Empty));
-        assert!(m("TRUE", Value::Bool(true)));
-        // A bare "<=" or ">=" never matches an empty string (Excel 365: COUNTIF(="", "<=") is 0).
         assert!(!m("<=", Value::from("")));
         assert!(!m(">=", Value::from("")));
+        // A bare "<=" or ">=" never matches an empty string (Excel 365: COUNTIF(="", "<=") is 0).
+    }
+
+    #[test]
+    fn typed_criteria() {
+        assert!(m("TRUE", Value::Bool(true)));
         assert!(m("<b", Value::from("apple")));
         assert!(!m("<b", Value::Number(1.0)));
         assert!(m("#N/A", Value::Error(CellError::NA)));
-        assert!(Criterion::parse(&Value::Number(3.0)).matches(&Value::Number(3.0)));
-        assert!(Criterion::parse(&Value::Number(0.3)).matches(&Value::Number(0.1 + 0.2)));
-        assert!(lookup_equal(&Value::Number(0.3), &Value::Number(0.1 + 0.2), false));
+        assert!(Criterion::parse(&Value::Number(3.0)).matches(&Value::Number(3.0), Collation::Root));
+        assert!(Criterion::parse(&Value::Number(0.3)).matches(&Value::Number(0.1 + 0.2), Collation::Root));
+        assert!(!lookup_equal(&Value::Number(0.3), &Value::Number(0.1 + 0.2), false));
+        assert!(lookup_equal(&Value::Number(0.0), &Value::Number(-0.0), false));
         assert!(m("<>a*", Value::from("bcd")));
         assert!(m(">1/1/2020", Value::Number(44000.0)));
         // Text patterns never match blank cells, but an empty string is text.
@@ -412,6 +486,36 @@ mod tests {
         assert!(!m("a~*", Value::from("ab")));
         // Non-text cells never equal a text criterion.
         assert!(!m("Ánh", Value::Number(1.0)) && m("<>Ánh", Value::Empty));
+    }
+
+    #[test]
+    fn relational_text_criteria_equal_compare_text_with() {
+        // One parsed criterion is reused across cells (its operand key is built once and kept);
+        // every answer must be the one `compare_text_with` gives, in either collation, and even
+        // when the collation changes between calls.
+        let words = ["Dương", "Đặng", "Đ", "D", "Em", "Ánh", "Anh", "Ảnh", "Hoà", "Hòa", "ư", "Uz", "abc", "ABD", "", "İ", "ø", "z"];
+        let spell = |w: &str| {
+            let d = gridcraft_core::canonical(w);
+            [w.to_string(), d.clone(), w.to_uppercase(), d.to_uppercase()]
+        };
+        for op in ["<", "<=", ">", ">="] {
+            for p in words {
+                for pv in spell(p) {
+                    let c = Criterion::parse(&Value::from(format!("{op}{pv}").as_str()));
+                    if !matches!(c.operand, Operand::Text(..)) {
+                        continue;
+                    }
+                    for coll in [Collation::Vi, Collation::Root, Collation::Vi] {
+                        for cell in words {
+                            for cv in spell(cell) {
+                                let want = cmp_op(c.op, compare_text_with(&cv, &pv, coll));
+                                assert_eq!(c.matches(&Value::from(cv.as_str()), coll), want, "{op}{pv:?} {cv:?} {coll:?}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]

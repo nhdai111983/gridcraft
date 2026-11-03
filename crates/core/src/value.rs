@@ -222,7 +222,8 @@ impl Value {
     }
 
     /// Coercion to a number as arithmetic does it: empty = 0, TRUE = 1, numeric text parses
-    /// (including dates, times, percentages and currency), other text = `#VALUE!`.
+    /// (including dates, times, percentages and currency) in the regional format of the formula
+    /// being evaluated ([`crate::locale::coercion_locale`]), other text = `#VALUE!`.
     pub fn to_number(&self) -> Result<f64, CellError> {
         self.to_number_in(crate::DateSystem::D1900)
     }
@@ -232,20 +233,24 @@ impl Value {
             Value::Empty => Ok(0.0),
             Value::Number(n) => Ok(*n),
             Value::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
-            Value::Text(t) => crate::parse::parse_number_text_in(t, sys).ok_or(CellError::Value),
+            Value::Text(t) => crate::parse::coerce_number_text(t, sys).ok_or(CellError::Value),
             Value::Error(e) => Err(*e),
             Value::Array(a) => a.data.first().map(|v| v.to_number_in(sys)).unwrap_or(Ok(0.0)),
         }
     }
-    /// Coercion to text as `&` does it.
+    /// Coercion to text as `&` does it. A number is spelled in the regional format of the formula
+    /// being evaluated (`1,5` in vi-VN, as Excel does; en-US outside a formula).
     pub fn to_text(&self) -> Result<String, CellError> {
         match self {
             Value::Empty => Ok(String::new()),
-            Value::Number(n) => Ok(number_to_text(*n)),
+            Value::Number(n) => Ok(match crate::locale::coercion_locale() {
+                crate::Locale::EnUs => number_to_text(*n),
+                l => l.localize_number(&number_to_text(*n)),
+            }),
             Value::Bool(b) => Ok(if *b { "TRUE".into() } else { "FALSE".into() }),
             Value::Text(t) => Ok(t.to_string()),
             Value::Error(e) => Err(*e),
-            Value::Array(a) => a.data.first().map(|v| v.to_text()).unwrap_or(Ok(String::new())),
+            Value::Array(a) => a.data.first().map(Value::to_text).unwrap_or(Ok(String::new())),
         }
     }
     /// Coercion to a boolean as `IF` does it.
@@ -264,7 +269,7 @@ impl Value {
                 }
             }
             Value::Error(e) => Err(*e),
-            Value::Array(a) => a.data.first().map(|v| v.to_bool()).unwrap_or(Ok(false)),
+            Value::Array(a) => a.data.first().map(Value::to_bool).unwrap_or(Ok(false)),
         }
     }
     /// Display text with General formatting (for logs, CSV and tests).
@@ -288,8 +293,15 @@ impl Value {
 }
 
 /// Excel's comparison for `=`, `<`… operators. Text compares case-insensitively; empty acts as
-/// 0, "" or FALSE depending on the other side. Errors are handled by the caller.
+/// 0, "" or FALSE depending on the other side. Errors are handled by the caller. Text order is
+/// the Root order (ours, language-neutral, not CLDR root): `compare_with(a, b, Collation::Root)`.
 pub fn compare(a: &Value, b: &Value) -> Ordering {
+    compare_with(a, b, Collation::Root)
+}
+
+/// [`compare`] with text ordered by collation `c` ([`compare_text_with`]). The order of the
+/// classes and the treatment of empty do not depend on `c`, and neither does text equality.
+pub fn compare_with(a: &Value, b: &Value, c: Collation) -> Ordering {
     match (a, b) {
         (Value::Empty, Value::Empty) => Ordering::Equal,
         (Value::Empty, Value::Number(n)) => compare_numbers(0.0, *n),
@@ -299,7 +311,7 @@ pub fn compare(a: &Value, b: &Value) -> Ordering {
         (Value::Empty, Value::Bool(b)) => false.cmp(b),
         (Value::Bool(b), Value::Empty) => b.cmp(&false),
         (Value::Number(x), Value::Number(y)) => compare_numbers(*x, *y),
-        (Value::Text(x), Value::Text(y)) => compare_text(x, y),
+        (Value::Text(x), Value::Text(y)) => compare_text_with(x, y, c),
         (Value::Bool(x), Value::Bool(y)) => x.cmp(y),
         (Value::Error(x), Value::Error(y)) => x.code().cmp(&y.code()),
         _ => a.rank().cmp(&b.rank()),
@@ -323,16 +335,23 @@ pub fn compare_numbers(a: f64, b: f64) -> Ordering {
     round15(a).partial_cmp(&round15(b)).unwrap_or(Ordering::Equal)
 }
 
-pub use crate::collate::compare_text;
+pub use crate::collate::{Collation, compare_text, compare_text_with};
 
 /// Sorting order used by Sort (ascending): numbers, text, booleans, errors, then blanks last.
+/// Text order is the Root order (ours, not CLDR root): `sort_compare_with(a, b, Collation::Root)`.
 pub fn sort_compare(a: &Value, b: &Value) -> Ordering {
+    sort_compare_with(a, b, Collation::Root)
+}
+
+/// [`sort_compare`] with text ordered by collation `c`; only the order inside the text class
+/// depends on `c`.
+pub fn sort_compare_with(a: &Value, b: &Value, c: Collation) -> Ordering {
     match (a, b) {
         (Value::Empty, Value::Empty) => Ordering::Equal,
         (Value::Empty, _) => Ordering::Greater,
         (_, Value::Empty) => Ordering::Less,
         (Value::Error(_), Value::Error(_)) => Ordering::Equal,
-        _ => compare(a, b),
+        _ => compare_with(a, b, c),
     }
 }
 
@@ -344,6 +363,10 @@ pub fn number_to_text(n: f64) -> String {
     }
     let a = n.abs();
     if !(1e-9..1e15).contains(&a) && a.round() != a || a >= 1e15 {
+        return sci_text(n, 15);
+    }
+    // A value just below 1e15 can round up to 1e15 at 15 significant digits.
+    if format!("{:.14e}", a).parse::<f64>().is_ok_and(|r| r >= 1e15) {
         return sci_text(n, 15);
     }
     // 15 significant digits, trailing zeros trimmed.
@@ -390,6 +413,13 @@ mod tests {
     }
 
     #[test]
+    fn number_text_rounds_up_to_scientific_boundary() {
+        assert_eq!(number_to_text(999999999999999.9), "1E+15");
+        assert_eq!(number_to_text(-999999999999999.9), "-1E+15");
+        assert_eq!(number_to_text(999999999999999.0), "999999999999999");
+    }
+
+    #[test]
     fn coercion() {
         assert_eq!(Value::from("12").to_number(), Ok(12.0));
         assert_eq!(Value::from(" 1,234.5 ").to_number(), Ok(1234.5));
@@ -433,11 +463,12 @@ mod tests {
     }
 
     #[test]
-    fn arrays() {
-        let a = Array::new(2, 2, vec![1.0.into(), 2.0.into(), 3.0.into(), 4.0.into()]).unwrap();
+    fn arrays() -> Result<(), std::io::Error> {
+        let a = Array::new(2, 2, vec![1.0.into(), 2.0.into(), 3.0.into(), 4.0.into()]).ok_or_else(|| std::io::Error::other("valid array"))?;
         assert_eq!(a.transpose().get(0, 1), Some(&Value::Number(3.0)));
         assert!(Array::new(2, 2, vec![]).is_none());
         let row = Array::row(vec![1.0.into(), 2.0.into()]);
         assert_eq!(row.get_broadcast(5, 1), Value::Number(2.0));
+        Ok(())
     }
 }

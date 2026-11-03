@@ -1,5 +1,18 @@
 use super::*;
 
+#[test]
+fn format_colors_resolve_named_and_indexed_rgb_safely() {
+    assert_eq!(FormatColor::Green.rgb(), Some([0, 255, 0]));
+    assert_eq!(FormatColor::Black.rgb(), Some([0, 0, 0]));
+    assert_eq!(FormatColor::Indexed(1).rgb(), Some([0, 0, 0]));
+    assert_eq!(FormatColor::Indexed(10).rgb(), Some([0, 128, 0]));
+    assert_eq!(FormatColor::Indexed(46).rgb(), Some([255, 102, 0]));
+    assert_eq!(FormatColor::Indexed(56).rgb(), Some([51, 51, 51]));
+    for index in [0, 57, 255] {
+        assert_eq!(FormatColor::Indexed(index).rgb(), None);
+    }
+}
+
 const S: DateSystem = DateSystem::D1900;
 
 fn f(code: &str, n: f64) -> String {
@@ -145,6 +158,18 @@ fn fractions() {
     assert_eq!(f("# ???/???", 0.5), "   1/2  ");
 }
 
+/// A fraction without a whole part puts the whole value in the numerator; large values must
+/// not saturate at u64::MAX.
+#[test]
+fn fraction_numerator_beyond_u64() {
+    assert_eq!(f("?/1000000000", 2e10), "20000000000000000000/1000000000");
+    assert_eq!(f("?/?", 1e20), "100000000000000000000/1");
+    assert_eq!(f("?/100", 1e18), "100000000000000000000/100");
+    assert_eq!(f("??/??", 1e25), "10000000000000000000000000/1 ");
+    assert!(!f("?/10", 1e300).contains("18446744073709551615"));
+    assert_eq!(f("?/1000000000", 2.5), "2500000000/1000000000");
+}
+
 /// Fraction sections with literal text, as Excel renders them (observed `TEXT()` results).
 #[test]
 fn fractions_with_literals() {
@@ -222,7 +247,7 @@ fn question_mark_pads_thousands_separator() {
 }
 
 #[test]
-fn literals_and_fill() {
+fn literals_and_fill() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(f("\"$\"#,##0.00", 3.0), "$3.00");
     assert_eq!(f("$#,##0.00", -3.0), "-$3.00");
     assert_eq!(f("[$€-407]#,##0.00", 1234.5), "€1,234.50");
@@ -231,7 +256,7 @@ fn literals_and_fill() {
     assert_eq!(f("(0)", 5.0), "(5)");
     let r = full("*-0", Value::Number(5.0));
     assert_eq!((r.text.as_str(), r.fill), ("5", Some(('-', 0))));
-    let acct = builtin_format(44).unwrap();
+    let acct = builtin_format(44).ok_or("none")?;
     let r = full(acct, Value::Number(0.0));
     assert_eq!((r.text.as_str(), r.fill), (" $-   ", Some((' ', 2))));
     let r = full(acct, Value::Number(1234.5));
@@ -242,6 +267,7 @@ fn literals_and_fill() {
     assert_eq!((r.text.as_str(), r.numeric), (" abc ", false));
     let r = full("-* 0", Value::Number(-5.0));
     assert_eq!((r.text.as_str(), r.fill), ("--5", Some((' ', 2))));
+    Ok(())
 }
 
 #[test]
@@ -254,6 +280,10 @@ fn dates_and_times() {
     assert_eq!(f("d-mmm-yy", 46302.0), "7-Oct-26");
     assert_eq!(f("e", 46302.0), "2026");
     assert_eq!(f("YYYY-MM-DD", 46302.0), "2026-10-07");
+}
+
+#[test]
+fn time_formats() {
     assert_eq!(f("yyyy-mm-dd hh:mm:ss", 46302.5), "2026-10-07 12:00:00");
     assert_eq!(f("h:mm AM/PM", 0.75), "6:00 PM");
     assert_eq!(f("h AM/PM", 0.0), "12 AM");
@@ -265,6 +295,10 @@ fn dates_and_times() {
     assert_eq!(f("[s]", 1.0 / 1440.0), "60");
     assert_eq!(f("mm:ss.0", 61.2 / 86400.0), "01:01.2");
     assert_eq!(f("mm:ss.00", 61.25 / 86400.0), "01:01.25");
+}
+
+#[test]
+fn date_serial_boundaries() {
     assert_eq!(f("h:mm:ss", 0.5 + 59.6 / 86400.0), "12:01:00");
     assert_eq!(f("h:mm", 0.5 + 40.0 / 86400.0), "12:00");
     assert_eq!(f("m/d/yyyy", 60.0), "2/29/1900");
@@ -317,12 +351,12 @@ fn general() {
 }
 
 #[test]
-fn kinds() {
+fn kinds() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(NumberFormat::general().kind(), FormatKind::General);
     assert_eq!(NumberFormat::parse("0.00").kind(), FormatKind::Number);
     assert_eq!(NumberFormat::parse("#,##0.00;[Red](#,##0.00)").kind(), FormatKind::Number);
     assert_eq!(NumberFormat::parse("\"$\"#,##0.00").kind(), FormatKind::Currency);
-    assert_eq!(NumberFormat::parse(builtin_format(44).unwrap()).kind(), FormatKind::Accounting);
+    assert_eq!(NumberFormat::parse(builtin_format(44).ok_or("none")?).kind(), FormatKind::Accounting);
     assert_eq!(NumberFormat::parse("m/d/yyyy").kind(), FormatKind::Date);
     assert_eq!(NumberFormat::parse("h:mm AM/PM").kind(), FormatKind::Time);
     assert_eq!(NumberFormat::parse("0%").kind(), FormatKind::Percentage);
@@ -331,10 +365,11 @@ fn kinds() {
     assert_eq!(NumberFormat::parse("@").kind(), FormatKind::Text);
     assert_eq!(NumberFormat::parse("00000").kind(), FormatKind::Special);
     assert_eq!(NumberFormat::parse("\"hello\"").kind(), FormatKind::Custom);
+    Ok(())
 }
 
 #[test]
-fn builtins() {
+fn builtins() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(builtin_format(0), Some("General"));
     assert_eq!(builtin_format(14), Some("m/d/yyyy"));
     assert_eq!(builtin_format(49), Some("@"));
@@ -350,9 +385,10 @@ fn builtins() {
             assert_eq!(builtin_id(code), Some(id));
         }
     }
-    assert_eq!(f(builtin_format(5).unwrap(), -1234.0), "($1,234)");
-    assert_eq!(f(builtin_format(12).unwrap(), 0.5), " 1/2");
-    assert_eq!(f(builtin_format(47).unwrap(), 61.2 / 86400.0), "0101.2");
+    assert_eq!(f(builtin_format(5).ok_or("none")?, -1234.0), "($1,234)");
+    assert_eq!(f(builtin_format(12).ok_or("none")?, 0.5), " 1/2");
+    assert_eq!(f(builtin_format(47).ok_or("none")?, 61.2 / 86400.0), "0101.2");
+    Ok(())
 }
 
 #[test]
@@ -637,7 +673,7 @@ fn text_uncached(v: &Value, code: &str, sys: DateSystem) -> Result<String, CellE
     if !n.is_finite() {
         return Err(CellError::Num);
     }
-    let (f, overflow) = fmt.format_number(n, sys);
+    let (f, overflow) = fmt.format_number(n, sys, Locale::EnUs);
     if overflow { Err(CellError::Value) } else { Ok(f.text) }
 }
 
@@ -819,28 +855,29 @@ fn format_codes_are_capped_at_255_characters() {
     assert_eq!(f(&huge, 0.5), "0.5");
 }
 
-/// Parses and renders `code` on a worker thread; panics if that takes more than 20 s, so a quadratic
+/// Parses and renders `code` on a worker thread; errors if that takes more than 20 s, so a quadratic
 /// parser fails the test instead of hanging CI. Not a benchmark: at this size an O(n^2) pass takes
 /// minutes and an O(n) pass milliseconds, so the margin is decades wide.
-fn finishes_in_time(code: String) -> String {
+fn finishes_in_time(code: String) -> Result<String, std::sync::mpsc::RecvTimeoutError> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         // Uncapped: `parse` turns a code past 255 characters into General before the parser sees it.
         let _ = tx.send(format_value(&Value::Number(1234.5), &NumberFormat::parse_uncapped(&code), S).text);
     });
-    rx.recv_timeout(std::time::Duration::from_secs(20)).expect("format code did not parse and render in time")
+    rx.recv_timeout(std::time::Duration::from_secs(20))
 }
 
 #[test]
-fn hostile_codes_parse_in_linear_time() {
+fn hostile_codes_parse_in_linear_time() -> Result<(), std::sync::mpsc::RecvTimeoutError> {
     let n = 1_000_000;
     // Unclosed brackets, a run of commas after a digit, a run of fraction bars.
-    assert!(finishes_in_time("[".repeat(n)).starts_with('['));
-    finishes_in_time(format!("0{}", ",".repeat(n)));
-    finishes_in_time(format!("0{}", "/".repeat(n)));
-    finishes_in_time(format!("0{}0", ",".repeat(n)));
+    assert!(finishes_in_time("[".repeat(n))?.starts_with('['));
+    finishes_in_time(format!("0{}", ",".repeat(n)))?;
+    finishes_in_time(format!("0{}", "/".repeat(n)))?;
+    finishes_in_time(format!("0{}0", ",".repeat(n)))?;
     // Unclosed brackets mixed with semicolons: each is a literal and a section separator stays one.
-    finishes_in_time("[;".repeat(n / 2));
+    finishes_in_time("[;".repeat(n / 2))?;
+    Ok(())
 }
 
 #[test]
@@ -863,4 +900,70 @@ fn closed_brackets_still_hold_their_semicolons() {
     assert_eq!(parse::parse_sections("[unknown;x]0;0").len(), 2);
     assert_eq!(f("0\\[0", 5.0), "0[5");
     assert_eq!(f("\"[\"0;0", 5.0), "[5");
+}
+
+fn vi(code: &str, n: f64) -> String {
+    format_value_in(&Value::Number(n), &NumberFormat::parse(code), S, Locale::ViVn).text
+}
+
+/// NexusOffice: vi-VN shows en-US codes with its separators, names and system formats.
+#[test]
+fn vietnamese_display() {
+    // (code, value, en-US, vi-VN)
+    let cases: &[(&str, f64, &str, &str)] = &[
+        ("General", 1234567.89, "1234567.89", "1234567,89"),
+        ("General", -0.5, "-0.5", "-0,5"),
+        ("General", 1e20, "1E+20", "1E+20"),
+        ("#,##0.00", 1234567.891, "1,234,567.89", "1.234.567,89"),
+        ("#,##0", -1234567.0, "-1,234,567", "-1.234.567"),
+        ("0.0%", 0.125, "12.5%", "12,5%"),
+        ("0.00E+00", 12345.0, "1.23E+04", "1,23E+04"),
+        ("# ?/?", 1234.5, "1234 1/2", "1234 1/2"),
+        ("#,##0 ?/?", 1234.5, "1,234 1/2", "1.234 1/2"),
+        ("#,##0 [$₫-42A]", 1234567.0, "1,234,567 ₫", "1.234.567 ₫"),
+        ("#,##0 [$₫-42A]", -1234567.4, "-1,234,567 ₫", "-1.234.567 ₫"),
+        ("\"Tổng: \"#,##0.0", 1234.5, "Tổng: 1,234.5", "Tổng: 1.234,5"),
+        // System short date (built-in 14) and its date-time (22) follow the locale.
+        ("m/d/yyyy", 46319.0, "10/24/2026", "24/10/2026"),
+        ("m/d/yyyy h:mm", 46319.75, "10/24/2026 18:00", "24/10/2026 18:00"),
+        ("[$-F800]dddd, mmmm dd, yyyy", 46319.0, "Saturday, October 24, 2026", "Thứ Bảy, 24 tháng 10, 2026"),
+        ("[$-x-sysdate]dddd, mmmm dd, yyyy", 46026.0, "Sunday, January 04, 2026", "Chủ Nhật, 4 tháng 1, 2026"),
+        ("[$-F400]h:mm:ss AM/PM", 0.75, "6:00:00 PM", "18:00:00"),
+        // Explicit codes keep their shape; names, AM/PM and fractional seconds are localized.
+        ("dd/mm/yyyy", 46319.0, "24/10/2026", "24/10/2026"),
+        ("dddd", 46319.0, "Saturday", "Thứ Bảy"),
+        ("ddd d mmm", 46319.0, "Sat 24 Oct", "Th 7 24 thg 10"),
+        ("mmmm", 46319.0, "October", "tháng 10"),
+        ("mmmmm", 46319.0, "O", "10"),
+        ("h:mm AM/PM", 0.25, "6:00 AM", "6:00 SA"),
+        ("h:mm AM/PM", 0.75, "6:00 PM", "6:00 CH"),
+        ("hh:mm", 0.75, "18:00", "18:00"),
+        ("ss.00", 1.5 / 86400.0, "01.50", "01,50"),
+        ("dd.mm.yyyy", 46319.0, "24.10.2026", "24.10.2026"),
+    ];
+    for (code, n, en, vi_text) in cases {
+        assert_eq!(f(code, *n), *en, "en-US {code} {n}");
+        assert_eq!(vi(code, *n), *vi_text, "vi-VN {code} {n}");
+    }
+    assert_eq!(format_general_fit_in(1234.5, 11, Locale::ViVn).as_deref(), Some("1234,5"));
+    // Text, booleans and errors are the same in every locale.
+    let fmt = NumberFormat::parse("#,##0.00");
+    for v in [Value::from("1.234,5"), Value::Bool(true), Value::Error(CellError::Div0)] {
+        assert_eq!(format_value_in(&v, &fmt, S, Locale::ViVn), format_value(&v, &fmt, S));
+    }
+}
+
+/// `TEXT` reads its format text and numeric text the locale's way (Excel's depends on the
+/// regional settings) and shows the result in it.
+#[test]
+fn vietnamese_text_function() {
+    let text = |v: Value, code: &str| text_function_in(&v, code, S, Locale::ViVn);
+    assert_eq!(text(Value::Number(1234.5), "#.##0,00").as_deref(), Ok("1.234,50"));
+    assert_eq!(text(Value::Number(46319.0), "dd/mm/yyyy").as_deref(), Ok("24/10/2026"));
+    assert_eq!(text(Value::Number(46319.0), "dddd").as_deref(), Ok("Thứ Bảy"));
+    assert_eq!(text(Value::from("1.234,5"), "0,0").as_deref(), Ok("1234,5"));
+    assert_eq!(text(Value::Number(0.125), "0,0%").as_deref(), Ok("12,5%"));
+    // en-US is unchanged: the same codes mean something else there.
+    assert_eq!(text_function(&Value::Number(1234.5), "#,##0.00", S).as_deref(), Ok("1,234.50"));
+    assert_eq!(text_function_in(&Value::Number(1234.5), "#,##0.00", S, Locale::EnUs).as_deref(), Ok("1,234.50"));
 }

@@ -3,7 +3,7 @@
 # exports VERSION and NFPM_ARCH.
 #
 #   nfpm package -f packaging/linux/nfpm.yaml -p deb -t dist/release/
-name: nexus-sheets
+name: nexus-sheet
 arch: ${NFPM_ARCH}
 platform: linux
 version: ${VERSION}
@@ -13,15 +13,15 @@ release: 1
 section: misc
 priority: optional
 maintainer: ${GRIDCRAFT_MAINTAINER}
-vendor: Sonnytech
-homepage: https://github.com/nhdai111983/gridcraft
+vendor: SonnyTech
+homepage: https://github.com/sonnytech-vn/gridcraft
 license: MIT OR Apache-2.0
 description: |-
   Open-source, native spreadsheet that works the way Excel users expect.
   Opens and saves .xlsx workbooks and CSV/TSV files; hundreds of worksheet
   functions; formatting, sorting, filtering and charts.
-  Includes nexus-sheets-cli, a headless evaluator, converter and command runner.
-  Nexus Sheets is part of NexusOffices by Sonnytech, based on the open-source
+  Includes nexus-sheet-cli, a headless evaluator, converter and command runner.
+  Nexus Sheet is part of NexusOffice by SonnyTech, based on the open-source
   GridCraft by the ArtCraft team.
 
 # The binaries link only glibc and libgcc_s directly. Windowing (X11/Wayland, xkbcommon) and the
@@ -57,11 +57,11 @@ overrides:
       - xdg-desktop-portal
 
 contents:
-  - src: ${STAGE}/usr/bin/nexus-sheets
-    dst: /usr/bin/nexus-sheets
+  - src: ${STAGE}/usr/bin/nexus-sheet
+    dst: /usr/bin/nexus-sheet
     file_info: { mode: 0755 }
-  - src: ${STAGE}/usr/bin/nexus-sheets-cli
-    dst: /usr/bin/nexus-sheets-cli
+  - src: ${STAGE}/usr/bin/nexus-sheet-cli
+    dst: /usr/bin/nexus-sheet-cli
     file_info: { mode: 0755 }
   - src: ${STAGE}/usr/share/
     dst: /usr/share/
