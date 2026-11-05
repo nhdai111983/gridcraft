@@ -289,6 +289,17 @@ fn should_expand_text(filter_space: f32, overflows: bool, across_end: u32, col: 
     filter_space == 0.0 && (overflows || across_end > col) && !in_merge
 }
 
+/// NexusOffice (Henry, 03/11; wrapped text review 05/11): the height of a galley of `gh` that the
+/// vertical alignment places. Middle centres the letters (the first line's ascent to the last
+/// line's descent), not the rows with the line gap egui adds below the last line, as Excel does;
+/// the other alignments place the whole galley.
+fn aligned_text_height(p: &Painter, valign: VAlign, gh: f32, font: &FontId) -> f32 {
+    match valign {
+        VAlign::Center => (gh - crate::nexus::line_gap(p.ctx(), font)).max(0.0),
+        _ => gh,
+    }
+}
+
 fn paint_cell(q: &QuadrantPaint<'_>, painted: &(CellRef, Rect, Look, Option<CfLook>), merges: &[RangeRef]) {
     let (cell, rect, lk, cfl) = painted;
     let c = *cell;
@@ -363,7 +374,7 @@ fn paint_cell(q: &QuadrantPaint<'_>, painted: &(CellRef, Rect, Look, Option<CfLo
             HAlign::Right => rect.right() - pad,
             _ => text_left + pad + indent,
         };
-        let y = wrapped_cell_text_y(st.align.v, *rect, galley.size().y, z);
+        let y = wrapped_cell_text_y(st.align.v, *rect, aligned_text_height(p, st.align.v, galley.size().y, &font), z);
         p.with_clip_rect(rect.intersect(p.clip_rect())).galley(pos2(x, y), galley, color);
         return;
     }
@@ -458,12 +469,7 @@ fn paint_cell(q: &QuadrantPaint<'_>, painted: &(CellRef, Rect, Look, Option<CfLo
         _ => text_left + pad + indent,
     };
     let gh = galley.size().y;
-    // NexusOffice (Henry, 03/11): Middle centres the letters (ascent to descent), not the row
-    // with the line gap egui adds below them, as Excel does.
-    let y = match st.align.v {
-        VAlign::Center => cell_text_y(st.align.v, *rect, (gh - crate::nexus::line_gap(p.ctx(), &font)).max(0.0), z),
-        _ => cell_text_y(st.align.v, *rect, gh, z),
-    };
+    let y = cell_text_y(st.align.v, *rect, aligned_text_height(p, st.align.v, gh, &font), z);
     let cp = p.with_clip_rect(clip.intersect(p.clip_rect()));
     if rotated {
         let angle = -(st.align.rotation as f32).to_radians();
