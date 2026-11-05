@@ -235,7 +235,9 @@ const JOURNAL_MAX_ENTRIES: usize = 10_000;
 /// `engine.journal`), and a `file.open` holds the whole file as base64: without a size cap a
 /// few opens of a large workbook keep tens of MB alive.
 pub(crate) const JOURNAL_MAX_BYTES: usize = 64 * 1024 * 1024;
-const UNDO_BYTES_LIMIT: usize = 128 * 1024 * 1024;
+/// Past this many bytes retained by the undo snapshots, the oldest steps are dropped (always
+/// keeping the latest one).
+pub const UNDO_BYTES_LIMIT: usize = 128 * 1024 * 1024;
 
 fn history_retained_bytes(older: &Workbook, newer: &Workbook) -> usize {
     let mut bytes = std::mem::size_of::<Workbook>();
