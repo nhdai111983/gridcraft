@@ -435,7 +435,7 @@ fn sensitivity_report_gives_the_wyndor_glass_shadow_prices_and_ranges() {
         .unwrap();
     assert_eq!(solved["reports"], json!(["Sensitivity Report 1"]), "{solved}");
     let rep = "Sensitivity Report 1";
-    assert_eq!(at(&s, rep, "A1"), Value::text("GridCraft Sensitivity Report"));
+    assert_eq!(at(&s, rep, "A1"), Value::text("Nexus Sheet Sensitivity Report"));
     let r = row_of(&s, rep, "Reduced Cost");
     assert_eq!(at(&s, rep, &format!("F{}", r + 1)), Value::text("Objective Coefficient"));
     let cols = ["D", "E", "F", "G", "H"];

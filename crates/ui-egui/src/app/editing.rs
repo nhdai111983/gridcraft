@@ -25,7 +25,7 @@ impl SheetApp {
         // refuses `cell.set` anyway): refuse before a draft exists, rather than leaving one that
         // can never be committed and blocks Save (#2945).
         if let Some(m) = self.session.locked_cell_message(d.wb.active_sheet(), at) {
-            self.message = Some(("GridCraft".into(), m));
+            self.message = Some((crate::nexus::APP_NAME.into(), m));
             return;
         }
         // A picture has no editable scalar text. Selecting it, F2, or clicking
@@ -148,7 +148,7 @@ impl SheetApp {
         // open) can't be entered: drop it with the warning instead of keeping it, which would
         // block Save with a draft that can never be committed (#2945).
         if let Some(m) = self.session.locked_cell_message(ed.sheet, ed.cell) {
-            self.message = Some(("GridCraft".into(), m));
+            self.message = Some((crate::nexus::APP_NAME.into(), m));
             return true;
         }
         let text = match self.session.active().map(|d| formula_locale::canonical(&text, ed.locale, &d.wb, ed.sheet, ed.cell)) {
@@ -244,7 +244,7 @@ impl SheetApp {
         if let Some(why) = why {
             self.editor = None;
             self.session.mode = gridcraft_engine::Mode::Ready;
-            self.message = Some(("GridCraft".into(), why.into()));
+            self.message = Some((crate::nexus::APP_NAME.into(), why.into()));
             return;
         }
         if let (true, Some(sheet), Some(ed)) = (moved, found, self.editor.as_mut()) {
@@ -267,7 +267,7 @@ impl SheetApp {
                 true
             }
             None => {
-                self.message = Some(("GridCraft".into(), DRAFT_SHEET_GONE.into()));
+                self.message = Some((crate::nexus::APP_NAME.into(), DRAFT_SHEET_GONE.into()));
                 false
             }
         }
@@ -304,7 +304,7 @@ impl SheetApp {
         // A locked cell on a protected sheet is refused before a draft exists, as `begin_edit`
         // refuses it (#2945).
         if let Some(m) = self.session.locked_cell_message(d.wb.active_sheet(), at) {
-            self.message = Some(("GridCraft".into(), m));
+            self.message = Some((crate::nexus::APP_NAME.into(), m));
             return;
         }
         let py = sh.cell(at).and_then(|c| c.py.as_deref());
@@ -382,7 +382,7 @@ impl SheetApp {
         // A draft on a cell sheet protection now locks can never be entered: it is dropped with
         // the warning, as `commit_edit_here` drops an ordinary one (#2945).
         if let Some(m) = self.session.locked_cell_message(ed.sheet, ed.cell) {
-            self.message = Some(("GridCraft".into(), m));
+            self.message = Some((crate::nexus::APP_NAME.into(), m));
             return true;
         }
         // No code at all: a Python cell is cleared through cell.set, as an empty entry clears any
@@ -398,7 +398,7 @@ impl SheetApp {
                 true
             }
             Err(e) => {
-                self.message = Some(("GridCraft".into(), clean_error(&e)));
+                self.message = Some((crate::nexus::APP_NAME.into(), clean_error(&e)));
                 self.editor = Some(ed);
                 self.session.mode = gridcraft_engine::Mode::Edit;
                 false
