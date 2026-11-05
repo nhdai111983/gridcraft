@@ -155,7 +155,10 @@ Sinh bằng `python3 -c "import uuid; print(uuid.uuid4())"` ngày 2026-10-16.
 `packaging/linux/vn.sonnytech.nexus.sheets.desktop`,
 `packaging/linux/vn.sonnytech.nexus.sheets.metainfo.xml.in` (MIME dùng lại file upstream
 `ai.storyteller.gridcraft.mime.xml`, cài dưới tên APP_ID), `nexus/assets/*` (logo tạm
-`nexus-sheet.svg` + PNG/ICO/ICNS/hicolor sinh bằng `nexus/assets/render-icons.py`).
+`nexus-sheet.svg` + PNG/ICO/ICNS/hicolor sinh bằng `nexus/assets/render-icons.py`),
+`crates/ui-egui/tests/nexus_cell_middle.rs` (soát 05/11: chữ căn giữa nằm giữa ô theo ascent/descent
+của mặt chữ, đỏ khi bỏ phần sửa ở `grid/quadrant.rs`; `nexus::line_gap` giữ kết quả theo họ phông
+trong bộ nhớ của context cho mỗi pass, không khoá `ctx.fonts` và không cấp phát cho mỗi ô).
 
 ## File khác
 
