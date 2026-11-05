@@ -283,3 +283,16 @@ craft-print) chỉ là nguồn build (T5/§4.8 mirror), không phải gọi mạ
 | `crates/ui-egui/tests/nexus_i18n_dialogs.rs` | File mới: mở mọi hộp thoại bằng tiếng Việt và báo nhãn tiếng Anh còn sót; thanh trạng thái; menu thẻ; menu biểu đồ | — (file mới) |
 | `crates/ui-egui/src/grid/quadrant.rs` (Henry 03/11) | Căn giữa theo chiều dọc: căn hộp chữ từ ascent tới descent, không tính khoảng cách dòng (line gap) egui thêm dưới chữ (`nexus::line_gap`, file của fork); Calibri có line gap 0,22 em nên chữ căn giữa trước đây nằm cao | Có - hook "chiều cao chữ để căn dọc" |
 | `crates/ui-egui/tests/nexus_i18n_dialogs.rs` | File mới: mở mọi hộp thoại bằng tiếng Việt và báo nhãn tiếng Anh còn sót; thanh trạng thái; menu thẻ; menu biểu đồ | — (file mới) |
+
+## Soát 05/11: fuzz hằng tuần trượt seed 79 (nhánh `nx/review-1105-fuzz-spill-constant`)
+
+Lỗi chung của upstream (có trên `upstream/main` @ `1fb19157`); bản sửa cho upstream ở nhánh
+`fix/formula-only-error-constants` của fork (chưa gửi lên storytold). Khi upstream có bản sửa, các
+mục dưới đây về lại upstream và bỏ khỏi danh sách.
+
+| File | Lý do | Thay được bằng white-label? |
+|---|---|---|
+| `crates/core/src/value.rs` (thêm) | `Value::stored`: giá trị file lưu cho một lỗi (`#SPILL!`/`#CALC!` → `#VALUE!`, `#CIRC!` → 0), một nguồn sự thật cho bộ ghi XLSX và mô hình | Nên PR upstream (lỗi chung) |
+| `crates/model/src/sheet.rs` | `Sheet::set_cell`: hằng (ô không công thức) giữ lỗi theo `Value::stored`, nên dán giá trị của ô `#SPILL!` hay gõ `#SPILL!` không còn đổi thành `#VALUE!` sau khi lưu và mở lại | Nên PR upstream (lỗi chung) |
+| `crates/xlsx/src/sheet_write.rs` | Bộ ghi dùng `Value::stored` thay bảng ánh xạ riêng | Nên PR upstream (lỗi chung) |
+| `crates/engine/tests/it/main.rs`, `crates/engine/tests/it/spill_error_constant.rs` | Test hồi quy từ chuỗi fuzz đã thu nhỏ (3 lệnh) | Nên PR upstream (lỗi chung) |
