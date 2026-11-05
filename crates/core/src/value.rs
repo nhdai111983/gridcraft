@@ -215,6 +215,30 @@ impl Value {
     pub fn text(s: impl Into<Arc<str>>) -> Value {
         Value::Text(s.into())
     }
+    /// The value as a file caches it. `#SPILL!`, `#CALC!` and the Python errors are not error
+    /// codes of the file formats (Excel refuses a file that caches them, and caches them as
+    /// `#VALUE!` itself); `#CIRC!` is GridCraft's own and is cached as 0, the value Excel shows.
+    /// A formula recalculates to the error again when the file is opened; a constant can't, so a
+    /// constant holds this value from the start.
+    pub fn stored(self) -> Value {
+        match self {
+            Value::Error(e) => match e {
+                CellError::Circ => Value::Number(0.0),
+                CellError::Spill | CellError::Calc | CellError::Python | CellError::Busy | CellError::Timeout | CellError::Blocked => {
+                    Value::Error(CellError::Value)
+                }
+                CellError::Null
+                | CellError::Div0
+                | CellError::Value
+                | CellError::Ref
+                | CellError::Name
+                | CellError::Num
+                | CellError::NA
+                | CellError::GettingData => Value::Error(e),
+            },
+            v => v,
+        }
+    }
     pub fn is_empty(&self) -> bool {
         matches!(self, Value::Empty)
     }
@@ -463,6 +487,21 @@ mod tests {
             assert_eq!(CellError::parse(e.as_str()), Some(e));
         }
         assert_eq!(CellError::parse("#div/0!"), Some(CellError::Div0));
+    }
+
+    #[test]
+    fn stored_errors_are_the_file_format_codes() {
+        for e in CellError::ALL.into_iter().chain([CellError::Circ]) {
+            let stored = Value::Error(e).stored();
+            match e {
+                CellError::Circ => assert_eq!(stored, Value::Number(0.0)),
+                CellError::Spill | CellError::Calc | CellError::Python | CellError::Busy | CellError::Timeout | CellError::Blocked => {
+                    assert_eq!(stored, Value::Error(CellError::Value), "{e}")
+                }
+                _ => assert_eq!(stored, Value::Error(e), "{e}"),
+            }
+        }
+        assert_eq!(Value::text("#SPILL!").stored(), Value::text("#SPILL!"));
     }
 
     #[test]

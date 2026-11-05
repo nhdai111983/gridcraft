@@ -27,6 +27,7 @@ mod row_autofit;
 mod sheet_copy_spill;
 mod sheet_name_quoting;
 mod sparse_clear_invalidation;
+mod spill_error_constant;
 mod stored_list_shape;
 mod table_resize_overlap;
 mod table_total_row_last_row;
