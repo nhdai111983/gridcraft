@@ -408,10 +408,11 @@ pub fn macros_dialog(app: &mut SheetApp, ui: &mut Ui, d: &mut Dialog, open: &mut
     let mut name = d.values.get("name").and_then(Json::as_str).unwrap_or("").to_string();
     let mut kind = if d.values.get("kind").and_then(Json::as_str) == Some("script") { Kind::Script } else { Kind::Macro };
     let t = Tokens::get(ui.ctx());
+    let lang = app.ui.language;
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.set_width(330.0);
-            let label = ui.label("Macro name:");
+            let label = ui.label(lang.tr("Macro name:"));
             if ui.add(egui::TextEdit::singleline(&mut name).desired_width(330.0).id_salt("macro_name")).labelled_by(label.id).changed() {
                 kind = Kind::Macro;
             }
@@ -419,7 +420,7 @@ pub fn macros_dialog(app: &mut SheetApp, ui: &mut Ui, d: &mut Dialog, open: &mut
                 ui.set_min_size(vec2(326.0, 200.0));
                 egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                     if list.is_empty() {
-                        ui.label(egui::RichText::new("This workbook has no scripts or macros.").italics().color(t.text_dim));
+                        ui.label(egui::RichText::new(lang.tr("This workbook has no scripts or macros.")).italics().color(t.text_dim));
                     }
                     for e in &list {
                         let label = match (e.kind, &e.shortcut) {
@@ -447,30 +448,30 @@ pub fn macros_dialog(app: &mut SheetApp, ui: &mut Ui, d: &mut Dialog, open: &mut
             let target = name.trim().to_string();
             let found = list.iter().find(|e| e.kind == kind && e.name.eq_ignore_ascii_case(&target)).cloned();
             let is_macro = found.as_ref().is_some_and(|e| e.kind == Kind::Macro);
-            if ui.add_enabled(found.is_some(), egui::Button::new("Run").min_size(w)).clicked()
+            if ui.add_enabled(found.is_some(), egui::Button::new(lang.tr("Run")).min_size(w)).clicked()
                 && let Some(e) = &found
             {
                 *open = false;
                 run_entry(app, e);
             }
             if ui
-                .add_enabled(is_macro, egui::Button::new("Step Into").min_size(w))
+                .add_enabled(is_macro, egui::Button::new(lang.tr("Step Into")).min_size(w))
                 .on_hover_text("Open the macro in the step editor and stop before its first step")
                 .clicked()
             {
                 *open = false;
                 app.open_dialog("macroEditor", json!({"macro": target, "debug": true}));
             }
-            if ui.add_enabled(is_macro, egui::Button::new("Edit").min_size(w)).clicked() {
+            if ui.add_enabled(is_macro, egui::Button::new(lang.tr("Edit")).min_size(w)).clicked() {
                 *open = false;
                 app.open_dialog("macroEditor", json!({"macro": target}));
             }
             let free = !target.is_empty() && !list.iter().any(|e| e.kind == Kind::Macro && e.name.eq_ignore_ascii_case(&target));
-            if ui.add_enabled(free, egui::Button::new("Create").min_size(w)).on_hover_text("Write a new macro with this name").clicked() {
+            if ui.add_enabled(free, egui::Button::new(lang.tr("Create")).min_size(w)).on_hover_text("Write a new macro with this name").clicked() {
                 *open = false;
                 app.open_dialog("macroEditor", json!({"new": target}));
             }
-            if ui.add_enabled(found.is_some(), egui::Button::new("Delete").min_size(w)).clicked()
+            if ui.add_enabled(found.is_some(), egui::Button::new(lang.tr("Delete")).min_size(w)).clicked()
                 && let Some(e) = &found
             {
                 let (title, command, what) = match e.kind {
@@ -486,7 +487,7 @@ pub fn macros_dialog(app: &mut SheetApp, ui: &mut Ui, d: &mut Dialog, open: &mut
                     choices: vec![("Delete".into(), json!({}))],
                 });
             }
-            if ui.add_enabled(is_macro, egui::Button::new("Options…").min_size(w)).clicked()
+            if ui.add_enabled(is_macro, egui::Button::new(lang.tr("Options…")).min_size(w)).clicked()
                 && let Some(e) = &found
             {
                 let key = e.shortcut.as_deref().and_then(parse_shortcut).map(String::from).unwrap_or_default();
@@ -495,19 +496,20 @@ pub fn macros_dialog(app: &mut SheetApp, ui: &mut Ui, d: &mut Dialog, open: &mut
                 d.values.insert("description".into(), json!(e.description));
             }
             ui.add_space(12.0);
-            if ui.add(egui::Button::new("Cancel").min_size(w)).clicked() {
+            if ui.add(egui::Button::new(lang.tr("Cancel")).min_size(w)).clicked() {
                 *open = false;
             }
         });
     });
     ui.add_space(6.0);
-    ui.label("Description");
+    ui.label(lang.tr("Description"));
     let desc = list.iter().find(|e| e.kind == kind && e.name.eq_ignore_ascii_case(name.trim())).map(|e| e.description.clone()).unwrap_or_default();
     ui.label(egui::RichText::new(if desc.is_empty() { " ".to_string() } else { desc }).color(t.text_dim));
     if vba {
         ui.add_space(6.0);
         ui.label(
-            egui::RichText::new("This workbook also has a VBA project. Nexus Sheet keeps it when you save but does not run it.").color(t.text_dim),
+            egui::RichText::new(lang.tr("This workbook also has a VBA project. Nexus Sheet keeps it when you save but does not run it."))
+                .color(t.text_dim),
         );
     }
     d.values.insert("name".into(), json!(name));

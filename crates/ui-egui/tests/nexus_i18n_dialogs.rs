@@ -68,6 +68,8 @@ const KEEP: &[&str] = &[
     "GRG",
     "Anova",
     "Pareto",
+    "Bernoulli",
+    "Poisson",
     "Kth",
     "nexus",
     "sheet",
@@ -281,8 +283,8 @@ fn data_tab_is_vietnamese() {
     // The strip's own words, as `small_button` translates them.
     assert_eq!(Language::Vi.tr("Advanced"), "Nâng cao");
     assert_eq!(Language::Vi.tr("Settings"), "Thiết lập");
-    // A small button's accessible name is its tooltip ("Advanced Filter", "Outline Settings").
-    for want in ["Lọc nâng cao", "Thiết lập phân cấp"] {
+    // Upstream (2026-11-05): a labelled small button reports its label to accessibility.
+    for want in ["Nâng cao", "Thiết lập"] {
         assert!(shown.contains(want), "{want} missing: {shown:?}");
     }
     let bad: Vec<&String> = shown.difference(&base).filter(|l| english(l)).collect();

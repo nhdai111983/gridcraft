@@ -563,7 +563,7 @@ pub(super) fn solver(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, conf
     );
     ui.add_space(4.0);
     ui.horizontal(|ui| {
-        if ui.button("Reset All").clicked() && at_home(app, d) {
+        if ui.button(t(ui, "Reset All")).clicked() && at_home(app, d) {
             match app.run("data.solverReset", json!({})) {
                 Ok(_) => {
                     for (k, v) in [
@@ -591,10 +591,10 @@ pub(super) fn solver(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, conf
         let shown = d.values.get("modelArea").and_then(Json::as_bool).unwrap_or(false);
         // Hiding the area ends picking into Model Range, as a box that is not drawn is no longer
         // picked into (`ref_edit::window_shown`).
-        if ui.selectable_label(shown, "Load/Save").clicked() {
+        if ui.selectable_label(shown, t(ui, "Load/Save")).clicked() {
             d.values.insert("modelArea".into(), json!(!shown));
         }
-        if ui.button("Options").clicked() {
+        if ui.button(t(ui, "Options")).clicked() {
             open_solver_options(d);
         }
     });
