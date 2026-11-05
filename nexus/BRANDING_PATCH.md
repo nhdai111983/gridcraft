@@ -51,7 +51,7 @@ Cơ chế chính:
 | `crates/ui-egui/src/updates_ui.rs` | Tiêu đề thông báo = `nexus::APP_NAME`; **`start()` không kiểm tra bản phát hành**: không gọi mạng tới `storytold/gridcraft`, không tự cập nhật thành GridCraft; Help ▸ Check for Updates… hiện `nexus::updates_text` (cập nhật qua NexusOffice) | Có — tắt updater qua biến build |
 | `crates/ui-egui/src/dialogs/about.rs` | Tab About → `nexus::about_ui` (bỏ "Part of ArtCraft", link getartcraft/Discord) | Có |
 | `crates/ui-egui/src/dialogs/show.rs` | Hộp Agent Control ghi Nexus Sheet, lệnh `nexus-sheet`/`nexus-sheet-cli` | Có |
-| `crates/ui-egui/src/dialogs/macros.rs` | Hộp Macros ghi Nexus Sheet | Có |
+| ~~`crates/ui-egui/src/dialogs/macros.rs`~~ | Đồng bộ 2026-11-05: upstream xoá file (hộp Macros mới ở `macro_ui.rs`), patch bỏ theo; câu VBA của `macro_ui.rs` ghi Nexus Sheet | — |
 | `crates/ui-egui/src/backstage.rs` | Tiêu đề hộp thoại lỗi = `nexus::APP_NAME` (4 chỗ); tên sản phẩm ở File › Account = `nexus::APP_NAME` | Có — `APP_NAME` |
 | `crates/ui-egui/src/backstage/options.rs` | Tiêu đề thông báo = `nexus::APP_NAME` | Có — `APP_NAME` |
 | `crates/ui-egui/src/formula_bar.rs` | Tiêu đề hộp thoại lỗi = `nexus::APP_NAME` | Có — `APP_NAME` |
@@ -247,6 +247,19 @@ craft-print) chỉ là nguồn build (T5/§4.8 mirror), không phải gọi mạ
 - Trình cập nhật mới của upstream (`craft-update`, kiểm tra lúc mở app và tự cập nhật từ `storytold/gridcraft`)
   bị tắt trong `updates_ui::start` (xem bảng trên).
 - `sonarcloud.yml` mới của upstream bị chặn trên fork (xem "File khác").
+
+## Đồng bộ upstream 2026-11-05
+
+- 749 commit upstream (`1fb19157`). egui/winit giữ rev `6d518fc7`/`a517b384`.
+- Upstream mới: ô Python (chỉ mô hình và định dạng tệp, không có trình chạy Python trong bản build, không gọi mạng), ghi/sửa/chạy macro (`macro_ui.rs`, `macro_editor.rs`), điều khiển biểu mẫu (nút, thanh trượt, nút xoay), hộp chọn vùng (ref-edit), sách hàm theo màu ở Công thức, bảng dữ liệu biểu đồ, nhập SYLK, CSV nhận thứ tự ngày theo cột.
+- Ribbon: các thẻ Tự động hoá, Công thức, Chèn/Vẽ dựng lại từ bản upstream rồi bọc vào nhóm Nexus (`group`/`stack` cho dải WPS); nhóm mới "Macros", "Form Controls", "Symbols".
+- Đổi tên tại nguồn trong file upstream mới/đổi: `cmd/macros.rs`, `cmd/sheet.rs`, `io/sylk.rs`, `macros/mod.rs`, `model/src/macros.rs`, `app/editing.rs`, `grid/interact.rs`, `macro_ui.rs` (+ test `tests.rs`, `cmd/solver/tests.rs`).
+- Lỗi có sẵn trên `nexus` đã sửa: `build_params` (dời sang `dialogs/show.rs` ở đợt trước) mất đổi cm → inch của Thiết lập trang vùng vi-VN và "tự động" của Dự báo; tiêu đề cột bảng mới "Cột1" mất vì upstream gộp `cmd/insert/table.rs` vào `cmd/insert.rs` (file cũ không còn được biên dịch).
+- `selected_chart` thành `selected_object` của upstream (WPS, menu đối tượng, kittest Nexus). Giá trị lỗi Python lưu thành #VALUE! (`Value::stored`). CSV: ô không phải ngày đọc theo vùng (`read_field`).
+- `Sheet::set_cell` (model): giữ ô Python khi giá trị khác rỗng (`cell.py.is_none()`), sửa 5 test Python của engine sau khi gộp.
+- vi: 44 nhãn mới (Thứ tự trang, công cụ Analysis ToolPak mới và các trường của chúng, hộp Macro, Solver, Chèn hàm, tuỳ chọn Sửa). Hộp Macro (`macro_ui.rs`) và nút Solver "Reset All"/"Load/Save"/"Options" (`dialogs/analysis.rs`) của upstream vẽ chữ tiếng Anh cố định, nay qua `tr`. "Bernoulli"/"Poisson" là tên riêng, thêm vào `KEEP` của test. Test `data_tab_is_vietnamese` theo upstream: nút nhỏ báo nhãn ("Nâng cao", "Thiết lập") cho trợ năng.
+- Biểu đồ: vành khuyên (`render/kinds.rs`) và bảng dữ liệu biểu đồ mới (`render/table.rs`) của upstream định dạng số kiểu Mỹ (`1,234.50`); nay theo vùng của sổ (`Fmt::new_in`, `1.234,50`). Test `nexus_locale` bật bảng dữ liệu cho mọi loại biểu đồ (đã thấy đỏ khi bỏ sửa).
+- Số patch (`nexus-tools patch-count`): trước 183 (branding 75, other 108, so với merge-base `146161b4`), sau 192 (branding 74, other 118). Ngân sách 200.
 
 ## Việc còn nợ (đã allowlist có lý do, hoặc không bị brand-check bắt)
 - Đề xuất PR upstream (white-label): hằng `APP_NAME`/`SETTINGS_DIR`/`APP_ID` lấy từ biến build
