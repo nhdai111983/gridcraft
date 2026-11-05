@@ -543,9 +543,9 @@ fn paint_with(p: &Painter, rect: Rect, icon: Icon, c: Color32, pal: &Palette) {
             g.line(&[(12.0, 4.0), (4.0, 12.0)], c, 1.3);
         }
         Icon::Hamburger => {
-            for y in [4.5, 8.0, 11.5] {
-                g.line(&[(2.5, y), (13.5, y)], c, 1.3);
-            }
+            g.line(&[(2.5, 4.5), (13.5, 4.5)], c, 1.3);
+            g.line(&[(2.5, 8.0), (13.5, 8.0)], c, 1.3);
+            g.line(&[(2.5, 11.5), (13.5, 11.5)], c, 1.3);
         }
         Icon::ChevronDoubleRight => {
             g.line(&[(3.5, 4.0), (7.5, 8.0), (3.5, 12.0)], c, 1.2);

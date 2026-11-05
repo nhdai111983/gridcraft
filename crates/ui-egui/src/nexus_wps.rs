@@ -818,7 +818,8 @@ mod tests {
             let mut h = harness(size, crate::i18n::Language::Vi, session(Some("sales")), |a| {
                 // Inside the sample's table, with its first chart selected.
                 a.run("selection.set", serde_json::json!({"range": "B5"})).unwrap();
-                a.selected_chart = a.session.active().and_then(|d| d.wb.active()).and_then(|sh| sh.charts.first()).map(|c| c.id);
+                let first = a.session.active().and_then(|d| d.wb.active()).and_then(|sh| sh.charts.first()).map(|c| c.id);
+                a.select_object_id(first);
             });
             let tabs = crate::ribbon::shown_tabs(h.state());
             assert!(tabs.contains(&"Table Design") && tabs.contains(&"Chart Design"), "{tabs:?}");

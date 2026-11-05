@@ -323,7 +323,7 @@ fn right_click_on_a_chart_opens_the_chart_menu() {
     let mut h = harness();
     h.state_mut().session.execute("selection.set", json!({"range": "A1:B5"})).unwrap();
     h.state_mut().session.execute("insert.chart", json!({"type": "column"})).unwrap();
-    h.state_mut().selected_chart = None;
+    h.state_mut().selected_object = None;
     assert!(h.state().dialog.is_none());
     h.run_steps(4);
     // A point on the chart.
@@ -336,7 +336,7 @@ fn right_click_on_a_chart_opens_the_chart_menu() {
         'scan: for i in 1..40 {
             for j in 1..40 {
                 let p = egui::pos2(r.left() + r.width() * i as f32 / 40.0, r.top() + r.height() * j as f32 / 40.0);
-                if gridcraft_ui_egui::chartview::hit(app, &geo, sh, p).is_some_and(|(kind, ..)| kind == "chart") {
+                if gridcraft_ui_egui::chartview::hit(app, &geo, sh, p).is_some_and(|(o, ..)| o.kind == gridcraft_engine::model::ObjKind::Chart) {
                     found = Some(p);
                     break 'scan;
                 }
@@ -354,11 +354,11 @@ fn right_click_on_a_chart_opens_the_chart_menu() {
             added.iter().any(|l| l.as_str() == want),
             "{want} missing: {added:?}; at {at:?}; cell menu {:?}; chart {:?}",
             h.state().grid.context_menu,
-            h.state().selected_chart
+            h.state().selected_chart()
         );
     }
     assert!(h.state().grid.context_menu.is_none(), "not the cell menu");
-    assert!(h.state().selected_chart.is_some(), "the chart is selected");
+    assert!(h.state().selected_chart().is_some(), "the chart is selected");
     // Delete from the menu removes the chart.
     let deletes = h.query_all_by_label("Xóa").count();
     assert!(deletes >= 2, "the menu has its own Xóa beside the ribbon's");

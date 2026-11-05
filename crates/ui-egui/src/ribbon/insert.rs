@@ -276,8 +276,8 @@ pub(super) fn insert(app: &mut SheetApp, ui: &mut Ui) {
 }
 
 pub(super) fn draw(app: &mut SheetApp, ui: &mut Ui) {
+    let tool = app.session.draw_tool.clone();
     group(ui, app, "Tools", |ui, app| {
-        let tool = app.session.draw_tool.clone();
         let __k = big_button(ui, Icon::Shapes, "Select\nObjects", "Select and move ink and shapes", false);
         control_keytip(app, ui, &__k, "draw.lasso");
         if __k.clicked() {

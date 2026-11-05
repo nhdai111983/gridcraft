@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use gridcraft_core::date::{days_in_month_in, serial_from_ymd};
-use gridcraft_core::parse::{Parsed, parse_input_in};
+use gridcraft_core::parse::{Parsed, parse_input, parse_input_in};
 use gridcraft_core::{CellRef, DateSystem, MAX_COLS, MAX_ROWS, Value, col_to_letters};
 use gridcraft_model::{Cell, NumFmt, Sheet, StyleId, Workbook};
 
