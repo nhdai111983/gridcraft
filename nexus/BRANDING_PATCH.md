@@ -285,3 +285,17 @@ craft-print) chỉ là nguồn build (T5/§4.8 mirror), không phải gọi mạ
 | `crates/ui-egui/src/nexus_wps.rs` (test) | Test bấm Hoàn tác/Làm lại/Lưu theo nhãn đã đổi ký hiệu phím | — |
 | `crates/ui-egui/tests/nexus_i18n_dialogs.rs` | File mới: mở mọi hộp thoại bằng tiếng Việt và báo nhãn tiếng Anh còn sót; thanh trạng thái; menu thẻ; menu biểu đồ; tab Dữ liệu (`data_tab_is_vietnamese`, 03/11) | — (file mới) |
 | `crates/ui-egui/src/grid/quadrant.rs` (Henry 03/11) | Căn giữa theo chiều dọc: căn hộp chữ từ ascent tới descent, không tính khoảng cách dòng (line gap) egui thêm dưới chữ (`nexus::line_gap`, file của fork); Calibri có line gap 0,22 em nên chữ căn giữa trước đây nằm cao | Có - hook "chiều cao chữ để căn dọc" |
+
+## Soát 05/11: fuzz seed 98 (vùng tràn chồng nhau) và seed 7 (ngân sách undo) (nhánh `nx/review-1105-fuzz-spill-order`)
+
+Lỗi chung của upstream (có trên `upstream/main` @ `1fb19157`); bản sửa cho upstream ở nhánh
+`fix/spill-collision-order-independent` của fork (chưa gửi lên storytold). Khi upstream có bản sửa,
+các mục dưới đây về lại upstream và bỏ khỏi danh sách.
+
+| File | Lý do | Thay được bằng white-label? |
+|---|---|---|
+| `crates/calc/src/recalc.rs` | Hai vùng tràn chồng nhau: ô neo đứng trước theo thứ tự hàng (như tính lại toàn bộ) được tràn, ô sau `#SPILL!`, dù công thức nào được nhập hay tính trước (`spills_to_take`, `lays_out_first`); xoá công thức tràn cũng tính lại các ô `#SPILL!` có vùng chạm vùng tràn vừa mất | Nên PR upstream (lỗi chung) |
+| `crates/calc/src/recalc/pass_host.rs` | `spill_blocked`: chỉ vùng tràn của ô neo đứng trước mới chặn | Nên PR upstream (lỗi chung) |
+| `crates/engine/tests/it/main.rs`, `crates/engine/tests/it/spill_collision_order.rs` | Test hồi quy (seed 98 thu gọn và cặp D1/C3 theo cả hai thứ tự nhập) | Nên PR upstream (lỗi chung) |
+| `crates/engine/src/lib.rs` (thêm) | `UNDO_BYTES_LIMIT` thành `pub` để bộ fuzz kiểm việc cắt lịch sử | Nên PR upstream (lỗi chung) |
+| `crates/engine/tests/it/command_sequence_fuzz.rs` (thêm) | Bộ fuzz biết lịch sử undo bị cắt theo ngân sách byte: hoàn tác hết về trạng thái trước bước cũ nhất còn giữ, và chỉ chấp nhận cắt khi lịch sử vượt ngân sách | Nên PR upstream (lỗi chung) |

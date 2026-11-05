@@ -101,8 +101,12 @@ impl<'a> PassHost<'a> {
 }
 
 /// Whether an array result at `k` can't spill: it is in a table, or its area runs off the sheet,
-/// overlaps merged cells, holds other cells, or another formula's spill (unless that formula is
-/// recalculated in this pass, and so may spill elsewhere now).
+/// overlaps merged cells, holds other cells, or the spill of a formula before it in row-major
+/// order (unless that formula is recalculated in this pass, and so may spill elsewhere now).
+///
+/// When two spill areas collide, the anchor first in row-major order spills and the other is
+/// `#SPILL!`, as a full recalculation lays them out: the spill of a later anchor doesn't block
+/// this one, which takes the area from it when the results are written (`write_back`).
 fn spill_blocked(host: &PassHost<'_>, (sheet, anchor): Key, a: &Array) -> bool {
     let Some(sh) = host.wb.sheet(sheet) else { return false };
     let end =
@@ -111,7 +115,10 @@ fn spill_blocked(host: &PassHost<'_>, (sheet, anchor): Key, a: &Array) -> bool {
     let own = sh.spill_ranges.get(&anchor);
     let spilled_over = |c: CellRef| {
         !own.is_some_and(|o| o.contains(c))
-            && sh.spill_ranges.iter().any(|(o, r)| *o != anchor && r.contains(c) && !host.exprs.contains_key(&(sheet, *o)))
+            && sh.spill_ranges.iter().any(|(o, r)| {
+                // A formula recalculated in this pass lays its array out again.
+                *o != anchor && r.contains(c) && super::lays_out_first(*o, anchor) && !host.exprs.contains_key(&(sheet, *o))
+            })
     };
     end.row >= gridcraft_core::MAX_ROWS
         || end.col >= gridcraft_core::MAX_COLS

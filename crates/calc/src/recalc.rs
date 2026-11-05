@@ -262,6 +262,14 @@ impl Calc {
                 }
             }
         }
+        // So does a spill area that went with its formula: an anchor whose area overlapped it is
+        // above or to the left of its end.
+        for &(si, r) in &cleared {
+            match emptied.iter_mut().find(|x| x.0 == si) {
+                Some(x) => x.1 = CellRef::new(x.1.row.max(r.end.row), x.1.col.max(r.end.col)),
+                None => emptied.push((si, r.end)),
+            }
+        }
         // An emptied cell can unblock an anchor any distance above or to the left of it.
         for (si, end) in emptied {
             for &(s, c) in self.graph.nodes.keys() {
@@ -436,6 +444,27 @@ impl Calc {
             if let Some(array) = new {
                 let end = CellRef::new(key.1.row.saturating_add(array.rows as u32 - 1), key.1.col.saturating_add(array.cols as u32 - 1));
                 let range = RangeRef::new(key.1, end);
+                // Spills of anchors after this one in row-major order give way to it, as in a
+                // full recalculation, which lays the arrays out in that order.
+                let taken = spills_to_take(sheet, key.1, range, end);
+                for (anchor, previous) in &taken {
+                    if previous.count() <= sheet.spill.len() as u64 {
+                        for cell in previous.iter() {
+                            sheet.spill.remove(&cell);
+                        }
+                    } else {
+                        sheet.spill.retain(|cell, _| !previous.contains(*cell));
+                    }
+                    sheet.spill_ranges.remove(anchor);
+                    if let Some(cell) = sheet.cells.get_mut(*anchor) {
+                        cell.value = Value::Error(CellError::Spill);
+                    }
+                    let mut dependents = Vec::new();
+                    self.graph.dependents_of_range(key.0, *previous, &mut dependents);
+                    spill_changes.extend(dependents.into_iter().filter(|dependent| dependent != key));
+                    // The part of its area this array doesn't cover may unblock another anchor.
+                    freed.push((key.0, *previous));
+                }
                 let blocked = spill_is_blocked(sheet, key.1, range, end);
                 if blocked {
                     if let Some(cell) = sheet.cells.get_mut(key.1) {
@@ -477,6 +506,38 @@ impl Calc {
         }
         spill_changes
     }
+}
+
+/// Whether the anchor at `first` lays its array out before the one at `other` when both are
+/// recalculated: row-major order, the order a full recalculation evaluates and writes them in.
+pub(crate) fn lays_out_first(first: CellRef, other: CellRef) -> bool {
+    first < other
+}
+
+/// The spills (anchor, area) of anchors after `anchor` in row-major order that an array over
+/// `range` takes the area from: those it overlaps, provided nothing else blocks it. Empty when the
+/// array is blocked anyway, or collides with no later spill.
+fn spills_to_take(sheet: &gridcraft_model::Sheet, anchor: CellRef, range: RangeRef, end: CellRef) -> Vec<(CellRef, RangeRef)> {
+    if !sheet.spill.range(range.start..=range.end).any(|(c, _)| range.contains(*c)) {
+        return Vec::new();
+    }
+    let later: Vec<(CellRef, RangeRef)> = sheet
+        .spill_ranges
+        .range((std::ops::Bound::Excluded(anchor), std::ops::Bound::Unbounded))
+        .filter(|(o, r)| lays_out_first(anchor, **o) && r.intersects(&range))
+        .map(|(o, r)| (*o, *r))
+        .collect();
+    if later.is_empty() {
+        return Vec::new();
+    }
+    let free = end.row < gridcraft_core::MAX_ROWS
+        && end.col < gridcraft_core::MAX_COLS
+        && !sheet.merges.iter().any(|merge| merge.intersects(&range))
+        && !sheet.tables.iter().any(|table| table.range.contains(anchor))
+        && !range.iter().any(|cell| {
+            cell != anchor && (sheet.cells.has(cell) || (sheet.spill.contains_key(&cell) && !later.iter().any(|(_, r)| r.contains(cell))))
+        });
+    if free { later } else { Vec::new() }
 }
 
 fn spill_is_blocked(sheet: &gridcraft_model::Sheet, anchor: CellRef, range: RangeRef, end: CellRef) -> bool {
