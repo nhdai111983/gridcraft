@@ -190,3 +190,8 @@ reason = "Chính sách cài đặt hai phạm vi (per-user/per-machine) của MS
 path = "{Cargo.toml,Cargo.lock}"
 pattern = 'github\.com/storytold/(egui|winit)\.git'
 reason = "Nguồn build: upstream ghim cả họ egui 0.37 và winit vào fork storytold đã duyệt ([patch.crates-io]); không gọi mạng lúc chạy, người dùng không thấy. Bộ NexusOffice phải ghim cùng commit"
+
+[[allow]]
+path = ".github/workflows/{nexus-ci.yml,nexus-release.yml}"
+pattern = 'github\.com/storytold/craft-i18n'
+reason = "Bản dịch giao diện (cả tiếng Việt) upstream chuyển ra storytold/craft-i18n (đầu vào build CRAFT_I18N_DIR, ghim ở craft-i18n.rev); workflow lấy về lúc build, không phát hành URL. Giống mục của wordcraft"
