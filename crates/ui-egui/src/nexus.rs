@@ -78,33 +78,83 @@ pub fn about_ui(ui: &mut egui::Ui, language: Language) {
 /// Henry, 03/11: Middle-aligned cell text sat high (Calibri's line gap is 0.22 em), because the
 /// whole row was centred, not the letters. Excel centres the ascent-to-descent box; leaving the
 /// gap out of the height does the same. 0 when the family or its face isn't known.
+///
+/// The grid asks for every Middle cell every frame, so the answer per family is kept in the
+/// context's memory ([`GapCache`]) for the pass: one font lookup per family and pass, no lock on
+/// the fonts and no allocation per cell. Fonts only change between passes (`set_fonts` takes
+/// effect when the next pass begins, or at once while no text has been laid out yet, and the grid
+/// asks only after laying the cell's text out), so a new pass starts the cache afresh.
 pub(crate) fn line_gap(ctx: &egui::Context, font_id: &egui::FontId) -> f32 {
-    use skrifa::MetadataProvider as _;
-    use std::collections::HashMap;
-    use std::sync::{Mutex, PoisonError};
-    /// The line gap per face name, as a fraction of the em.
-    static GAP_EM: Mutex<Option<HashMap<String, f32>>> = Mutex::new(None);
-    let face = ctx.fonts(|f| {
-        let defs = f.definitions();
-        let name = defs.families.get(&font_id.family)?.first()?.clone();
-        let data = defs.font_data.get(&name)?.clone();
-        Some((name, data))
-    });
-    let Some((name, data)) = face else { return 0.0 };
-    let mut cache = GAP_EM.lock().unwrap_or_else(PoisonError::into_inner);
-    let gaps = cache.get_or_insert_with(HashMap::new);
-    let em = *gaps.entry(name).or_insert_with(|| {
-        skrifa::FontRef::from_index(data.bytes(), data.index)
-            .ok()
-            .map(|font| {
-                let m = font.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
-                let upem = f32::from(m.units_per_em.max(1));
-                (m.leading / upem).clamp(0.0, 1.0)
-            })
-            .unwrap_or(0.0)
+    use std::sync::{Arc, Mutex, PoisonError};
+    let pass = ctx.cumulative_pass_nr();
+    let id = egui::Id::unique("nexus::line_gap");
+    let cache = match ctx.data(|d| d.get_temp::<Arc<Mutex<GapCache>>>(id)) {
+        Some(cache) => cache,
+        None => {
+            let cache = Arc::new(Mutex::new(GapCache::default()));
+            ctx.data_mut(|d| d.insert_temp(id, cache.clone()));
+            cache
+        }
+    };
+    let known = {
+        let mut c = cache.lock().unwrap_or_else(PoisonError::into_inner);
+        if c.pass != Some(pass) {
+            c.pass = Some(pass);
+            c.em.clear();
+        }
+        c.em.get(&font_id.family).copied()
+    };
+    // Looked up outside the cache's lock: `ctx.fonts` takes the context's own lock.
+    let em = known.unwrap_or_else(|| {
+        let em = face_gap_em(ctx, &font_id.family);
+        let mut c = cache.lock().unwrap_or_else(PoisonError::into_inner);
+        if c.pass == Some(pass) && c.em.len() < GapCache::MAX_FAMILIES {
+            c.em.insert(font_id.family.clone(), em);
+        }
+        em
     });
     let gap = em * font_id.size;
     if gap.is_finite() { gap.max(0.0) } else { 0.0 }
+}
+
+/// [`line_gap`]'s answers for one pass of one context: the line gap per family, as a fraction of
+/// the em.
+#[derive(Default)]
+struct GapCache {
+    pass: Option<u64>,
+    em: std::collections::HashMap<egui::FontFamily, f32>,
+}
+
+impl GapCache {
+    /// Families kept per pass; a sheet uses a handful, so this only bounds hostile workbooks.
+    const MAX_FAMILIES: usize = 256;
+}
+
+/// Face lookups [`line_gap`] made (tests count them).
+#[cfg(test)]
+static FACE_LOOKUPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// The line gap of `family`'s first face as a fraction of its em, 0 when unknown.
+fn face_gap_em(ctx: &egui::Context, family: &egui::FontFamily) -> f32 {
+    use skrifa::MetadataProvider as _;
+    #[cfg(test)]
+    FACE_LOOKUPS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let Some(data) = ctx.fonts(|f| {
+        let defs = f.definitions();
+        let name = defs.families.get(family)?.first()?;
+        defs.font_data.get(name).cloned()
+    }) else {
+        return 0.0;
+    };
+    skrifa::FontRef::from_index(data.bytes(), data.index)
+        .ok()
+        .map(|font| {
+            let m = font.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
+            let upem = f32::from(m.units_per_em.max(1));
+            let em = m.leading / upem;
+            if em.is_finite() { em.clamp(0.0, 1.0) } else { 0.0 }
+        })
+        .unwrap_or(0.0)
 }
 
 #[cfg(test)]
@@ -133,6 +183,40 @@ mod tests {
         }
         assert!(at("ubuntu") > 0.0, "Ubuntu has a line gap (Calibri's is 0.22 em)");
         assert_eq!(at("no such family"), 0.0);
+    }
+
+    /// Review 05/11 (P3): the grid asks for every Middle cell every frame, so the face is looked up
+    /// once per family and pass, and a new pass sees fonts that changed since (`set_fonts`).
+    #[test]
+    fn line_gap_looks_a_face_up_once_a_pass_and_follows_new_fonts() {
+        use std::sync::atomic::Ordering;
+        let fonts = |bytes: &'static [u8]| {
+            let mut defs = egui::FontDefinitions::empty();
+            defs.font_data.insert("face".into(), std::sync::Arc::new(egui::FontData::from_static(bytes)));
+            defs.families.insert(egui::FontFamily::Name("cell".into()), vec!["face".into()]);
+            defs
+        };
+        let ctx = egui::Context::default();
+        ctx.set_fonts(fonts(epaint_default_fonts::HACK_REGULAR));
+        let font = egui::FontId::new(20.0, egui::FontFamily::Name("cell".into()));
+        let mut gaps = Vec::new();
+        let mut lookups = 0;
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            let before = FACE_LOOKUPS.load(Ordering::Relaxed);
+            for _ in 0..500 {
+                gaps.push(line_gap(ui.ctx(), &font));
+            }
+            lookups = FACE_LOOKUPS.load(Ordering::Relaxed) - before;
+        });
+        out.textures_delta.clear();
+        // Other tests may look faces up meanwhile; 500 cells must not mean 500 lookups.
+        assert!(lookups < 50, "{lookups} face lookups for 500 cells in one pass");
+        assert!(gaps.iter().all(|g| *g == 0.0), "Hack has no line gap");
+        ctx.set_fonts(fonts(epaint_default_fonts::UBUNTU_LIGHT));
+        let mut after = 0.0;
+        let mut out = ctx.run_ui(Default::default(), |ui| after = line_gap(ui.ctx(), &font));
+        out.textures_delta.clear();
+        assert!(after > 0.0, "the new face's gap, not the cached one");
     }
 
     #[test]

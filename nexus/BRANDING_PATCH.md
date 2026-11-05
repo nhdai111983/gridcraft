@@ -155,7 +155,10 @@ Sinh bằng `python3 -c "import uuid; print(uuid.uuid4())"` ngày 2026-10-16.
 `packaging/linux/vn.sonnytech.nexus.sheets.desktop`,
 `packaging/linux/vn.sonnytech.nexus.sheets.metainfo.xml.in` (MIME dùng lại file upstream
 `ai.storyteller.gridcraft.mime.xml`, cài dưới tên APP_ID), `nexus/assets/*` (logo tạm
-`nexus-sheet.svg` + PNG/ICO/ICNS/hicolor sinh bằng `nexus/assets/render-icons.py`).
+`nexus-sheet.svg` + PNG/ICO/ICNS/hicolor sinh bằng `nexus/assets/render-icons.py`),
+`crates/ui-egui/tests/nexus_cell_middle.rs` (soát 05/11: chữ căn giữa nằm giữa ô theo ascent/descent
+của mặt chữ, đỏ khi bỏ phần sửa ở `grid/quadrant.rs`; `nexus::line_gap` giữ kết quả theo họ phông
+trong bộ nhớ của context cho mỗi pass, không khoá `ctx.fonts` và không cấp phát cho mỗi ô).
 
 ## File khác
 
@@ -280,9 +283,8 @@ craft-print) chỉ là nguồn build (T5/§4.8 mirror), không phải gọi mạ
 | `crates/ui-egui/src/i18n/brand.rs` (thêm) | QC-SHT-14: ngoài macOS, ký hiệu phím Mac trong nhãn thành tên phím (`⌘S` → `Ctrl+S`, `⇧` → `Shift+`) | Có — theo nền tảng |
 | `crates/ui-egui/src/i18n/vi.rs` (thêm) | ~430 nhãn mới cho các chỗ trên, gồm mọi nhãn lệnh và nhóm của registry engine (Tìm lệnh, menu thanh công cụ) và 6 thông báo kết quả Solver; khoá ngữ cảnh `Scope\|Workbook`, `Seasonality\|auto`, `Footer\|…`, `Pane\|Selection`, `Table Styles\|…` | — (file của fork) |
 | `crates/ui-egui/src/nexus_wps.rs` (test) | Test bấm Hoàn tác/Làm lại/Lưu theo nhãn đã đổi ký hiệu phím | — |
-| `crates/ui-egui/tests/nexus_i18n_dialogs.rs` | File mới: mở mọi hộp thoại bằng tiếng Việt và báo nhãn tiếng Anh còn sót; thanh trạng thái; menu thẻ; menu biểu đồ | — (file mới) |
+| `crates/ui-egui/tests/nexus_i18n_dialogs.rs` | File mới: mở mọi hộp thoại bằng tiếng Việt và báo nhãn tiếng Anh còn sót; thanh trạng thái; menu thẻ; menu biểu đồ; tab Dữ liệu (`data_tab_is_vietnamese`, 03/11) | — (file mới) |
 | `crates/ui-egui/src/grid/quadrant.rs` (Henry 03/11) | Căn giữa theo chiều dọc: căn hộp chữ từ ascent tới descent, không tính khoảng cách dòng (line gap) egui thêm dưới chữ (`nexus::line_gap`, file của fork); Calibri có line gap 0,22 em nên chữ căn giữa trước đây nằm cao | Có - hook "chiều cao chữ để căn dọc" |
-| `crates/ui-egui/tests/nexus_i18n_dialogs.rs` | File mới: mở mọi hộp thoại bằng tiếng Việt và báo nhãn tiếng Anh còn sót; thanh trạng thái; menu thẻ; menu biểu đồ | — (file mới) |
 
 ## Soát 05/11: fuzz hằng tuần trượt seed 79 (nhánh `nx/review-1105-fuzz-spill-constant`)
 
