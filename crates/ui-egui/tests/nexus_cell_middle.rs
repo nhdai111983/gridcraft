@@ -21,11 +21,21 @@ use skrifa::MetadataProvider as _;
 const TEXT: &str = "Middle";
 
 fn harness(align: &str) -> common::Harness {
+    harness_text(align, TEXT, false)
+}
+
+/// The cell B2 with `text`, 48 pt, in a row 120 pt high (260 pt when `wrap`, with Wrap Text on and a column wide enough for a line),
+/// aligned by the command `align`.
+fn harness_text(align: &str, text: &str, wrap: bool) -> common::Harness {
     let mut s = Session::new();
     s.new_workbook();
-    s.execute("cell.set", json!({"cell": "B2", "input": TEXT})).unwrap();
+    s.execute("cell.set", json!({"cell": "B2", "input": text})).unwrap();
     s.execute("home.fontSize", json!({"range": "B2", "size": 48})).unwrap();
-    s.execute("home.rowHeight", json!({"rows": "2:2", "height": 120})).unwrap();
+    s.execute("home.rowHeight", json!({"rows": "2:2", "height": if wrap { 260 } else { 120 }})).unwrap();
+    if wrap {
+        s.execute("home.columnWidth", json!({"cols": "B:B", "width": 200})).unwrap();
+        s.execute("home.wrapText", json!({"range": "B2"})).unwrap();
+    }
     s.execute(align, json!({"range": "B2"})).unwrap();
     s.execute("selection.set", json!({"range": "D8"})).unwrap();
     let mut h = common::harness_with(common::builder().with_size(egui::vec2(1200.0, 800.0)), common::app(s), 6);
@@ -71,18 +81,27 @@ fn cell_rect(h: &common::Harness, cell: &str) -> egui::Rect {
 /// Where the letters of the painted `TEXT` are, top and bottom (the face's ascent and descent
 /// about the baseline), and the face's line gap, all in points.
 fn letters(h: &common::Harness) -> (f32, f32, f32) {
+    letters_of(h, TEXT).0
+}
+
+/// [`letters`] of the painted `text`, and how many lines it took.
+fn letters_of(h: &common::Harness, text: &str) -> ((f32, f32, f32), usize) {
     let text = h
         .output()
         .shapes
         .iter()
         .find_map(|c| match &c.shape {
-            Shape::Text(t) if t.galley.job.text == TEXT => Some(t.clone()),
+            Shape::Text(t) if t.galley.job.text == text => Some(t.clone()),
             _ => None,
         })
         .expect("the cell's text is painted");
-    let row = &text.galley.rows[0];
-    let glyph = row.glyphs.first().expect("a glyph");
-    let baseline = text.pos.y + row.pos.y + glyph.pos.y;
+    let baseline_of = |i: usize| {
+        let row = &text.galley.rows[i];
+        let glyph = row.glyphs.first().expect("a glyph");
+        text.pos.y + row.pos.y + glyph.pos.y
+    };
+    let lines = text.galley.rows.len();
+    let (first, last) = (baseline_of(0), baseline_of(lines - 1));
     let font = &text.galley.job.sections[0].format.font_id;
     let data = h
         .ctx
@@ -94,7 +113,7 @@ fn letters(h: &common::Harness) -> (f32, f32, f32) {
         .expect("the cell font's face");
     let face = skrifa::FontRef::from_index(data.bytes(), data.index).unwrap();
     let m = face.metrics(skrifa::instance::Size::new(font.size), skrifa::instance::LocationRef::default());
-    (baseline - m.ascent, baseline - m.descent, m.leading)
+    ((first - m.ascent, last - m.descent, m.leading), lines)
 }
 
 #[test]
@@ -121,5 +140,35 @@ fn top_and_bottom_still_hug_their_edge() {
     let (_, bottom, gap) = letters(&h);
     let rect = cell_rect(&h, "B2");
     // Bottom keeps the row's gap under the letters, as before.
+    assert!(bottom <= rect.bottom() && bottom > rect.bottom() - gap - 4.0, "Bottom: letters end at {bottom} in a cell to {}", rect.bottom());
+}
+
+/// Wrapped text of several lines sits in the middle of the cell as a block: from the first line's
+/// ascent to the last line's descent, with only the lines' gaps between them, not one more below.
+#[test]
+fn wrapped_middle_text_of_three_lines_is_centred_in_the_cell() {
+    const WRAPPED: &str = "Aa\nBb\nCc";
+    let h = harness_text("home.alignMiddle", WRAPPED, true);
+    let rect = cell_rect(&h, "B2");
+    let ((top, bottom, gap), lines) = letters_of(&h, WRAPPED);
+    assert!(gap > 10.0, "the cell font is the test face, with its line gap ({gap} pt)");
+    assert_eq!(lines, 3, "one line for each line of the text");
+    let off = (top + bottom) / 2.0 - rect.center().y;
+    // The grid's own insets move it by under a point; centring the galley with its trailing line
+    // gap moves it up by half the gap (6 pt).
+    assert!(off.abs() < 1.5, "letters {top}..{bottom} in a cell {}..{}: {off} pt off centre (gap {gap})", rect.top(), rect.bottom());
+}
+
+/// Wrapped Top and Bottom keep their edges (the gap only matters for Middle).
+#[test]
+fn wrapped_top_and_bottom_still_hug_their_edge() {
+    const WRAPPED: &str = "Aa\nBb\nCc";
+    let h = harness_text("home.alignTop", WRAPPED, true);
+    let (top, _, _) = letters_of(&h, WRAPPED).0;
+    let rect = cell_rect(&h, "B2");
+    assert!(top >= rect.top() && top < rect.top() + 14.0, "Top: letters start at {top} in a cell from {}", rect.top());
+    let h = harness_text("home.alignBottom", WRAPPED, true);
+    let ((_, bottom, gap), _) = letters_of(&h, WRAPPED);
+    let rect = cell_rect(&h, "B2");
     assert!(bottom <= rect.bottom() && bottom > rect.bottom() - gap - 4.0, "Bottom: letters end at {bottom} in a cell to {}", rect.bottom());
 }

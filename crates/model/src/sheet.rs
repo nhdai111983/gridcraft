@@ -262,7 +262,12 @@ impl Sheet {
         self.set_cell(c, Cell { value: v, formula: None, style });
     }
     /// Replaces content, removing any picture at this address. Style-only edits use set_style.
-    pub fn set_cell(&mut self, c: CellRef, cell: Cell) {
+    /// A constant holds its value as a file stores it ([`Value::stored`]): `#SPILL!` pasted as a
+    /// value, or typed, is `#VALUE!`, so saving and reopening shows what the cell showed.
+    pub fn set_cell(&mut self, c: CellRef, mut cell: Cell) {
+        if cell.formula.is_none() && cell.value.is_error() {
+            cell.value = cell.value.stored();
+        }
         self.cell_pictures.remove(&c);
         self.cells.set(c, cell);
     }
