@@ -204,7 +204,8 @@ jobs:
                 cargo test --release -p gridcraft-engine --test it command_sequence_fuzz:: 2>&1 | tee "$log"
               rc=${PIPESTATUS[0]}
               failing=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -oE '[0-9]+ failing seed' | head -n1 | grep -oE '^[0-9]+' || true)
-              if grep -q '^test result: ok' "$log"; then
+              # "ok" alone is not a pass: a filter that matches nothing also prints "test result: ok. 0 passed".
+              if grep -qE '^test result: ok\. [1-9][0-9]* passed' "$log"; then
                 summary="$seeds chuỗi × $steps lệnh: đạt"
               elif [ -n "$failing" ]; then
                 summary="$seeds chuỗi × $steps lệnh: $failing chuỗi trượt"
