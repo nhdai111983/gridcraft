@@ -22,8 +22,11 @@ fn chart(kind: ChartKind) -> Chart {
         }],
         legend: LegendPos::Bottom,
         data_labels: true,
+        data_table: None,
         gridlines: true,
         style: 0,
+        hole_size: 75,
+        first_slice_angle: 0,
         x_title: None,
         y_title: None,
         source: None,
@@ -119,7 +122,9 @@ fn every_kind_renders_in_vietnamese_without_panicking() {
         ChartKind::BoxWhisker,
         ChartKind::Combo,
     ] {
-        let c = chart(kind);
+        let mut c = chart(kind);
+        // The data table (upstream 2026-11) formats its cells in the workbook's region too.
+        c.data_table = Some(Default::default());
         let d = resolve(&wb, 0, &c);
         let prims = render(&c, &d, 500.0, 300.0, &ApproxMeasure);
         for p in &prims {

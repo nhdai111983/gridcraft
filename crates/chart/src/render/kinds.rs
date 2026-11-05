@@ -314,7 +314,7 @@ pub(super) fn doughnut(ctx: &mut Ctx, chart: &Chart, data: &ChartData, area: Bx)
         }
         let n = slices.len();
         budget = budget.saturating_sub(n);
-        let f = Fmt::new(&s.number_format);
+        let f = Fmt::new_in(&s.number_format, data.locale);
         let mut a = start;
         for (j, v) in slices {
             let sweep = (v / total) as f32 * TAU;
