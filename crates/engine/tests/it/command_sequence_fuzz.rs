@@ -19,7 +19,10 @@
 //! - every few steps and at the end, an XLSX save and reload (with the recalculation opening does)
 //!   gives the same sheets, formulas and values;
 //! - at the end, undoing everything gives back the starting workbook and redoing everything the
-//!   final one (view state aside), and both keep the Watch Window list, which isn't an edit.
+//!   final one (view state aside), and both keep the Watch Window list, which isn't an edit. When
+//!   the engine dropped the oldest steps past its undo byte budget (`UNDO_BYTES_LIMIT`), undoing
+//!   everything gives back the workbook before the oldest step it kept instead, and a step may only
+//!   go while the history is over the budget.
 //!
 //! Knobs (environment variables):
 //! - `GRIDCRAFT_FUZZ_SEEDS` (default 6) and `GRIDCRAFT_FUZZ_STEPS` (default 40): the budget. Soak with
@@ -35,12 +38,13 @@ use std::sync::Arc;
 use gridcraft_core::{CellRef, MAX_COLS, MAX_ROWS, RangeRef, Value, col_to_letters};
 use gridcraft_engine::calc::Calc;
 use gridcraft_engine::model::{CalcMode, Formula, Sheet, Workbook};
-use gridcraft_engine::{EngineError, Session, command_specs, find_command, io};
+use gridcraft_engine::{EngineError, Session, UNDO_BYTES_LIMIT, command_specs, find_command, io};
 use serde_json::{Value as Json, json};
 
 const SAMPLES: [&str; 3] = ["sales", "budget", "grades"];
 /// Episodes end (undo/redo checks, then a fresh history) before the engine's 100-step undo limit
-/// starts dropping the oldest entries.
+/// starts dropping the oldest entries. Its byte budget can drop them sooner (large workbooks): see
+/// [`Harness::track_history`].
 const EPISODE_UNDO_DEPTH: usize = 90;
 /// Save and reload every this many steps (and at the end of every episode).
 const ROUNDTRIP_EVERY: usize = 10;
@@ -232,8 +236,16 @@ fn shrink(sample: &str, steps: &[Step], kind: &str) -> Vec<Step> {
 
 struct Harness {
     s: Session,
-    /// The workbook at the start of the current episode (what undoing everything gives back).
+    /// The workbook at the start of the current episode (what undoing everything gives back while
+    /// the engine keeps every step).
     base: Arc<Workbook>,
+    /// The undo history after the last step, oldest first: each step's snapshot and the bytes it
+    /// retains.
+    kept: Vec<(Arc<Workbook>, usize)>,
+    /// After the engine dropped the oldest undo steps in this episode (past its byte budget): the
+    /// workbook before the oldest step it kept, which undoing everything gives back instead of
+    /// `base`.
+    floor: Option<Arc<Workbook>>,
 }
 
 fn fail(step: usize, kind: &'static str, what: impl Into<String>) -> Failure {
@@ -257,7 +269,7 @@ impl Harness {
         let mut s = Session::new();
         s.execute("file.new", json!({"sample": sample})).expect("sample opens");
         let base = s.doc().expect("document").wb.clone();
-        Harness { s, base }
+        Harness { s, base, kept: Vec::new(), floor: None }
     }
 
     fn wb(&self) -> Arc<Workbook> {
@@ -294,6 +306,7 @@ impl Harness {
         {
             return Err(fail(i, "not undoable", format!("non-undoable `{id}` changed cell content: {diff}")));
         }
+        self.track_history(i, id)?;
         self.check_state(i)?;
         if (i + 1).is_multiple_of(ROUNDTRIP_EVERY) {
             guarded(i, "xlsx roundtrip", || roundtrip_diff(&after))?;
@@ -314,10 +327,39 @@ impl Harness {
         guarded(i, "recalc", || recalc_diff(&wb))
     }
 
+    /// Notices the engine dropping the oldest undo steps: the oldest step it kept before `id` ran
+    /// is no longer the oldest. Episodes end before the 100-step limit, so only the byte budget
+    /// may drop one, and only while the history (with the last step dropped) is over it.
+    fn track_history(&mut self, i: usize, id: &str) -> Result<(), Failure> {
+        let undo = &self.s.doc().expect("document").undo;
+        if let (Some((oldest, _)), Some(now)) = (self.kept.first(), undo.first())
+            && !Arc::ptr_eq(oldest, &now.wb)
+        {
+            // The last step dropped is the one just before the new oldest, when the engine kept
+            // a step it had before `id` ran.
+            let at = self.kept.iter().position(|(wb, _)| Arc::ptr_eq(wb, &now.wb));
+            if let Some((_, bytes)) = at.and_then(|at| at.checked_sub(1)).and_then(|last| self.kept.get(last)) {
+                let total = undo.iter().fold(*bytes, |sum, e| sum.saturating_add(e.retained_bytes));
+                if total <= UNDO_BYTES_LIMIT {
+                    return Err(fail(
+                        i,
+                        "undo",
+                        format!("`{id}` dropped the oldest undo steps with {total} bytes in the history, within the {UNDO_BYTES_LIMIT}-byte budget"),
+                    ));
+                }
+            }
+            self.floor = Some(now.wb.clone());
+        }
+        self.kept = undo.iter().map(|e| (e.wb.clone(), e.retained_bytes)).collect();
+        Ok(())
+    }
+
     /// Undo everything, compare with the start, redo everything, compare with the end, then save
-    /// and reload; the next episode starts from here with an empty history.
+    /// and reload; the next episode starts from here with an empty history. When the engine
+    /// dropped the oldest steps, "the start" is the workbook before the oldest step it kept.
     fn end_episode(&mut self, i: usize) -> Result<(), Failure> {
         let end = self.wb();
+        let start = self.floor.clone().unwrap_or_else(|| self.base.clone());
         let mut n = 0;
         while !self.s.doc().expect("document").undo.is_empty() {
             if let Err(EngineError::Internal(_, msg)) = self.s.execute("edit.undo", json!({})) {
@@ -329,8 +371,9 @@ impl Harness {
             }
         }
         let undone = self.wb();
-        if let Some(diff) = workbook_diff(&self.base, &undone) {
-            return Err(fail(i, "undo", format!("undoing all {n} steps doesn't give back the starting workbook: {diff}")));
+        if let Some(diff) = workbook_diff(&start, &undone) {
+            let what = if self.floor.is_some() { "the workbook before the oldest kept step" } else { "the starting workbook" };
+            return Err(fail(i, "undo", format!("undoing all {n} steps doesn't give back {what}: {diff}")));
         }
         if watch_list(&end) != watch_list(&undone) {
             return Err(fail(i, "undo", format!("undoing all {n} steps changed the Watch Window list (not an edit)")));
@@ -351,6 +394,8 @@ impl Harness {
         d.undo.clear();
         d.redo.clear();
         self.base = d.wb.clone();
+        self.kept.clear();
+        self.floor = None;
         Ok(())
     }
 
