@@ -161,6 +161,7 @@ fn doughnut_draws_each_series_as_a_ring() {
     c.hole_size = 25;
     c.first_slice_angle = 0;
     let d = ChartData {
+        locale: Default::default(),
         category_levels: vec![],
         palette: vec![],
         categories: ["A", "B", "C"].iter().map(|s| s.to_string()).collect(),
@@ -194,12 +195,14 @@ fn doughnut_with_many_series_still_draws_the_outer_rings() {
     // The annulus is a few dozen pixels tall and there are far more series than pixels, so every
     // ring is thinner than 1 px. The chart used to draw nothing at all.
     let many = ChartData {
+        locale: Default::default(),
         category_levels: vec![],
         palette: vec![],
         categories: ["A", "B"].iter().map(|s| s.to_string()).collect(),
         series: (0..255).map(|i| series(&format!("S{i}"), &[1.0, 1.0], [20, 96, 130, 255], ChartKind::Doughnut)).collect(),
     };
     let single = ChartData {
+        locale: Default::default(),
         category_levels: vec![],
         palette: vec![],
         categories: ["A", "B"].iter().map(|s| s.to_string()).collect(),
@@ -242,6 +245,7 @@ fn doughnut_one_pixel_rings_skip_the_separator_stroke() {
     // 255 series over a 46-pixel annulus: every drawn ring is one pixel tall, narrower than the
     // 1.5-pixel white separator, which would otherwise paint over both neighbouring rings.
     let thin = ChartData {
+        locale: Default::default(),
         category_levels: vec![],
         palette: vec![],
         categories: ["A", "B"].iter().map(|s| s.to_string()).collect(),
@@ -259,6 +263,7 @@ fn doughnut_one_pixel_rings_skip_the_separator_stroke() {
 
     // A ring with room for the separator keeps it.
     let thick = ChartData {
+        locale: Default::default(),
         category_levels: vec![],
         palette: vec![],
         categories: ["A", "B"].iter().map(|s| s.to_string()).collect(),
@@ -291,6 +296,7 @@ fn doughnut_wedge_budget_bounds_many_series_and_categories() {
     let cats = 20_000usize;
     let values: Vec<f64> = (0..cats).map(|j| if j < 10 { 1000.0 } else { 1.0 }).collect();
     let d = ChartData {
+        locale: Default::default(),
         category_levels: vec![],
         palette: vec![],
         categories: (0..cats).map(|j| format!("C{j}")).collect(),
@@ -329,6 +335,7 @@ fn doughnut_first_slice_angle_rotates_the_start() {
     c.legend = LegendPos::None;
     c.first_slice_angle = 90;
     let d = ChartData {
+        locale: Default::default(),
         category_levels: vec![],
         palette: vec![],
         categories: ["A", "B"].iter().map(|s| s.to_string()).collect(),
@@ -355,6 +362,7 @@ fn rotated_wedges_cover_each_slice_once_without_overlap() {
             c.data_labels = false;
             c.first_slice_angle = angle;
             let d = ChartData {
+                locale: Default::default(),
                 category_levels: vec![],
                 palette: vec![[230, 126, 34, 255], [39, 174, 96, 255], [142, 68, 173, 255]],
                 categories: ["A", "B", "C", "D"].iter().map(|s| s.to_string()).collect(),
@@ -397,6 +405,7 @@ fn slice_crossing_twelve_has_no_internal_seam() {
     let a = [230, 126, 34, 255];
     let b = [39, 174, 96, 255];
     let d = ChartData {
+        locale: Default::default(),
         category_levels: vec![],
         palette: vec![a, b],
         categories: ["A", "B"].iter().map(|s| s.to_string()).collect(),
@@ -437,6 +446,7 @@ fn doughnut_legend_names_categories_and_matches_every_ring() {
     c.legend = LegendPos::Right;
     c.first_slice_angle = 180;
     let d = ChartData {
+        locale: Default::default(),
         category_levels: vec![],
         palette: vec![[230, 126, 34, 255], [39, 174, 96, 255], [142, 68, 173, 255]],
         categories: ["A", "B", "C", "D"].iter().map(|s| s.to_string()).collect(),

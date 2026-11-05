@@ -505,7 +505,9 @@ mod tests {
             let stored = Value::Error(e).stored();
             match e {
                 CellError::Circ => assert_eq!(stored, Value::Number(0.0)),
-                CellError::Spill | CellError::Calc => assert_eq!(stored, Value::Error(CellError::Value), "{e}"),
+                CellError::Spill | CellError::Calc | CellError::Python | CellError::Busy | CellError::Timeout | CellError::Blocked => {
+                    assert_eq!(stored, Value::Error(CellError::Value), "{e}")
+                }
                 _ => assert_eq!(stored, Value::Error(e), "{e}"),
             }
         }

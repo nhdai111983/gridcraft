@@ -429,7 +429,8 @@ impl Sheet {
     /// A constant holds its value as a file stores it ([`Value::stored`]): `#SPILL!` pasted as a
     /// value, or typed, is `#VALUE!`, so saving and reopening shows what the cell showed.
     pub fn set_cell(&mut self, c: CellRef, mut cell: Cell) {
-        if cell.formula.is_none() && cell.value.is_error() {
+        // A Python cell (upstream) keeps its state (#BLOCKED!, #BUSY!…): it is not a constant.
+        if cell.formula.is_none() && cell.py.is_none() && cell.value.is_error() {
             cell.value = cell.value.stored();
         }
         self.cell_pictures.remove(&c);
