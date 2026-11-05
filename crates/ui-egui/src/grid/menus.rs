@@ -129,6 +129,9 @@ pub(super) fn context_menu(app: &mut SheetApp, ui: &mut egui::Ui) {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.set_min_width(200.0);
             let insert_copied = insert_copied_item(app);
+            // On a cell with a link Excel offers to edit, open or remove it (#2120).
+            let link =
+                app.session.active().and_then(|d| d.wb.active().and_then(|sh| sh.hyperlinks.get(&d.selection.active)).map(|l| l.target.clone()));
             let mut items: Vec<(&str, &str)> = vec![
                 ("Cut", "edit.cut"),
                 ("Copy", "edit.copy"),
@@ -154,6 +157,14 @@ pub(super) fn context_menu(app: &mut SheetApp, ui: &mut egui::Ui) {
             if let Some(item) = insert_copied {
                 items.insert(6, item);
             }
+            if link.is_some()
+                && let Some(i) = items.iter().position(|(_, id)| *id == "ui:insertLink")
+            {
+                items.splice(
+                    i..=i,
+                    [("Edit Hyperlink…", "ui:insertLink"), ("Open Hyperlink", "ui:openLink"), ("Remove Hyperlink", "edit.clearHyperlinks")],
+                );
+            }
             if show_details_offered(app)
                 && let Some(i) = items.iter().position(|(_, id)| *id == "data.sortDescending")
             {
@@ -178,6 +189,11 @@ pub(super) fn context_menu(app: &mut SheetApp, ui: &mut egui::Ui) {
                         "ui:newNote" => app.open_dialog("comment", json!({"threaded": false})),
                         "ui:defineName" => app.open_dialog("defineName", json!({})),
                         "ui:insertLink" => app.open_dialog("insertLink", json!({})),
+                        "ui:openLink" => {
+                            if let Some(target) = &link {
+                                super::interact::follow_link(app, target);
+                            }
+                        }
                         "ui:pickList" => app.open_dialog("pickList", json!({})),
                         "ui:filterValue" => {
                             if let Some(d) = app.session.active() {
@@ -369,16 +385,18 @@ pub(super) fn fill_menu(app: &mut SheetApp, ui: &mut egui::Ui, was_open: bool) {
     }
 }
 
-/// The right-click menu of a chart, picture, shape or slicer.
+/// The right-click menu of a chart, picture, shape, slicer or form control (Edit Text and Assign
+/// Action for a button, and Format Control, before Delete).
 pub(super) fn object_menu(app: &mut SheetApp, ui: &mut egui::Ui) {
     let Some((at, kind, id)) = app.grid.object_menu else { return };
     let mut close = false;
     let resp = egui::Area::new(egui::Id::unique("object_context")).fixed_pos(at).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.set_min_width(200.0);
-            // NexusOffice (QC-SHT-11): the fuller menu (Change Chart Type, order) of `nexus_object_menu`.
+            // NexusOffice (QC-SHT-11): the fuller menu (Change Chart Type, order) of `nexus_object_menu`;
+            // a form control gets upstream's Edit Text / Assign Action / Format Control there too.
             let lang = crate::i18n::current(ui.ctx());
-            for (label, action) in crate::nexus_object_menu::items(kind) {
+            for (label, action) in crate::nexus_object_menu::items(app, kind, id) {
                 if label == "-" {
                     ui.separator();
                     continue;
