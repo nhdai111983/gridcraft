@@ -120,7 +120,7 @@ fn table_style_strip(app: &mut SheetApp, ui: &mut Ui, tname: &str, current: &str
 }
 
 pub(super) fn chart_design(app: &mut SheetApp, ui: &mut Ui) {
-    let Some(id) = app.selected_chart else { return };
+    let Some(id) = app.selected_chart() else { return };
     group(ui, app, "Chart Layouts", |ui, app| {
         let ae = big_button(ui, Icon::Chart, "Add Chart\nElement", "Add Chart Element", true);
         for sequence in keytip_table::group_extension(app.keytips.prefix().unwrap_or_default(), &["chart.set"]) {
@@ -138,6 +138,9 @@ pub(super) fn chart_design(app: &mut SheetApp, ui: &mut Ui) {
                     ("-", "", json!(null)),
                     ("Data Labels: Show", "chart.set", json!({"chart": id, "dataLabels": true})),
                     ("Data Labels: None", "chart.set", json!({"chart": id, "dataLabels": false})),
+                    ("Data Table: With Legend Keys", "chart.addElement", json!({"chart": id, "element": "dataTable", "dataTableKeys": true})),
+                    ("Data Table: No Legend Keys", "chart.addElement", json!({"chart": id, "element": "dataTable", "dataTableKeys": false})),
+                    ("Data Table: None", "chart.addElement", json!({"chart": id, "element": "dataTable", "on": false})),
                     ("Gridlines: Show", "chart.set", json!({"chart": id, "gridlines": true})),
                     ("Gridlines: None", "chart.set", json!({"chart": id, "gridlines": false})),
                 ],
@@ -190,7 +193,7 @@ pub(super) fn chart_design(app: &mut SheetApp, ui: &mut Ui) {
         control_keytip(app, ui, &__k, "chart.delete");
         if __k.clicked() {
             act(app, "chart.delete", json!({"chart": id}));
-            app.selected_chart = None;
+            app.selected_object = None;
         }
     });
 }

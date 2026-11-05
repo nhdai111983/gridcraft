@@ -40,3 +40,13 @@ pub(super) fn localize_solver_numbers(values: &mut Json, locale: gridcraft_engin
         }
     }
 }
+
+/// Adds the interface's regional format to the parameters of a dialog's command when the command
+/// reads typed numbers and dates (`LOCALE_COMMANDS`).
+pub(super) fn add_locale(app: &crate::SheetApp, cmd: &str, params: &mut serde_json::Value) {
+    if LOCALE_COMMANDS.contains(&cmd)
+        && let Some(m) = params.as_object_mut()
+    {
+        m.insert("locale".into(), serde_json::json!(app.ui.regional_format().tag()));
+    }
+}
