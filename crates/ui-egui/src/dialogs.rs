@@ -1201,7 +1201,48 @@ mod tests {
         assert!(gridcraft_engine::cmd::data::check_validation(&doc.wb, 0, at, "4").is_some());
     }
 
-    /// #2181: a programmatic `link.open` opens nothing; the Open Hyperlink prompt has no command
+    /// NexusOffice: in a vi-VN region Page Setup shows the margins in centimetres and OK without
+    /// edits keeps them; the command takes inches (sent as typed, 1,778 cm became 1,778 in).
+    #[test]
+    fn page_setup_in_centimetres_keeps_the_margins_on_ok() {
+        let mut session = gridcraft_engine::Session::default();
+        session.new_workbook();
+        let mut app = SheetApp::new(session, Default::default());
+        app.ui.region = Some(gridcraft_engine::core::Locale::ViVn);
+        let margins = |app: &SheetApp| app.session.active().and_then(|d| d.wb.active()).map(|s| s.print.margins).unwrap();
+        let before = margins(&app);
+        let d = Dialog::open(&mut app, "pageSetup", json!({})).unwrap();
+        let left = d.values["left"].as_f64().unwrap();
+        assert!((left - f64::from(before[0]) * 2.54).abs() < 1e-3, "the form shows centimetres: {left}");
+        app.run(d.command.unwrap(), build_params(&d)).unwrap();
+        let after = margins(&app);
+        for (b, a) in before.iter().zip(after.iter()) {
+            assert!((b - a).abs() < 1e-4, "margins changed on OK: {before:?} → {after:?}");
+        }
+    }
+
+    /// NexusOffice: Create Forecast Worksheet in Vietnamese opens on seasonality "tự động", and
+    /// OK with that default runs (the engine reads `auto`).
+    #[test]
+    fn forecast_sheet_runs_with_the_vietnamese_default_seasonality() {
+        let mut session = gridcraft_engine::Session::default();
+        session.new_workbook();
+        let rows: Vec<Json> = (1..=12).map(|i| json!([i, 10 + 2 * i + i % 3])).collect();
+        session.execute("range.setValues", json!({"range": "A1:B12", "values": rows})).unwrap();
+        session.execute("selection.set", json!({"range": "A1:B12"})).unwrap();
+        let mut app = SheetApp::new(session, Default::default());
+        app.ui.language = crate::i18n::Language::Vi;
+        let d = Dialog::open(&mut app, "forecastSheet", json!({})).unwrap();
+        assert_eq!(d.values["seasonality"], crate::i18n::Language::Vi.tr("Seasonality|auto"));
+        // As OK in the window sends it: the dialog's params plus the regional `locale`.
+        let cmd = d.command.unwrap();
+        let mut params = build_params(&d);
+        nexus_locale::add_locale(&app, cmd, &mut params);
+        let r = app.run(cmd, params);
+        assert!(r.is_ok(), "forecast with the default seasonality failed: {r:?}");
+    }
+
+    /// #2181:a programmatic `link.open` opens nothing; the Open Hyperlink prompt has no command
     /// the control channel could confirm, and its OK opens exactly the address it showed.
     #[test]
     fn open_hyperlink_opens_only_the_address_the_user_confirmed() {
