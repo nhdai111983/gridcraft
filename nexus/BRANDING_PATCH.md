@@ -298,3 +298,17 @@ mục dưới đây về lại upstream và bỏ khỏi danh sách.
 | `crates/model/src/sheet.rs` | `Sheet::set_cell`: hằng (ô không công thức) giữ lỗi theo `Value::stored`, nên dán giá trị của ô `#SPILL!` hay gõ `#SPILL!` không còn đổi thành `#VALUE!` sau khi lưu và mở lại | Nên PR upstream (lỗi chung) |
 | `crates/xlsx/src/sheet_write.rs` | Bộ ghi dùng `Value::stored` thay bảng ánh xạ riêng | Nên PR upstream (lỗi chung) |
 | `crates/engine/tests/it/main.rs`, `crates/engine/tests/it/spill_error_constant.rs` | Test hồi quy từ chuỗi fuzz đã thu nhỏ (3 lệnh) | Nên PR upstream (lỗi chung) |
+
+## Soát 05/11: fuzz seed 98 (vùng tràn chồng nhau) và seed 7 (ngân sách undo) (nhánh `nx/review-1105-fuzz-spill-order`)
+
+Lỗi chung của upstream (có trên `upstream/main` @ `1fb19157`); bản sửa cho upstream ở nhánh
+`fix/spill-collision-order-independent` của fork (chưa gửi lên storytold). Khi upstream có bản sửa,
+các mục dưới đây về lại upstream và bỏ khỏi danh sách.
+
+| File | Lý do | Thay được bằng white-label? |
+|---|---|---|
+| `crates/calc/src/recalc.rs` | Hai vùng tràn chồng nhau: ô neo đứng trước theo thứ tự hàng (như tính lại toàn bộ) được tràn, ô sau `#SPILL!`, dù công thức nào được nhập hay tính trước (`spills_to_take`, `lays_out_first`); xoá công thức tràn cũng tính lại các ô `#SPILL!` có vùng chạm vùng tràn vừa mất | Nên PR upstream (lỗi chung) |
+| `crates/calc/src/recalc/pass_host.rs` | `spill_blocked`: chỉ vùng tràn của ô neo đứng trước mới chặn | Nên PR upstream (lỗi chung) |
+| `crates/engine/tests/it/main.rs`, `crates/engine/tests/it/spill_collision_order.rs` | Test hồi quy (seed 98 thu gọn và cặp D1/C3 theo cả hai thứ tự nhập) | Nên PR upstream (lỗi chung) |
+| `crates/engine/src/lib.rs` (thêm) | `UNDO_BYTES_LIMIT` thành `pub` để bộ fuzz kiểm việc cắt lịch sử | Nên PR upstream (lỗi chung) |
+| `crates/engine/tests/it/command_sequence_fuzz.rs` (thêm) | Bộ fuzz biết lịch sử undo bị cắt theo ngân sách byte: hoàn tác hết về trạng thái trước bước cũ nhất còn giữ, và chỉ chấp nhận cắt khi lịch sử vượt ngân sách | Nên PR upstream (lỗi chung) |
