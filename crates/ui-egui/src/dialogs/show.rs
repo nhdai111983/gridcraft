@@ -109,12 +109,24 @@ pub(crate) fn build_params(d: &Dialog) -> Json {
             }
         }
         "pageSetup" => {
+            // NexusOffice: a Vietnamese region shows the margins in centimetres (`unitCm`); the
+            // command takes inches.
+            let cm = v.as_object_mut().and_then(|m| m.remove("unitCm")).and_then(|x| x.as_bool()) == Some(true);
+            let per_inch = if cm { 2.54 } else { 1.0 };
             // A margin dragged below zero is zero, as the Margins command makes it (Page Setup
             // refuses negative margins from other callers).
             for key in ["left", "right", "top", "bottom", "header", "footer"] {
-                if let Some(inches) = d.values.get(key).and_then(Json::as_f64) {
-                    v[key] = json!(inches.max(0.0));
+                if let Some(value) = d.values.get(key).and_then(Json::as_f64) {
+                    v[key] = json!((value / per_inch).max(0.0));
                 }
+            }
+        }
+        // NexusOffice: "tự động" is the Vietnamese spelling of `auto`.
+        "forecastSheet" => {
+            if let Some(m) = v.as_object_mut()
+                && m.get("seasonality").and_then(Json::as_str).is_some_and(|x| x.trim() == crate::i18n::Language::Vi.tr("Seasonality|auto"))
+            {
+                m.insert("seasonality".into(), json!("auto"));
             }
         }
         _ => {}
@@ -124,12 +136,9 @@ pub(crate) fn build_params(d: &Dialog) -> Json {
 
 /// Takes and draws the active dialog, dispatches its body by name, consumes picture-inbox results, runs OK/confirm commands, handles Esc/close and restores the back-dialog stack.
 pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
-    let Some(mut d) = app.dialog.take() else { return };
-    // NexusOffice: as a tab of the NexusOffice window, the prompt every Nexus app shows.
-    if app.embedded && d.name == "saveChanges" {
-        super::nexus_save::embedded_save_prompt(app, ctx, d);
-        return;
-    }
+    // NexusOffice: as a tab of the NexusOffice window, Save Changes is the prompt every Nexus app
+    // shows (`nexus_save` draws it and keeps it).
+    let Some(mut d) = app.dialog.take().and_then(|d| super::nexus_save::other_than_embedded_prompt(app, ctx, d)) else { return };
     let home = app.ui_window();
     // The macro step editor is a large resizable window of its own.
     if d.name == "macroEditor" {
@@ -321,33 +330,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                     d.values.insert("path".into(), json!(path.clone()));
                     ok_cancel(ui, &mut confirm, &mut open);
                     if confirm {
-                        let id = match fmt.as_str() {
-                            "csv" => "file.exportCsv",
-                            "html" => "file.exportHtml",
-                            _ => "file.saveAs",
-                        };
-                        // NexusOffice: the host's dialog answers later; the copy is written then.
-                        let asked = path.is_empty()
-                            && app.ask_file(
-                                crate::FileDialogRequest::Save { name: format!("Copy.{fmt}"), types: vec![fmt.clone()] },
-                                crate::file_dialogs::AfterPick::SaveCopy { command: id.into(), ext: fmt.clone() },
-                            );
-                        // A bare name has no folder: written as typed it would land in the
-                        // process's working directory (`/` from the Finder, the install folder on
-                        // Windows), never where the user looks. The picker chooses the folder.
-                        let pick = app.services.pick_save.as_ref();
-                        let target = if asked {
-                            None
-                        } else if path.is_empty() {
-                            pick.and_then(|f| f(&format!("Copy.{fmt}")))
-                        } else if let Some(f) = pick.filter(|_| std::path::Path::new(&path).is_relative()) {
-                            f(&if path.ends_with(&format!(".{fmt}")) { path } else { format!("{path}.{fmt}") })
-                        } else {
-                            Some(path)
-                        };
-                        if let Some(t) = target {
-                            app.run_or_alert(id, json!({"path": t}));
-                        }
+                        save_copy(app, &fmt, path);
                     }
                 }
                 "saveChanges" => {
@@ -448,11 +431,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
     if confirm && let Some(cmd) = d.command {
         let mut params = build_params(&d);
         // NexusOffice: numbers and dates typed in these dialogs are in the interface's regional format.
-        if super::nexus_locale::LOCALE_COMMANDS.contains(&cmd)
-            && let Some(m) = params.as_object_mut()
-        {
-            m.insert("locale".into(), json!(app.ui.regional_format().tag()));
-        }
+        super::nexus_locale::add_locale(app, cmd, &mut params);
         match app.run(cmd, params) {
             Ok(r) => {
                 open = false;
@@ -752,4 +731,36 @@ fn page_order_preview(ui: &mut egui::Ui, order: PageOrder) {
     let d = (to - from).normalized();
     let n = vec2(-d.y, d.x);
     p.add(egui::Shape::convex_polygon(vec![to, to - d * 6.0 + n * 3.5, to - d * 6.0 - n * 3.5], t.accent, egui::Stroke::NONE));
+}
+
+/// Save a Copy's OK: writes the workbook as `fmt` to `path`, asking the host's file dialog or the
+/// desktop picker for a place when there is none.
+fn save_copy(app: &mut SheetApp, fmt: &str, path: String) {
+    let id = match fmt {
+        "csv" => "file.exportCsv",
+        "html" => "file.exportHtml",
+        _ => "file.saveAs",
+    };
+    // NexusOffice: the host's dialog answers later; the copy is written then.
+    let asked = path.is_empty()
+        && app.ask_file(
+            crate::FileDialogRequest::Save { name: format!("Copy.{fmt}"), types: vec![fmt.to_string()] },
+            crate::file_dialogs::AfterPick::SaveCopy { command: id.into(), ext: fmt.to_string() },
+        );
+    // A bare name has no folder: written as typed it would land in the
+    // process's working directory (`/` from the Finder, the install folder on
+    // Windows), never where the user looks. The picker chooses the folder.
+    let pick = app.services.pick_save.as_ref();
+    let target = if asked {
+        None
+    } else if path.is_empty() {
+        pick.and_then(|f| f(&format!("Copy.{fmt}")))
+    } else if let Some(f) = pick.filter(|_| std::path::Path::new(&path).is_relative()) {
+        f(&if path.ends_with(&format!(".{fmt}")) { path } else { format!("{path}.{fmt}") })
+    } else {
+        Some(path)
+    };
+    if let Some(t) = target {
+        app.run_or_alert(id, json!({"path": t}));
+    }
 }

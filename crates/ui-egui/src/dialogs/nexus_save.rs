@@ -5,6 +5,16 @@
 use super::{Dialog, Json, SheetApp};
 use crate::nexus_save_prompt as sp;
 
+/// `d` unless it is Save Changes in a window embedded in the NexusOffice host, which
+/// [`embedded_save_prompt`] draws (and keeps open) instead of upstream's dialog.
+pub(super) fn other_than_embedded_prompt(app: &mut SheetApp, ctx: &egui::Context, d: Dialog) -> Option<Dialog> {
+    if app.embedded && d.name == "saveChanges" {
+        embedded_save_prompt(app, ctx, d);
+        return None;
+    }
+    Some(d)
+}
+
 /// Shows the embedded prompt for `d` (a `saveChanges` dialog); puts the dialog back until it is
 /// answered.
 pub(super) fn embedded_save_prompt(app: &mut SheetApp, ctx: &egui::Context, d: Dialog) {
