@@ -613,6 +613,9 @@ impl Calc {
                     sheet.spill_ranges.remove(anchor);
                     if let Some(cell) = sheet.cells.get_mut(*anchor) {
                         cell.value = Value::Error(CellError::Spill);
+                        // Kept with the other #SPILL! cells, so that freeing this area later
+                        // (`unblock_candidates`) finds the anchor again.
+                        self.spill_errors.insert((key.0, *anchor));
                     }
                     let mut dependents = Vec::new();
                     self.graph.dependents_of_range(key.0, *previous, &mut dependents);
