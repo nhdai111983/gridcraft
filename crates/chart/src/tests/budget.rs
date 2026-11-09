@@ -16,6 +16,7 @@ fn data_of(series: usize, points: usize) -> ChartData {
         palette: vec![],
         categories: (0..points).map(|i| i.to_string()).collect(),
         category_levels: vec![],
+        locale: Default::default(),
         series: (0..series)
             .map(|s| SeriesData {
                 name: format!("S{s}"),
