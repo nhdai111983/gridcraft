@@ -79,8 +79,8 @@ Local test: `python3 -m http.server 8765` inside the folder, then open http://lo
 
 ### The parent bridge (`?host=parent`)
 
-A page framing GridCraft in a **same-origin** iframe can add `?host=parent` to the iframe's URL
-(`https://example.com/gridcraft/?host=parent`) and have GridCraft hand its files over instead of
+A page framing Nexus Sheet in a **same-origin** iframe can add `?host=parent` to the iframe's URL
+(`https://example.com/gridcraft/?host=parent`) and have Nexus Sheet hand its files over instead of
 downloading them. The two sides talk `postMessage` with plain window messages that carry a
 `type`:
 
@@ -99,7 +99,7 @@ app with downloads.
 
 ### Embedding without an iframe (page host mode)
 
-A page that loads the GridCraft module into its own document — its own `<canvas
+A page that loads the Nexus Sheet module into its own document — its own `<canvas
 id="gridcraft_canvas">` inside a component, sized to a box beside the page's own header and
 controls — opts in with `data-host="page"` on that canvas. The behaviour is the same as the
 parent bridge, except the transport is DOM `CustomEvent`s on the canvas instead of
@@ -127,7 +127,7 @@ canvas.addEventListener("gridcraft:ready", async () => {
   }));
 });
 
-// Every file GridCraft would otherwise download (Save, Save As, Export as PDF) arrives here.
+// Every file Nexus Sheet would otherwise download (Save, Save As, Export as PDF) arrives here.
 canvas.addEventListener("gridcraft:save", (event) => {
   const { name, bytes } = event.detail; // bytes is an ArrayBuffer
   storeFile(name, bytes);
@@ -148,17 +148,17 @@ As with the parent bridge, the app starts with an empty workbook instead of a sa
 must be exactly `page`; anything else is ignored, and the app runs as a standalone page with
 downloads.
 
-The messages and both transports are the shared contract of [`craft-web-host`](https://github.com/storytold/craft-libs/tree/main/crates/web-host) (storytold/craft-libs#420), the same for every Craft app: its README lists every message, including `saved`, with the compatibility notes. In `gridcraft:ready`, `version` is the contract's (`"1"`) and `appVersion` is this app's release. GridCraft reads bytes, so a host sends `bytes`, not a `File`.
+The messages and both transports are the shared contract of `craft-web-host` (from the open-source craft-libs): its documentation lists every message, including `saved`, with the compatibility notes. In `gridcraft:ready`, `version` is the contract's (`"1"`) and `appVersion` is this app's release. Nexus Sheet reads bytes, so a host sends `bytes`, not a `File`.
 
 ### Trust and limits
 
-- **Who is trusted.** In page host mode the page and GridCraft share one document, so any script on the page can drive the app: open files in it and receive what it saves. Use this mode only for a page you control. The iframe mode (`?host=parent`) answers only the parent window, on the page's own origin.
+- **Who is trusted.** In page host mode the page and Nexus Sheet share one document, so any script on the page can drive the app: open files in it and receive what it saves. Use this mode only for a page you control. The iframe mode (`?host=parent`) answers only the parent window, on the page's own origin.
 - **Files from the host are untrusted input.** An opened file goes through the same reading as one picked with File ▸ Open or dropped on the window, with the same format limits; before it is copied into the app's memory, its size is checked against the host open limit (512 MiB) and a larger file is refused, and a name is cut to 255 characters.
 - **The event and message names are the interface.** `gridcraft:ready`, `gridcraft:open`, `gridcraft:save`, `gridcraft:dirty` and `gridcraft:failed`, and the fields they carry (the same as the `?host=parent` messages), stay stable; changing one is a breaking change.
 
 ### Driving it from the page (`window.gridcraft`)
 
-Every GridCraft web build puts `window.gridcraft` on the page, from [`craft-web-api`](https://github.com/storytold/craft-libs/tree/main/crates/web-api) (storytold/craft-libs#413), the same shape in every Craft app. `gridcraft.request(method, params)` calls any method of the control channel the desktop app serves (`docs/control-protocol.md`), and `execute(command, params)`, `commands()`, `docInspect(params)`, `uiInspect(params)` and `screenshot(params)` are shortcuts for the common ones. Each returns a Promise that resolves with the method's result and rejects with an `Error`; a call the app does not answer within 30 seconds rejects, and the app skips it if it has not started it; a call the app has already taken still finishes, so a retry after a timeout can apply a command twice.
+Every Nexus Sheet web build puts `window.gridcraft` on the page, from `craft-web-api` (from the open-source craft-libs). `gridcraft.request(method, params)` calls any method of the control channel the desktop app serves (`docs/control-protocol.md`), and `execute(command, params)`, `commands()`, `docInspect(params)`, `uiInspect(params)` and `screenshot(params)` are shortcuts for the common ones. Each returns a Promise that resolves with the method's result and rejects with an `Error`; a call the app does not answer within 30 seconds rejects, and the app skips it if it has not started it; a call the app has already taken still finishes, so a retry after a timeout can apply a command twice.
 
 ```js
 const book = await gridcraft.docInspect();               // sheets, used ranges, tables, charts, names, selection
