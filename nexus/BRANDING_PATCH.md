@@ -272,7 +272,9 @@ craft-print) chỉ là nguồn build (T5/§4.8 mirror), không phải gọi mạ
 - Upstream mới: "Set precision as displayed" khi tính (#1366), chế độ host trong trang (`data-host="page"`) và `window.gridcraft` (`craft-web-api`) cho bản web, RefEdit giữ trang tính mở hộp thoại, mỗi trang tính giữ vị trí cuộn riêng, Ctrl+Shift+mũi tên, Ctrl-click mũi tên thẻ trang, dán bỏ qua hàng bị lọc, nhiều tối ưu tính toán/biểu đồ, BINOM.DIST/POISSON.DIST chính xác hơn.
 - Updater: upstream thêm `start_pending_update` (gọi ở `on_exit`) và hộp kết quả hiện cả khi vừa cập nhật xong; Nexus không bao giờ gọi `check_at_start`, nên không đọc bản ghi cập nhật và không có gì để cài.
 - vi: 3 thông báo dán mới của engine (vùng sao chép không vừa, quá nhiều ô dán liên kết, quá nhiều vùng xác thực). `packaging/web/README.md` (đóng gói thành `HOSTING.md`): phần host trong trang và `window.gridcraft` mới của upstream nói Nexus Sheet, bỏ link `storytold/craft-libs`.
-- Số patch (`nexus-tools patch-count`): 191 (branding 74, other 117, so với `1fb19157`) → 192 (branding 74, other 118, so với `76416d48`). Ngân sách 200.
+- Hồi quy do lần merge này, đã sửa: upstream (#2684) tìm công thức `#SPILL!` cần gỡ chặn qua chỉ mục `spill_errors`; quy tắc thứ tự hàng của Nexus (soát 05/11, fuzz seed 98) đặt `#SPILL!` cho ô neo bị ô neo trước giành vùng mà không ghi vào chỉ mục, nên xoá ô neo trước thì ô sau không tràn lại. `crates/calc/src/recalc.rs` (`write_back`) nay ghi ô đó vào `spill_errors`; test `spill_collision_order` đỏ trên CI trước khi sửa (`6bd9c24c`), xanh sau (`4a5b47fd`).
+- `crates/chart/src/tests/budget.rs` (test upstream mới): literal `ChartData` thêm `locale` (trường Nexus).
+- Số patch (`nexus-tools patch-count`): 191 (branding 74, other 117, so với `1fb19157`) → 193 (branding 75: `apps/gridcraft-web/src/host.rs`; other 118: `crates/chart/src/tests/budget.rs`; so với `76416d48`). Ngân sách 200.
 
 ## Việc còn nợ (đã allowlist có lý do, hoặc không bị brand-check bắt)
 - Đề xuất PR upstream (white-label): hằng `APP_NAME`/`SETTINGS_DIR`/`APP_ID` lấy từ biến build
