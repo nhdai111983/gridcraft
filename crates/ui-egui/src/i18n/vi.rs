@@ -74,6 +74,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Format\nPane" => "Ngăn\nđịnh dạng",
         "Format" => "Định dạng",
         "Insert" => "Chèn",
+        "Header Menu|Insert" => "Chèn",
         "Insert Cells…" => "Chèn ô…",
         "Delete" => "Xóa",
         "Delete Cells…" => "Xóa ô…",
@@ -1195,6 +1196,11 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Lookup" => "Tra cứu & tham chiếu",
         "AddIn" => "Bổ trợ",
         "Nothing to paste." => "Không có gì để dán.",
+        "The copied cells don't fit here: paste them where the whole copied area fits on the sheet." => {
+            "Vùng đã sao chép không vừa ở đây: hãy dán vào chỗ chứa đủ cả vùng trên trang tính."
+        }
+        "Too many cells to paste as links at once." => "Quá nhiều ô để dán dưới dạng liên kết cùng lúc.",
+        "Too many separate validation areas to paste at once." => "Quá nhiều vùng xác thực dữ liệu riêng lẻ để dán cùng lúc.",
         "Select data for the chart first." => "Hãy chọn dữ liệu cho biểu đồ trước.",
         "The reference isn't valid. Select a cell in a range with labeled columns, or pass `source`." => {
             "Tham chiếu không hợp lệ. Hãy chọn một ô trong vùng dữ liệu có hàng tiêu đề."
