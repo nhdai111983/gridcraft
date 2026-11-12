@@ -782,9 +782,82 @@ fn is_mark(c: char) -> bool {
     ('\u{300}'..='\u{36f}').contains(&c)
 }
 
-/// The secondary code of combining mark `c`: `32 + (cp - 0x300)`.
+/// The secondary code of combining mark `c`: `32 + (cp - 0x300)`; an Arabic mark
+/// ([`arabic_mark_rank`]) is [`ARABIC_MARK_CODE`] plus its rank.
 fn mark_code(c: char) -> u16 {
+    if let Some(rank) = arabic_mark_rank(c) {
+        return ARABIC_MARK_CODE.saturating_add(rank);
+    }
     u16::try_from((c as u32).saturating_sub(0x300).saturating_add(32)).unwrap_or(u16::MAX)
+}
+
+// Upstream's Arabic text order (gridcraft #1940, Excel 16.0 build 20527 observations), folded
+// into these keys: invisible format characters weigh nothing, Arabic marks weigh like the
+// marks above (a secondary difference on the letter before them), and Arabic-Indic digits weigh
+// as ASCII digits, with their digit script as the first secondary code of the element.
+
+/// First secondary code of an Arabic mark: above every Latin mark code (32..=143) and every
+/// [`VI_FOREIGN`] code.
+const ARABIC_MARK_CODE: u16 = 1000;
+
+/// Characters text order skips entirely: tatweel and invisible format characters (soft
+/// hyphen, combining grapheme joiner, zero-width (non-)joiner, bidi marks, embeddings, overrides
+/// and isolates, word joiner, byte order mark). The zero-width space is not one. Only `text`, the
+/// last tie-break, still sees them.
+fn ignorable(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{034F}'
+            | '\u{061C}'
+            | '\u{0640}'
+            | '\u{200C}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'
+            | '\u{2066}'..='\u{2069}'
+            | '\u{FEFF}'
+    )
+}
+
+/// Arabic combining marks in the order Excel sorts a letter carrying them; an unmarked letter
+/// sorts before all of them. Measured in Excel 16.0 (build 20527, en-US) with one mark on a letter.
+/// U+06D6 and U+06D7 sort as letters in Excel, so they are not listed.
+const ARABIC_MARK_ORDER: [char; 48] = [
+    '\u{06EC}', '\u{0611}', '\u{0612}', '\u{0613}', '\u{0614}', '\u{06DB}', '\u{0656}', '\u{0657}', '\u{0610}', '\u{06EB}', '\u{0615}', '\u{06D9}',
+    '\u{06E4}', '\u{06E1}', '\u{06DA}', '\u{06DC}', '\u{06EA}', '\u{06E3}', '\u{06D8}', '\u{0655}', '\u{065F}', '\u{0654}', '\u{06E7}', '\u{0653}',
+    '\u{06E8}', '\u{06ED}', '\u{06E2}', '\u{0658}', '\u{064B}', '\u{064C}', '\u{064D}', '\u{064E}', '\u{064F}', '\u{0650}', '\u{0652}', '\u{0651}',
+    '\u{0670}', '\u{0659}', '\u{065A}', '\u{065B}', '\u{065C}', '\u{065D}', '\u{065E}', '\u{0616}', '\u{0617}', '\u{0618}', '\u{0619}', '\u{061A}',
+];
+
+/// Rank of an Arabic mark (its index in [`ARABIC_MARK_ORDER`]).
+fn arabic_mark_rank(c: char) -> Option<u16> {
+    if !('\u{0610}'..='\u{06ED}').contains(&c) {
+        return None;
+    }
+    ARABIC_MARK_ORDER.iter().position(|&m| m == c).and_then(|i| u16::try_from(i).ok())
+}
+
+/// Whether `c` attaches to the element before it as a secondary difference: a combining mark
+/// U+0300..=U+036F or an Arabic mark.
+fn attaches(c: char) -> bool {
+    is_mark(c) || arabic_mark_rank(c).is_some()
+}
+
+/// A digit's script (0 ASCII, 1 Arabic-Indic, 2 Extended Arabic-Indic) and the ASCII digit it
+/// weighs as; `None` for anything else.
+fn digit(c: char) -> Option<(u16, char)> {
+    let (script, zero) = match c {
+        '0'..='9' => return Some((0, c)),
+        '\u{0660}'..='\u{0669}' => (1, 0x0660),
+        '\u{06F0}'..='\u{06F9}' => (2, 0x06F0),
+        _ => return None,
+    };
+    char::from_u32(u32::from(c).saturating_sub(zero).saturating_add(u32::from('0'))).map(|d| (script, d))
+}
+
+/// The base character an element weighs as: an Arabic-Indic digit is its ASCII digit.
+fn digit_base(c: char) -> char {
+    digit(c).map_or(c, |(_, d)| d)
 }
 
 /// Append the lowercase, fully decomposed form of `c` to `out` (marks are not yet reordered).
@@ -1057,16 +1130,21 @@ impl Key {
         let mut rest: Vec<char> = Vec::new();
         while primary.len() < MAX_PRIMARY {
             let Some(c) = chars.next() else { break };
-            if is_mark(c) {
+            if ignorable(c) || attaches(c) {
                 continue; // a mark with no letter before it leaves the weights alone
             }
             // V1: merge the quality marks that are not blocked; keep the others in `rest`.
             rest.clear();
-            let base = vi_merge(c, std::iter::from_fn(|| chars.next_if(|m| is_mark(*m))), |m| rest.push(m));
-            let (first, second, letter) = vi_letter(base);
+            let base =
+                vi_merge(c, std::iter::from_fn(|| chars.next_if(|m| attaches(*m) || ignorable(*m))).filter(|m| !ignorable(*m)), |m| rest.push(m));
+            let script = digit(base).map(|(script, _)| script);
+            let (first, second, letter) = vi_letter(digit_base(base));
             primary.push(first);
             let tone_mark = rest.iter().copied().find(|m| tone(*m) != 0);
             secondary.push(tone_mark.map_or(0, tone));
+            if let Some(script) = script {
+                secondary.push(script);
+            }
             if letter != 0 {
                 secondary.push(letter);
             }
@@ -1088,7 +1166,10 @@ impl Key {
         let mut primary: Vec<u32> = Vec::new();
         let mut secondary: Vec<u16> = Vec::new();
         for c in text.chars() {
-            if is_mark(c) {
+            if ignorable(c) {
+                continue;
+            }
+            if attaches(c) {
                 if !primary.is_empty() {
                     secondary.push(mark_code(c));
                 }
@@ -1103,6 +1184,10 @@ impl Key {
             if c == 'đ' {
                 primary.push('d' as u32);
                 secondary.push(STROKE);
+            } else if let Some((script, d)) = digit(c) {
+                // A digit's element starts with its script, so `1٢` < `١2` whatever follows.
+                primary.push(d as u32);
+                secondary.push(script);
             } else {
                 primary.push(c as u32);
             }
@@ -1136,6 +1221,12 @@ impl PartialOrd for Key {
 /// compares equal. Characters outside the Latin tables keep code point order, including the Latin
 /// letters that have no decomposition (such as `ø`, `ł`, `æ`, `ß`, `ð`, `ħ`, `ı`), which therefore sort
 /// after `z`. Two ASCII strings compare by their lowercase bytes, as before.
+///
+/// Arabic follows Excel's order (upstream #1940): tatweel and invisible format characters
+/// (bidi marks, zero-width (non-)joiners, soft hyphen…) are skipped until the last tie-break,
+/// Arabic marks are a secondary difference on their letter in Excel's mark order, and
+/// Arabic-Indic digits sort as digits, their script (ASCII, Arabic-Indic, Extended Arabic-Indic)
+/// a secondary difference that comes before the marks of later letters.
 pub fn compare_text(a: &str, b: &str) -> Ordering {
     compare_text_with(a, b, Collation::Root)
 }
@@ -1241,9 +1332,13 @@ fn primary_order(t: &str, c: Collation, want: &[u32]) -> Option<Ordering> {
             None => fits = false,
         });
         let Some((&base, marks)) = buf.get(..n).and_then(<[char]>::split_first) else { continue };
+        if ignorable(base) || arabic_mark_rank(base).is_some() {
+            continue; // no primary weight of its own
+        }
         if !fits || is_mark(base) || !marks.iter().all(|m| is_mark(*m)) {
             return None;
         }
+        let base = digit_base(base);
         let r = match c {
             Collation::Root => step(if base == 'đ' { 'd' as u32 } else { base as u32 }),
             Collation::Vi => {
@@ -2119,5 +2214,65 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Upstream's Arabic order (#1940) holds in both collations and the probe agrees with the
+    /// key: tatweel and bidi marks are skipped, marks are secondary, Arabic-Indic digits sort as
+    /// digits with their script before later marks. Vietnamese text is unaffected.
+    #[test]
+    fn arabic_order_in_every_collation_and_the_probe() {
+        let pool = [
+            "باب",
+            "بَاب",
+            "بِاب",
+            "بـاب",
+            "بيت",
+            "\u{200F}باب",
+            "ب\u{200F}ب\u{64E}",
+            "١٢",
+            "۱۲",
+            "12",
+            "1٢",
+            "١2",
+            "ب1",
+            "ب١",
+            "ب\u{64E}1",
+            "a\u{200C}b",
+            "ac",
+            "\u{FEFF}b",
+            "Ánh",
+            "Anh",
+            "đà",
+            "Đà Nẵng",
+            "ma\u{300}",
+            "\u{64E}",
+            "\u{640}",
+            "",
+        ];
+        for c in [Collation::Root, Collation::Vi] {
+            for a in pool {
+                for b in pool {
+                    let o = compare_text_with(a, b, c);
+                    assert_eq!(o, compare_text_with(b, a, c).reverse(), "{c:?}: {a:?} {b:?}");
+                    assert_eq!(o.is_eq(), text_eq(a, b), "{c:?}: {a:?} {b:?}");
+                    assert_eq!(TextProbe::new(b, c).order(a), o, "{c:?}: probe {a:?} against {b:?}");
+                    assert_eq!(text_key(a, c).cmp(&text_key(b, c)), o, "{c:?}: key {a:?} {b:?}");
+                    for d in pool {
+                        if o.is_le() && compare_text_with(b, d, c).is_le() {
+                            assert!(compare_text_with(a, d, c).is_le(), "{c:?}: {a:?} <= {b:?} <= {d:?}");
+                        }
+                    }
+                }
+            }
+            assert_eq!(compare_text_with("بـاب", "بت", c), Ordering::Less, "{c:?}");
+            assert_eq!(compare_text_with("بت\u{650}", "ب\u{64E}ت", c), Ordering::Less, "{c:?}");
+            assert_eq!(compare_text_with("ب۱", "ب\u{64E}1", c), Ordering::Less, "{c:?}");
+            assert_eq!(compare_text_with("1ب\u{650}", "١ب", c), Ordering::Less, "{c:?}");
+            assert_eq!(compare_text_with("\u{200E}zebra", "apple", c), Ordering::Greater, "{c:?}");
+        }
+        // Vietnamese order is unchanged by the Arabic rules.
+        assert_eq!(compare_text_with("ă", "b", Collation::Vi), Ordering::Less);
+        assert_eq!(compare_text_with("Ánh", "Anh", Collation::Root), Ordering::Greater);
+        assert_eq!(compare_text_with("Đà", "Dz", Collation::Root), Ordering::Less);
     }
 }
