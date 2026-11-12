@@ -20,7 +20,7 @@ pub fn main(args: &[String]) -> ExitCode {
     match run(args) {
         Ok(code) => code,
         Err(e) => {
-            eprintln!("gridcraft-cli: sandbox-check: {e}");
+            eprintln!("nexus-sheet-cli: sandbox-check: {e}");
             ExitCode::FAILURE
         }
     }
