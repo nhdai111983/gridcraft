@@ -12,6 +12,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Print What" => "Nội dung in",
         "Scale with Document" => "Co giãn theo tài liệu",
         "Align with Page Margins" => "Căn theo lề trang",
+        "Diagram" => "Sơ đồ",
+        "Decorative Text" => "Chữ trang trí",
         // NexusOffice: end of upstream keys.
         "Paste" => "Dán",
         "Paste Values" => "Dán giá trị",

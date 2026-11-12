@@ -91,6 +91,9 @@ pub(crate) fn criterion_matches_in(v: &Value, text: &str, crit: &Value, locale: 
     }
 }
 
+/// Most (list row, criteria row) pairs one Advanced Filter tests.
+const MAX_FILTER_TESTS: u64 = 50_000_000;
+
 pub(super) fn advanced_filter(s: &mut Session, p: &Json) -> Result<Json> {
     // NexusOffice: criteria cells hold what people typed in the workbook's regional format, and the
     // rows are compared as they show in it, whoever runs the filter (an API caller may read in
@@ -148,6 +151,10 @@ fn advanced_filter_in(s: &mut Session, p: &Json) -> Result<Json> {
             }
             rows.push(conds);
         }
+    }
+    // Each list row is tried against every criteria row, so bound their product too.
+    if u64::from(list.height()) * rows.len() as u64 > MAX_FILTER_TESTS {
+        return Err(bad(CMD, "the list and criteria ranges together are too large"));
     }
     let matches_row = |row: u32| -> bool {
         if rows.is_empty() {
