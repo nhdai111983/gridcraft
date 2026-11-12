@@ -276,6 +276,16 @@ craft-print) chỉ là nguồn build (T5/§4.8 mirror), không phải gọi mạ
 - `crates/chart/src/tests/budget.rs` (test upstream mới): literal `ChartData` thêm `locale` (trường Nexus).
 - Số patch (`nexus-tools patch-count`): 191 (branding 74, other 117, so với `1fb19157`) → 193 (branding 75: `apps/gridcraft-web/src/host.rs`; other 118: `crates/chart/src/tests/budget.rs`; so với `76416d48`). Ngân sách 200.
 
+## Đồng bộ upstream 2026-11-12
+
+- 88 commit upstream (`7e0d96d7`, v0.19.1). egui/winit giữ rev `6d518fc7`/`a517b384`. craft-libs lên `6e03f65b` (craft-update, craft-window, craft-ui, craft-print); bản web giữ `craft-web-api`/`craft-web-host` ở `fd5e2fef`.
+- 24 file xung đột. Đáng chú ý: `numfmt/src/render.rs` (upstream viết lại bộ dựng số thành một bộ đệm `Parts` và thêm lịch `B1`/`B2`; áp lại vùng của Nexus: dấu nhóm/thập phân, tên tháng/thứ, SA/CH, dấu phân giây theo `Locale` — chỉ cho phần Gregorian, `B2` giữ tên Hijri của upstream); `core/src/value.rs` (upstream viết lại `compare_text` theo thứ tự Arabic của Excel #1940; Nexus giữ `collate` và đưa các quy tắc Arabic vào khoá Root/Vi, `TextKey`, `TextProbe`); `grid/quadrant.rs` (mốc đường cơ sở CJK #3081 + khoảng hở dòng của Nexus cho Giữa); `i18n.rs` (upstream tách `translated`; `tr` vẫn bọc `brand::branded`); CSV/Get Data (vùng của Nexus + giới hạn 10 triệu ô).
+- Upstream mới đáng chú ý: crate `sandbox` (chạy chương trình phụ bị giới hạn: Landlock/seccomp, sandbox-exec) và lệnh CLI `sandbox-check`; `Region` (dữ liệu 20 vùng, chưa có vi-VN, chưa dùng ở đâu — song song với `Locale` của Nexus); hướng đọc ô (Ngữ cảnh/Trái sang phải/Phải sang trái) và bidi Arabic; XLSX/XLS công thức cũ mở với `@` ngầm; FORMULATEXT giữ công thức ẩn; MCP chỉ gửi token điều khiển tới địa chỉ loopback; rất nhiều giới hạn công việc chống tệp độc.
+- `crates/sandbox/src/lib.rs` và `apps/gridcraft-cli/src/sandbox_check.rs` (file upstream mới bị sửa): lý do "GridCraft confines programs…" in ra ở `sandbox-check` (brand-check bắt) thành câu không tên sản phẩm; tiền tố lỗi `nexus-sheet-cli:`.
+- vi: 4 nhãn mới của Format Cells › Alignment (Hướng văn bản, Theo ngữ cảnh, Trái sang phải, Phải sang trái) và "Diagram"/"Decorative Text" của upstream.
+- Updater: craft-update `6e03f65b`; Nexus vẫn không gọi `check_at_start`. Flatpak upstream thêm quyền `org.freedesktop.Flatpak` (gói Flatpak của upstream, Nexus không phát hành).
+- Số patch (`nexus-tools patch-count`): 193 (branding 75, other 118) → 195 (other 120: `crates/sandbox/src/lib.rs`, `apps/gridcraft-cli/src/sandbox_check.rs`).
+
 ## Việc còn nợ (đã allowlist có lý do, hoặc không bị brand-check bắt)
 - Đề xuất PR upstream (white-label): hằng `APP_NAME`/`SETTINGS_DIR`/`APP_ID` lấy từ biến build
   (`GRIDCRAFT_APP_NAME`…) → fork chỉ còn đặt biến, bỏ phần lớn patch ở trên.
@@ -291,7 +301,7 @@ craft-print) chỉ là nguồn build (T5/§4.8 mirror), không phải gọi mạ
 
 | File | Lý do | Thay được bằng white-label? |
 |---|---|---|
-| `crates/core/src/collate.rs`, `crates/core/src/lib.rs`, `crates/core/src/value.rs`, `crates/core/tests/collate_vi.rs` | QC-SHT-01: port collation lớp 2 (M3-SCOLL.4–10, `feat/vi-collation` @ `13ac1a0f`): `Collation { Root, Vi }`, thứ tự CLDR `vi`. Test ICU (`collate_icu.rs`) và dev-dependency ICU ở lại upstream như lớp 1 | Nên PR upstream (đã có nhánh `feat/vi-collation`) |
+| `crates/core/src/collate.rs`, `crates/core/src/lib.rs`, `crates/core/src/value.rs`, `crates/core/tests/collate_vi.rs` | QC-SHT-01: port collation lớp 2 (M3-SCOLL.4–10, `feat/vi-collation` @ `13ac1a0f`): `Collation { Root, Vi }`, thứ tự CLDR `vi`. Test ICU (`collate_icu.rs`) và dev-dependency ICU ở lại upstream như lớp 1. Đồng bộ 2026-11-12: thứ tự Arabic của upstream (#1940) nằm trong khoá Root/Vi (bỏ qua tatweel/ký tự định dạng, dấu Arabic là khác biệt cấp 2, chữ số Ả Rập-Ấn đọc như chữ số) | Nên PR upstream (đã có nhánh `feat/vi-collation`) |
 | `crates/functions/src/{criteria,database,dynamic,lib,lookup,math,util}.rs`, `crates/calc/src/{eval,tests}.rs`, `crates/model/src/workbook.rs` | QC-SHT-01: công thức, tra cứu, SORT/SORTBY, tiêu chí theo `Workbook::collation` (port M3-SCOLL.5/.8) | Nên PR upstream |
 | `crates/engine/src/{lib,pivot,cf}.rs`, `crates/engine/src/cmd/{data,edit,file,whatif}.rs`, `crates/engine/tests/{collation_text_compare,command_sequence_fuzz}.rs`, `apps/gridcraft/src/main.rs` | QC-SHT-01: lệnh `data.sortLanguage`, Sort/AutoFilter/pivot theo collation của phiên (port M3-SCOLL.6). NexusOffice: ngôn ngữ sắp xếp chưa chọn (`""`) theo vùng (vi-VN → tiếng Việt), `Session::set_locale` áp lại; chọn rõ thì lưu `"vi"`/`"root"` | Một phần — "theo vùng" nên PR upstream dạng tuỳ chọn |
 | `crates/engine/src/nexus_typed.rs` | File mới: QC-SHT-10 (gõ ngày/số có định dạng vào cột rộng mặc định thì giãn cột), QC-SHT-12 (công thức gõ vào ô General nhận định dạng số của ô đầu tiên nó đọc, với SUM/AVERAGE/MIN/MAX/ROUND…/phép tính), QC-SHT-05 (`column_word`: tiêu đề bảng `Cột1` ở vi-VN) | — (file mới) |
