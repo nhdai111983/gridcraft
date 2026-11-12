@@ -2,8 +2,8 @@
 
 use std::fmt::Write as _;
 
-use gridcraft_core::{DateSystem, Locale};
 use gridcraft_core::date::{datetime_from_serial, max_serial};
+use gridcraft_core::{DateSystem, Locale};
 
 use crate::calendar::Calendar;
 use crate::decimal::{decimal_digits, fixed, fixed_from_digits, format_general_fit};

@@ -240,7 +240,14 @@ pub struct CsvOptions {
 
 impl Default for CsvOptions {
     fn default() -> Self {
-        CsvOptions { delimiter: b',', quote: b'"', date_system: DateSystem::D1900, parse_values: true, locale: gridcraft_core::Locale::EnUs, max_used_cells: None }
+        CsvOptions {
+            delimiter: b',',
+            quote: b'"',
+            date_system: DateSystem::D1900,
+            parse_values: true,
+            locale: gridcraft_core::Locale::EnUs,
+            max_used_cells: None,
+        }
     }
 }
 
