@@ -14,6 +14,11 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Align with Page Margins" => "Căn theo lề trang",
         "Diagram" => "Sơ đồ",
         "Decorative Text" => "Chữ trang trí",
+        // Format Cells › Alignment: reading direction (upstream #947, sync 2026-11-12).
+        "Reading direction" => "Hướng văn bản",
+        "Context" => "Theo ngữ cảnh",
+        "Left to right" => "Trái sang phải",
+        "Right to left" => "Phải sang trái",
         // NexusOffice: end of upstream keys.
         "Paste" => "Dán",
         "Paste Values" => "Dán giá trị",
