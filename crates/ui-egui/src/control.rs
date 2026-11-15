@@ -291,6 +291,10 @@ pub fn handle(app: &mut SheetApp, ctx: &egui::Context, method: &str, p: &Json) -
                     "Region",
                     "{value?: \"vi-VN\" | \"en-US\" | \"\" | null} (\"\" or null: follow the interface language; no value reads) → {region, effective}",
                 ),
+                ("ui.window.minimize", "Minimize Window", ""),
+                ("ui.window.maximize", "Maximize Window", "{on: bool}"),
+                ("ui.window.close", "Close Window", ""),
+                ("ui.window.beginResize", "Resize Window", "{direction: north|south|east|west|northeast|northwest|southeast|southwest}"),
                 ("ui.dialog", "Open Dialog", ""),
                 ("ui.backstage", "File (Backstage view)", "{page?: home|new|open|info|saveAs|print|export|options|account|close}"),
                 (
