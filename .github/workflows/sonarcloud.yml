@@ -21,4 +21,7 @@ jobs:
     if: github.repository == 'storytold/gridcraft'
     # Tracked at @main so org-wide CI improvements propagate without PR churn.
     uses: storytold/craft-common-actions/.github/workflows/sonarcloud.yml@main
+    with:
+      # Match the main CI gate so coverage exercises every glyph-sensitive UI case.
+      fonts-ref: b076417b5880bd4154bd22f00695b1d28c6bea83
     secrets: inherit
