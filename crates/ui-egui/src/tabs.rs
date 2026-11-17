@@ -533,11 +533,7 @@ pub(crate) fn selection_statistics(app: &SheetApp) -> Vec<String> {
     let part = |label: &str, value: String| {
         let template = format!("{label}: {{}}");
         let sentence = lang.tr(&template);
-        if sentence == template {
-            format!("{}: {value}", lang.tr(label))
-        } else {
-            crate::nexus_i18n::fill(sentence, &[&value])
-        }
+        if sentence == template { format!("{}: {value}", lang.tr(label)) } else { crate::nexus_i18n::fill(sentence, &[&value]) }
     };
     let mut parts = Vec::new();
     if on.average
