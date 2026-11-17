@@ -148,9 +148,12 @@ fn do_sort(s: &mut Session, sheet: usize, r: RangeRef, header: bool, keys: Vec<S
                 };
                 let o = if k.by != "values" {
                     ca.cmp(cb)
-                } else if let Some(list) = &k.list {
-                    let pos = |v: &Value| v.as_text().and_then(|t| list.iter().position(|x| x.eq_ignore_ascii_case(t)));
-                    match (pos(va), pos(vb)) {
+                } else if k.list.is_some() {
+                    // NexusOffice: the list position comes from `custom_list_ranks`, which folds
+                    // spelling and case (`fold_key`), so a decomposed or differently-cased cell
+                    // still matches its entry ("hà nội" in NFD, "ĐÀ NẴNG"). `u32::MAX` is "not in
+                    // the list"; comparing the ranks themselves would make it just another place.
+                    match (Some(*ca).filter(|r| *r != u32::MAX), Some(*cb).filter(|r| *r != u32::MAX)) {
                         (Some(a), Some(b)) => a.cmp(&b),
                         (Some(_), None) => Ordering::Less,
                         (None, Some(_)) => Ordering::Greater,
