@@ -525,8 +525,20 @@ pub(crate) fn selection_statistics(app: &SheetApp) -> Vec<String> {
     };
     // The label the right-click menu shows, then the value: clicking a statistic copies the part
     // after `": "`.
+    // NexusOffice: the status bar has its own Vietnamese wording (QC-SHT-02: "Số lượng: 4", not
+    // "Đếm: 4", while the word "Count" on its own stays "Đếm" in the menus and dialogs), and the
+    // catalogue holds it as the whole sentence. Where there is one, it is used; the value still
+    // follows `": "`, so clicking a statistic copies the same part as upstream.
     let lang = app.ui.language;
-    let part = |label: &str, value: String| format!("{}: {value}", lang.tr(label));
+    let part = |label: &str, value: String| {
+        let template = format!("{label}: {{}}");
+        let sentence = lang.tr(&template);
+        if sentence.as_ref() == template.as_str() {
+            format!("{}: {value}", lang.tr(label))
+        } else {
+            crate::nexus_i18n::fill(sentence.as_ref(), &[&value])
+        }
+    };
     let mut parts = Vec::new();
     if on.average
         && let Some(a) = st.average
