@@ -42,7 +42,7 @@ impl FileKind {
             "ods" => FileKind::Ods,
             "csv" => FileKind::Csv,
             "tsv" | "tab" | "txt" => FileKind::Tsv,
-            "json" | "scjson" => FileKind::Json,
+            ext if craft_gridcraft_format::is_extension(ext) => FileKind::Json,
             "html" | "htm" => FileKind::Html,
             "slk" => FileKind::Sylk,
             _ => return None,
@@ -332,7 +332,13 @@ fn read_plain(name: &str, bytes: &[u8], cx: &OpenContext) -> Result<(Workbook, V
     }
     match kind {
         Some(FileKind::Json) => {
-            let mut wb: Workbook = serde_json::from_slice(bytes).map_err(|e| EngineError::Other(format!("not a Nexus Sheet JSON workbook: {e}")))?;
+            // NexusOffice: craft-gridcraft-format's own message names the upstream product and
+            // has no option for the name, so the sentence is written here from the inner serde
+            // error (pinned by `crates/engine/tests/golden/bad.error.txt`).
+            let mut wb: Workbook = craft_gridcraft_format::read(bytes).map_err(|e| match e {
+                craft_gridcraft_format::Error::Read(e) => EngineError::Other(format!("not a Nexus Sheet JSON workbook: {e}")),
+                e => EngineError::Other(e.to_string()),
+            })?;
             wb.styles.rebuild_index();
             if wb.sheets.is_empty() {
                 // The file's macros are read after this (`macros::load`), so they come along.

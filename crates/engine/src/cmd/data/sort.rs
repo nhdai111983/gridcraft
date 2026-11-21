@@ -131,18 +131,40 @@ fn do_sort(s: &mut Session, sheet: usize, r: RangeRef, header: bool, keys: Vec<S
         let empty = (Value::Empty, 0, None);
         order.sort_by(|&a, &b| {
             for (ki, k) in keys.iter().enumerate() {
+                // NexusOffice: indexing a line or key that isn't there would panic, and text is
+                // compared through the locale's collation keys (`with_text_keys`).
                 let (va, ca, ta) = keyed.get(a as usize).and_then(|l| l.get(ki)).unwrap_or(&empty);
                 let (vb, cb, tb) = keyed.get(b as usize).and_then(|l| l.get(ki)).unwrap_or(&empty);
                 let text_order = || match (ta, tb) {
                     (Some(x), Some(y)) => x.cmp(y),
                     _ => sort_compare_with(va, vb, coll),
                 };
-                let o = if k.by != "values" || k.list.is_some() {
+                let plain = || {
+                    if case && va.is_text() && vb.is_text() {
+                        text_order().then_with(|| case_order(va.as_text().unwrap_or(""), vb.as_text().unwrap_or("")))
+                    } else {
+                        text_order()
+                    }
+                };
+                let o = if k.by != "values" {
                     ca.cmp(cb)
-                } else if case && va.is_text() && vb.is_text() {
-                    text_order().then_with(|| case_order(va.as_text().unwrap_or(""), vb.as_text().unwrap_or("")))
+                } else if k.list.is_some() {
+                    // NexusOffice: the list position comes from `custom_list_ranks`, which folds
+                    // spelling and case (`fold_key`), so a decomposed or differently-cased cell
+                    // still matches its entry ("hà nội" in NFD, "ĐÀ NẴNG"). `u32::MAX` is "not in
+                    // the list"; comparing the ranks themselves would make it just another place.
+                    match (Some(*ca).filter(|r| *r != u32::MAX), Some(*cb).filter(|r| *r != u32::MAX)) {
+                        (Some(a), Some(b)) => a.cmp(&b),
+                        (Some(_), None) => Ordering::Less,
+                        (None, Some(_)) => Ordering::Greater,
+                        // Values not in the list follow the listed ones in the usual order, as in Excel.
+                        // A descending key is left as it was: they tie, so the next key decides.
+                        // A blank has no place in the list either, but still goes last.
+                        (None, None) if k.desc => va.is_empty().cmp(&vb.is_empty()),
+                        (None, None) => plain(),
+                    }
                 } else {
-                    text_order()
+                    plain()
                 };
                 // Blanks always sort last, whatever the order.
                 let o = if k.desc && !(va.is_empty() || vb.is_empty()) { o.reverse() } else { o };

@@ -424,7 +424,7 @@ pub fn status_bar(app: &mut SheetApp, ui: &mut Ui) {
                         ui.add_space(12.0);
                         // Only a loop on the active sheet is named, so the address needs no sheet.
                         let label = match d.calc.circular.iter().find(|(si, _)| *si == d.wb.active_sheet()) {
-                            Some((_, c)) => crate::nexus_i18n::fill(app.ui.language.tr("Circular References: {}"), &[&c.a1()]),
+                            Some((_, c)) => app.ui.language.tr_fill("Circular References: {cell}", &[("cell", &c.a1())]),
                             None => app.ui.language.tr("Circular References").to_owned(),
                         };
                         text(ui, egui::RichText::new(label).font(theme::ui_font(12.5)).color(t.danger));
@@ -523,29 +523,38 @@ pub(crate) fn selection_statistics(app: &SheetApp) -> Vec<String> {
         let code = if code == "General" { "#,##0.##########".to_string() } else { code };
         gridcraft_engine::display::format(&gridcraft_engine::core::Value::Number(v), &code, &d.wb).text.trim_end_matches('.').to_string()
     };
-    // NexusOffice: the labels in the interface's language (templates are catalogue keys).
+    // The label the right-click menu shows, then the value: clicking a statistic copies the part
+    // after `": "`.
+    // NexusOffice: the status bar has its own Vietnamese wording (QC-SHT-02: "Số lượng: 4", not
+    // "Đếm: 4", while the word "Count" on its own stays "Đếm" in the menus and dialogs), and the
+    // catalogue holds it as the whole sentence. Where there is one, it is used; the value still
+    // follows `": "`, so clicking a statistic copies the same part as upstream.
     let lang = app.ui.language;
-    let tf = |template: &str, value: &str| crate::nexus_i18n::fill(lang.tr(template), &[value]);
+    let part = |label: &str, value: String| {
+        let template = format!("{label}: {{}}");
+        let sentence = lang.tr(&template);
+        if sentence == template { format!("{}: {value}", lang.tr(label)) } else { crate::nexus_i18n::fill(sentence, &[&value]) }
+    };
     let mut parts = Vec::new();
     if on.average
         && let Some(a) = st.average
     {
-        parts.push(tf("Average: {}", &fmt(a)));
+        parts.push(part("Average", fmt(a)));
     }
     if on.count && st.count > 0 {
-        parts.push(tf("Count: {}", &st.count.to_string()));
+        parts.push(part("Count", st.count.to_string()));
     }
     if on.numerical_count && st.count > 0 {
-        parts.push(tf("Numerical Count: {}", &st.numeric.to_string()));
+        parts.push(part("Numerical Count", st.numeric.to_string()));
     }
     if on.minimum && st.numeric > 0 {
-        parts.push(tf("Minimum: {}", &fmt(st.min)));
+        parts.push(part("Minimum", fmt(st.min)));
     }
     if on.maximum && st.numeric > 0 {
-        parts.push(tf("Maximum: {}", &fmt(st.max)));
+        parts.push(part("Maximum", fmt(st.max)));
     }
     if on.sum && st.numeric > 0 {
-        parts.push(tf("Sum: {}", &fmt(st.sum)));
+        parts.push(part("Sum", fmt(st.sum)));
     }
     parts
 }
@@ -594,6 +603,26 @@ mod tests {
 
     fn names(app: &SheetApp) -> Vec<String> {
         app.session.active().unwrap().wb.sheets.iter().map(|s| s.name.clone()).collect()
+    }
+
+    #[test]
+    fn status_bar_statistics_follow_the_interface_language() {
+        use crate::i18n::Language;
+        let mut session = gridcraft_engine::Session::default();
+        session.new_workbook();
+        let mut app = SheetApp::new(session, Default::default());
+        for (cell, input) in [("A1", "1"), ("A2", "2"), ("A3", "3")] {
+            app.run("cell.set", json!({"cell": cell, "input": input})).unwrap();
+        }
+        app.run("selection.set", json!({"range": "A1:A3"})).unwrap();
+        app.run("view.statusBar", json!({"numericalCount": true, "minimum": true, "maximum": true})).unwrap();
+        let parts = [("Average", "2"), ("Count", "3"), ("Numerical Count", "3"), ("Minimum", "1"), ("Maximum", "3"), ("Sum", "6")];
+        let english: Vec<String> = parts.iter().map(|(label, value)| format!("{label}: {value}")).collect();
+        assert_eq!(super::selection_statistics(&app), english);
+        app.ui.language = Language::It;
+        let italian: Vec<String> = parts.iter().map(|(label, value)| format!("{}: {value}", Language::It.tr(label))).collect();
+        assert_eq!(super::selection_statistics(&app), italian, "each label as the right-click menu shows it");
+        assert!(italian.iter().zip(&english).all(|(it, en)| it != en), "the Italian catalog translates every label: {italian:?}");
     }
 
     #[test]
