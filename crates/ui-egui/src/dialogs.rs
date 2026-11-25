@@ -30,6 +30,7 @@ mod nexus_save;
 mod paste;
 mod ref_edit;
 mod show;
+mod sort_dialog;
 mod spelling;
 mod zoom;
 
@@ -43,6 +44,7 @@ use nexus_locale::localize_solver_numbers;
 pub(crate) use ref_edit::SHEET_DELETED;
 pub(crate) use show::build_params;
 pub use show::show;
+pub(crate) use sort_dialog::{grid_sense, refuse_sheet_change};
 use zoom::zoom_preset;
 
 /// A form field. `Ref` is a range reference that can also be picked by selecting on the grid
@@ -69,6 +71,8 @@ pub struct Dialog {
     pub tab: String,
     pub search: String,
     pub list_index: usize,
+    /// Custom Sort's own state: the selection to restore and the column choices.
+    sort: sort_dialog::State,
     pub result: Option<Json>,
     /// "Show password" is ticked: password fields show their text.
     pub show_password: bool,
@@ -238,6 +242,7 @@ impl Dialog {
             tab: String::new(),
             search: String::new(),
             list_index: 0,
+            sort: Default::default(),
             result: None,
             show_password: false,
             focus_first_field: true,
@@ -263,6 +268,7 @@ impl Dialog {
             tab: String::new(),
             search: String::new(),
             list_index: 0,
+            sort: Default::default(),
             result: None,
             show_password: false,
             focus_first_field: false,
@@ -1020,11 +1026,7 @@ impl Dialog {
                 }],
                 json!({"kind": "blanks"}),
             ),
-            "sort" => {
-                // Seed "Sort by" from the column the user is actually in (#1906).
-                let col = app.session.active().map(|d| gridcraft_engine::core::col_to_letters(d.selection.active.col)).unwrap_or_else(|| "A".into());
-                Dialog::custom("sort", "Sort", json!({"header": true, "levels": [{"column": col, "order": "asc"}]}))
-            }
+            "sort" => sort_dialog::open(app, &params)?,
             "nameManager" => Dialog::custom("nameManager", "Name Manager", json!({})),
             "pasteName" => {
                 // F3 opens it only when the workbook has names to paste, as in Excel.
