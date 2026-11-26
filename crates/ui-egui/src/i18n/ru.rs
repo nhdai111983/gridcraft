@@ -471,8 +471,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "+ Add Level" => "+ Добавить уровень",
         "100% Stacked Bar" => "Нормированная линейчатая",
         "100% Stacked Column" => "Нормированная гистограмма",
-        "A clean-room, open-source, Rust-native spreadsheet. Part of ArtCraft." => {
-            "Электронные таблицы с открытым исходным кодом, написанные с нуля на Rust. Часть ArtCraft."
+        "A clean-room, open-source, Rust-native spreadsheet. Part of NexusOffice." => {
+            "Электронные таблицы с открытым исходным кодом, написанные с нуля на Rust. Часть NexusOffice."
         }
         "About" => "О программе",
         "Accessibility" => "Доступность",
@@ -500,8 +500,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Any value" => "Любое значение",
         "Area" => "С областями",
         "At each change in (column letter):" => "При каждом изменении в (буква столбца):",
-        "Automation in this workbook. GridCraft runs its own scripts; a file's VBA project is preserved but not executed." => {
-            "Автоматизация в этой книге. GridCraft выполняет собственные сценарии; проект VBA из файла сохраняется, но не выполняется."
+        "Automation in this workbook. Nexus Sheet runs its own scripts; a file's VBA project is preserved but not executed." => {
+            "Автоматизация в этой книге. Nexus Sheet выполняет собственные сценарии; проект VBA из файла сохраняется, но не выполняется."
         }
         "Background Color:" => "Цвет фона:",
         "Before sheet (position, 0 = first):" => "Перед листом (позиция, 0 = первый):",
@@ -652,8 +652,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Goal Seek" => "Подбор параметра",
         "Gradebook" => "Журнал оценок",
         "Green Fill with Dark Green Text" => "Зелёная заливка и тёмно-зелёный текст",
-        "GridCraft is fully drivable by agents. Every menu item, button and gesture is a command:" => {
-            "GridCraft полностью управляется агентами. Каждый пункт меню, кнопка и жест — это команда:"
+        "Nexus Sheet is fully drivable by agents. Every menu item, button and gesture is a command:" => {
+            "Nexus Sheet полностью управляется агентами. Каждый пункт меню, кнопка и жест — это команда:"
         }
         "Grouped By:" => "Группировать по:",
         "Growth" => "Рост",
@@ -1065,8 +1065,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Distinct Count" => "Число уникальных",
         "Summarize by Distinct Count" => "Итоги по числу уникальных",
         "A calculated field can't use Distinct Count." => "Вычисляемое поле не может использовать число уникальных.",
-        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only GridCraft reads, so Excel's Refresh turns it into a plain count." => {
-            "В этой книге есть сводная таблица с полем значений «Число уникальных». В файле .xlsx оно сохраняется как обычное Количество вместе с меткой, которую читает только GridCraft, поэтому команда Обновить в Excel превращает его в обычное количество."
+        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count." => {
+            "В этой книге есть сводная таблица с полем значений «Число уникальных». В файле .xlsx оно сохраняется как обычное Количество вместе с меткой, которую читает только Nexus Sheet, поэтому команда Обновить в Excel превращает его в обычное количество."
         }
         "My list has headers" => "Мои данные содержат заголовки",
         "Sort by" => "Сортировать по",

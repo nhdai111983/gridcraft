@@ -169,7 +169,7 @@ fn save(s: &mut Session, p: &Json) -> Result<Json> {
 
 /// Shown when a workbook with a Distinct Count PivotTable value field is saved as .xlsx for the first time (#3336): the
 /// file stores a plain Count that only GridCraft's private marker turns back into Distinct Count.
-const DISTINCT_COUNT_NOTICE: &str = "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only GridCraft reads, so Excel's Refresh turns it into a plain count.";
+const DISTINCT_COUNT_NOTICE: &str = "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count.";
 
 /// Every Distinct Count value field of the workbook, as (sheet, pivot, value) positions.
 fn distinct_count_fields(wb: &gridcraft_model::Workbook) -> Vec<(usize, usize, usize)> {

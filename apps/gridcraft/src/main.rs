@@ -281,18 +281,18 @@ fn initialize_nightly_process_identity() -> Result<(), process_identity::Identit
 /// Tell a desktop user why a nightly launch was refused. A headless form (`--version` on a runner)
 /// never gets here: the version query is answered before this and before any profile work.
 fn report_launch_profile_error(error: &str) {
-    eprintln!("GridCraft launch profile: {error}");
+    eprintln!("Nexus Sheet launch profile: {error}");
     let desktop_session = cfg!(windows)
         || cfg!(target_os = "macos")
         || (cfg!(target_os = "linux") && ["DISPLAY", "WAYLAND_DISPLAY"].into_iter().any(|key| std::env::var_os(key).is_some_and(|v| !v.is_empty())));
     if build_flavor::needs_native_error(build_flavor::COMPILED, desktop_session) {
         if let Err(error) = initialize_nightly_process_identity() {
-            eprintln!("GridCraft launch profile: {error}");
+            eprintln!("Nexus Sheet launch profile: {error}");
             return;
         }
         #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         let _ = rfd::MessageDialog::new()
-            .set_title("GridCraft Nightly")
+            .set_title("Nexus Sheet Nightly")
             .set_description(error)
             .set_level(rfd::MessageLevel::Error)
             .set_buttons(rfd::MessageButtons::Ok)
@@ -403,7 +403,7 @@ fn main() -> eframe::Result<()> {
     // The control channel is a stable-only service: a nightly window owns no port, writes no
     // token and never inherits the stable app's `GRIDCRAFT_CONTROL_PORT`/`GRIDCRAFT_CONTROL_TOKEN`.
     if nightly && args.iter().any(|a| a == "--control" || a == "--control-token") {
-        eprintln!("GridCraft Nightly: the control channel is not part of the nightly channel");
+        eprintln!("Nexus Sheet Nightly: the control channel is not part of the nightly channel");
         std::process::exit(2);
     }
     let mut control_port: Option<u16> = (!nightly).then(|| std::env::var("GRIDCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok())).flatten();
@@ -480,14 +480,14 @@ fn main() -> eframe::Result<()> {
                 && watch.previous_unclean()
             {
                 app.notice = Some(gridcraft_ui_egui::Notice {
-                    text: "The last GridCraft Nightly session did not finish cleanly. Your saved workbooks are as you left them; only unsaved changes are affected.".into(),
+                    text: "The last Nexus Sheet Nightly session did not finish cleanly. Your saved workbooks are as you left them; only unsaved changes are affected.".into(),
                     kind: gridcraft_ui_egui::NoticeKind::Warning,
                     action: None,
                 });
                 nightly_notice_shown = true;
             }
             if unavailable {
-                log::warn!("this window shares a GridCraft Nightly profile another window owns; its exit is not recorded");
+                log::warn!("this window shares a Nexus Sheet Nightly profile another window owns; its exit is not recorded");
             }
             *session_watch.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = watch;
         }

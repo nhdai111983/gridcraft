@@ -13,8 +13,8 @@ pub const COMPILED: BuildFlavor = if cfg!(gridcraft_nightly_v1) { BuildFlavor::N
 
 pub fn require_profile(flavor: BuildFlavor, profile: &Profile) -> Result<(), String> {
     match (flavor, profile.is_nightly()) {
-        (BuildFlavor::NightlyV1, false) => Err("Open GridCraft Nightly from ArtCraft Launcher".into()),
-        (BuildFlavor::Stable, true) => Err("This is a stable GridCraft build; nightly-v1 requires the nightly build".into()),
+        (BuildFlavor::NightlyV1, false) => Err("Open Nexus Sheet Nightly from NexusOffice Launcher".into()),
+        (BuildFlavor::Stable, true) => Err("This is a stable Nexus Sheet build; nightly-v1 requires the nightly build".into()),
         _ => Ok(()),
     }
 }
@@ -49,7 +49,7 @@ mod tests {
     fn nightly_build_without_a_profile_is_refused_before_startup() {
         let started = std::cell::Cell::new(false);
         let result = require_profile(BuildFlavor::NightlyV1, &Profile::Stable).map(|()| started.set(true));
-        assert!(result.unwrap_err().contains("ArtCraft Launcher"));
+        assert!(result.unwrap_err().contains("NexusOffice Launcher"));
         assert!(!started.get());
     }
 

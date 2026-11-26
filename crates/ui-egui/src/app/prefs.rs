@@ -63,7 +63,7 @@ impl SheetApp {
         // Never from the nightly channel: a check would download into, and record in, the stable
         // app's folders, and an install would replace a Launcher-managed copy.
         if !crate::channel::stable_services_allowed() {
-            self.message = Some((crate::channel::name().into(), "GridCraft Nightly is updated by ArtCraft Launcher.".into()));
+            self.message = Some((crate::channel::name().into(), "Nexus Sheet Nightly is updated by NexusOffice Launcher.".into()));
             return;
         }
         #[cfg(not(target_arch = "wasm32"))]

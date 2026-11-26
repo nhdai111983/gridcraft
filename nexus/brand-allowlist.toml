@@ -195,3 +195,12 @@ reason = "Nguồn build: upstream ghim cả họ egui 0.37 và winit vào fork s
 path = ".github/workflows/{nexus-ci.yml,nexus-release.yml}"
 pattern = 'github\.com/storytold/craft-i18n'
 reason = "Bản dịch giao diện (cả tiếng Việt) upstream chuyển ra storytold/craft-i18n (đầu vào build CRAFT_I18N_DIR, ghim ở craft-i18n.rev); workflow lấy về lúc build, không phát hành URL. Giống mục của wordcraft"
+
+# ---------------------------------------------------------------------------------------------
+# Đồng bộ 2026-11-26: công cụ kênh "nightly-v1" của upstream (#4733 và các commit đi kèm)
+# ---------------------------------------------------------------------------------------------
+
+[[allow]]
+path = "{.github/workflows/nightly.yml,.github/workflows/nightly-sign.yml,assets/app-icon/nightly-provenance.json,packaging/nightly-common.sh,packaging/nightly-icons.py,packaging/nightly-release-tests.py,packaging/linux/nightly-launch.sh,packaging/linux/nightly-linux-launch-tests.py,packaging/macos/nightly.sh,packaging/macos/nightly-lib.sh,packaging/macos/nightly-sign.sh,packaging/macos/nightly-verify.sh,packaging/macos/nightly_plist.py,packaging/macos/nightly_plist_tests.py,packaging/macos/nightly_sign_tests.py,packaging/windows/nightly.ps1,packaging/windows/nightly-package-tests.ps1}"
+pattern = '.*(GridCraft|ArtCraft|gridcraft).*'
+reason = "Công cụ đóng gói/ký cho kênh nightly của upstream. Fork KHÔNG phát hành kênh nightly: hai workflow chỉ chạy bằng workflow_dispatch (không có lịch), và các script này không nằm trong đường phát hành nexus-release.yml. Giữ nguyên để lần đồng bộ sau không xung đột; nếu một ngày fork phát hành nightly thì phải đổi nhãn các tệp này trước, rồi xoá mục này."

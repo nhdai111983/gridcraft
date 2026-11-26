@@ -74,7 +74,7 @@ pub struct Server {
 
 impl Server {
     pub fn new(backend: Box<dyn Backend>) -> Self {
-        let info = Info { name: "gridcraft", title: "GridCraft", version: env!("CARGO_PKG_VERSION"), max_line: MAX_LINE };
+        let info = Info { name: "gridcraft", title: "Nexus Sheet", version: env!("CARGO_PKG_VERSION"), max_line: MAX_LINE };
         let options = Options { website_url: None, tool_errors_as_results: false, strict_request_ids: true };
         Self { inner: craft_mcp_server::Server::new(info, GridcraftTools { backend }).with_options(options) }
     }

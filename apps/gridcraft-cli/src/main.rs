@@ -91,7 +91,7 @@ fn main() -> ExitCode {
     // The nightly profile protocol belongs to the desktop app: the Launcher's selector is not a
     // CLI option, and a CLI that silently ignored it would act on the wrong files.
     if let Some(flag) = launch_profile_argument(&raw) {
-        eprintln!("gridcraft-cli: {flag} belongs to the GridCraft desktop app, not this CLI");
+        eprintln!("gridcraft-cli: {flag} belongs to the Nexus Sheet desktop app, not this CLI");
         return ExitCode::from(2);
     }
     let args: Vec<String> = std::env::args().skip(1).collect();

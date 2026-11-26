@@ -1031,8 +1031,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Expand dialog" => "Розгорнути діалогове вікно",
         "Distinct Count" => "Кількість унікальних",
         "A calculated field can't use Distinct Count." => "Обчислюване поле не може використовувати кількість унікальних.",
-        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only GridCraft reads, so Excel's Refresh turns it into a plain count." => {
-            "Ця книга містить зведену таблицю з полем значень «Кількість унікальних». У файлі .xlsx воно зберігається як звичайна Кількість разом із міткою, яку читає лише GridCraft, тому Оновити в Excel перетворює його на звичайну кількість."
+        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count." => {
+            "Ця книга містить зведену таблицю з полем значень «Кількість унікальних». У файлі .xlsx воно зберігається як звичайна Кількість разом із міткою, яку читає лише Nexus Sheet, тому Оновити в Excel перетворює його на звичайну кількість."
         }
         "Numerical Count" => "Кількість чисел",
         "Minimum" => "Мінімум",

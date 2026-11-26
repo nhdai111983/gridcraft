@@ -1027,8 +1027,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Expand dialog" => "Rozwiń okno dialogowe",
         "Distinct Count" => "Licznik unikatowych",
         "A calculated field can't use Distinct Count." => "Pole obliczeniowe nie może używać licznika unikatowych.",
-        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only GridCraft reads, so Excel's Refresh turns it into a plain count." => {
-            "Ten skoroszyt zawiera tabelę przestawną z polem wartości „Licznik unikatowych”. W pliku .xlsx jest ona zapisana jako zwykły Licznik wraz ze znacznikiem, który odczytuje tylko GridCraft, więc Odśwież w programie Excel zamienia ją w zwykły licznik."
+        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count." => {
+            "Ten skoroszyt zawiera tabelę przestawną z polem wartości „Licznik unikatowych”. W pliku .xlsx jest ona zapisana jako zwykły Licznik wraz ze znacznikiem, który odczytuje tylko Nexus Sheet, więc Odśwież w programie Excel zamienia ją w zwykły licznik."
         }
         "Numerical Count" => "Liczba wartości liczbowych",
         "Minimum" => "Minimum",

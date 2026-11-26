@@ -604,8 +604,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Distinct Count" => "Počet různých",
         "Summarize by Distinct Count" => "Shrnout podle počtu různých",
         "A calculated field can't use Distinct Count." => "Počítané pole nemůže používat počet různých.",
-        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only GridCraft reads, so Excel's Refresh turns it into a plain count." => {
-            "Tento sešit obsahuje kontingenční tabulku s hodnotovým polem „Počet různých“. V souboru .xlsx se ukládá jako obyčejný Počet spolu se značkou, kterou čte jen GridCraft, takže Aktualizovat v Excelu z něj udělá obyčejný počet."
+        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count." => {
+            "Tento sešit obsahuje kontingenční tabulku s hodnotovým polem „Počet různých“. V souboru .xlsx se ukládá jako obyčejný Počet spolu se značkou, kterou čte jen Nexus Sheet, takže Aktualizovat v Excelu z něj udělá obyčejný počet."
         }
         "My list has headers" => "Data obsahují záhlaví",
         "Sort by" => "Seřadit podle",

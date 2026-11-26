@@ -1,5 +1,5 @@
-//! GridCraft's nightly profile fences: no stable fallback, no migration and no change to the
-//! process environment. Every stable place a GridCraft build keeps user state is refused as a
+//! Nexus Sheet's nightly profile fences: no stable fallback, no migration and no change to the
+//! process environment. Every stable place a Nexus Sheet build keeps user state is refused as a
 //! nightly root, in both directions, so the two channels can never share a file.
 
 use std::ffi::OsString;
@@ -105,13 +105,13 @@ fn forbidden_roots(platform: Platform, env: &impl Fn(&str) -> Option<OsString>, 
             // token folder, plus both MSI install folders (`install-policy.wxi`).
             let mut roots = ["APPDATA", "LOCALAPPDATA"]
                 .into_iter()
-                .map(|key| required_base(env, key).map(|p| p.join("GridCraft")))
+                .map(|key| required_base(env, key).map(|p| p.join("Nexus Sheet")))
                 .collect::<Result<Vec<_>, _>>()?;
-            roots.push(required_base(env, "LOCALAPPDATA")?.join("Programs").join("ArtCraft").join("GridCraft"));
+            roots.push(required_base(env, "LOCALAPPDATA")?.join("Programs").join("NexusOffice").join("Nexus Sheet"));
             roots.push(required_base(env, "USERPROFILE")?.join(WINDOWS_TOKEN_DIR));
             for key in ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"] {
                 if let Some(base) = env(key).filter(|v| !v.is_empty()) {
-                    roots.push(absolute(PathBuf::from(base), key)?.join("ArtCraft").join("GridCraft"));
+                    roots.push(absolute(PathBuf::from(base), key)?.join("NexusOffice").join("Nexus Sheet"));
                 }
             }
             roots
@@ -133,14 +133,14 @@ fn forbidden_roots(platform: Platform, env: &impl Fn(&str) -> Option<OsString>, 
             let home = required_base(env, "HOME")?;
             let library = home.join("Library");
             vec![
-                library.join("Application Support/GridCraft"),
-                library.join("Caches/GridCraft"),
+                library.join("Application Support/Nexus Sheet"),
+                library.join("Caches/Nexus Sheet"),
                 library.join("Caches/ai.storyteller.gridcraft"),
-                library.join("Preferences/GridCraft"),
+                library.join("Preferences/Nexus Sheet"),
                 library.join("Preferences/ai.storyteller.gridcraft.plist"),
                 library.join("Saved Application State/ai.storyteller.gridcraft.savedState"),
-                home.join("Applications/GridCraft.app"),
-                PathBuf::from("/Applications/GridCraft.app"),
+                home.join("Applications/Nexus Sheet.app"),
+                PathBuf::from("/Applications/Nexus Sheet.app"),
             ]
         }
     };
@@ -217,7 +217,7 @@ fn validate_for(
         && let Some(id) = env("FLATPAK_ID").filter(|value| !value.is_empty())
         && id.to_string_lossy().as_ref() != gridcraft_ui_egui::channel::NIGHTLY_PACKAGE_ID
     {
-        // `packaging/linux/flatpak-bundle.sh` builds GridCraft Nightly as its own Flatpak
+        // `packaging/linux/flatpak-bundle.sh` builds Nexus Sheet Nightly as its own Flatpak
         // (`ai.storyteller.gridcraft.nightly`), whose sandbox is already a private home, so that one
         // instance may carry a profile. Any other, the stable app's included, could point it at
         // another installation's tree; these rows are otherwise native tar/app-bundle launches.
@@ -317,10 +317,10 @@ mod tests {
     #[test]
     fn every_stable_data_root_is_refused_on_its_own_platform() {
         let mut fixture = Fixture::new();
-        // Windows: APPDATA\GridCraft (settings and logs), LOCALAPPDATA\GridCraft, the per-user
+        // Windows: APPDATA\Nexus Sheet (settings and logs), LOCALAPPDATA\Nexus Sheet, the per-user
         // and per-machine install folders and the control-token folder.
         for key in ["APPDATA", "LOCALAPPDATA"] {
-            let stable = PathBuf::from(fixture.get(key).unwrap()).join("GridCraft");
+            let stable = PathBuf::from(fixture.get(key).unwrap()).join("Nexus Sheet");
             for candidate in [stable.clone(), stable.join("nightly")] {
                 assert!(fixture.check(Platform::Windows, &candidate).unwrap_err().contains("overlap"), "{key}");
             }
@@ -328,15 +328,15 @@ mod tests {
         }
         assert!(
             fixture
-                .check(Platform::Windows, &PathBuf::from(fixture.get("LOCALAPPDATA").unwrap()).join("Programs/ArtCraft/GridCraft/nightly"))
+                .check(Platform::Windows, &PathBuf::from(fixture.get("LOCALAPPDATA").unwrap()).join("Programs/NexusOffice/Nexus Sheet/nightly"))
                 .is_err()
         );
         assert!(fixture.check(Platform::Windows, &fixture.home().join(".gridcraft/nightly")).is_err());
         for key in ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"] {
             let base = fixture.root.join(format!("machine {key}"));
             fixture.env.insert(key.into(), base.clone().into_os_string());
-            assert!(fixture.check(Platform::Windows, &base.join("ArtCraft/GridCraft/nightly")).is_err(), "{key}");
-            assert!(!base.join("ArtCraft/GridCraft").exists());
+            assert!(fixture.check(Platform::Windows, &base.join("NexusOffice/Nexus Sheet/nightly")).is_err(), "{key}");
+            assert!(!base.join("NexusOffice/Nexus Sheet").exists());
         }
         // Linux: the four XDG folders, then the stable Flatpak row and the token folder.
         for key in ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"] {
@@ -356,9 +356,9 @@ mod tests {
         assert!(fixture.check(Platform::Linux, Path::new("/usr/bin/gridcraft/../gridcraft-nightly")).is_err(), "parent traversal is refused");
         // macOS: the four Library rows and the bundle itself.
         for suffix in [
-            "Application Support/GridCraft",
-            "Caches/GridCraft",
-            "Preferences/GridCraft",
+            "Application Support/Nexus Sheet",
+            "Caches/Nexus Sheet",
+            "Preferences/Nexus Sheet",
             "Saved Application State/ai.storyteller.gridcraft.savedState",
         ] {
             assert!(fixture.check(Platform::Mac, &fixture.home().join("Library").join(suffix).join("nightly")).is_err(), "{suffix}");
@@ -376,10 +376,10 @@ mod tests {
             fixture
                 .check(
                     Platform::Linux,
-                    &PathBuf::from(fixture.get("LOCALAPPDATA").unwrap()).join("Programs/ArtCraft/ArtCraftLauncher/nightly/gridcraft")
+                    &PathBuf::from(fixture.get("LOCALAPPDATA").unwrap()).join("Programs/NexusOffice/NexusOfficeLauncher/nightly/gridcraft")
                 )
                 .is_ok(),
-            "the Launcher's own folder is not GridCraft's install"
+            "the Launcher's own folder is not Nexus Sheet's install"
         );
     }
 
@@ -405,13 +405,13 @@ mod tests {
     #[test]
     fn mac_fences_the_whole_bundle_not_just_its_macos_folder() {
         let mut fixture = Fixture::new();
-        fixture.exe = fixture.root.join("install/GridCraft Nightly.app/Contents/MacOS/GridCraft");
+        fixture.exe = fixture.root.join("install/Nexus Sheet Nightly.app/Contents/MacOS/Nexus Sheet");
         std::fs::create_dir_all(fixture.exe.parent().unwrap()).unwrap();
         std::fs::write(&fixture.exe, b"fixture executable, never run").unwrap();
         let inside_resources = fixture.exe.parent().unwrap().parent().unwrap().join("Resources/profile");
         assert!(fixture.check(Platform::Mac, &inside_resources).unwrap_err().contains("overlap"));
         assert!(!inside_resources.exists());
-        assert!(fixture.check(Platform::Mac, &fixture.home().join("Library/Application Support/ArtCraft/nightly/profiles/gridcraft")).is_ok());
+        assert!(fixture.check(Platform::Mac, &fixture.home().join("Library/Application Support/NexusOffice/nightly/profiles/gridcraft")).is_ok());
     }
 
     #[test]

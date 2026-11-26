@@ -1033,8 +1033,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Expand dialog" => "Ανάπτυξη παραθύρου διαλόγου",
         "Distinct Count" => "Πλήθος διακριτών",
         "A calculated field can't use Distinct Count." => "Ένα υπολογιζόμενο πεδίο δεν μπορεί να χρησιμοποιήσει πλήθος διακριτών.",
-        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only GridCraft reads, so Excel's Refresh turns it into a plain count." => {
-            "Αυτό το βιβλίο εργασίας έχει μια συγκεντρωτική λίστα με πεδίο τιμών «Πλήθος διακριτών». Στο αρχείο .xlsx αποθηκεύεται ως απλό Πλήθος μαζί με έναν δείκτη που διαβάζει μόνο το GridCraft, οπότε η Ανανέωση στο Excel το μετατρέπει σε απλό πλήθος."
+        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count." => {
+            "Αυτό το βιβλίο εργασίας έχει μια συγκεντρωτική λίστα με πεδίο τιμών «Πλήθος διακριτών». Στο αρχείο .xlsx αποθηκεύεται ως απλό Πλήθος μαζί με έναν δείκτη που διαβάζει μόνο το Nexus Sheet, οπότε η Ανανέωση στο Excel το μετατρέπει σε απλό πλήθος."
         }
         "Numerical Count" => "Αριθμητικό πλήθος",
         "Minimum" => "Ελάχιστο",

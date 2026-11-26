@@ -50,7 +50,7 @@ fn main() {
         return;
     }
     let mut res = winresource::WindowsResource::new();
-    res.set_icon("../../nexus/assets/nexus-sheet.ico")
+    res.set_icon(build_channel::windows_icon_path(nightly))
         .set("ProductName", if nightly { "Nexus Sheet Nightly" } else { "Nexus Sheet" })
         .set("FileDescription", if nightly { "Nexus Sheet Nightly spreadsheet" } else { "Nexus Sheet spreadsheet" })
         .set("CompanyName", "SonnyTech")

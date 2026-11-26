@@ -455,8 +455,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Distinct Count" => "Benzersiz Sayı",
         "Summarize by Distinct Count" => "Benzersiz Sayıya göre özetle",
         "A calculated field can't use Distinct Count." => "Hesaplanmış alan Benzersiz Sayı kullanamaz.",
-        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only GridCraft reads, so Excel's Refresh turns it into a plain count." => {
-            "Bu çalışma kitabında değer alanı “Benzersiz Sayı” olan bir PivotTable var. .xlsx dosyasında düz bir Sayı olarak ve yalnızca GridCraft'in okuduğu bir işaretle saklanır; bu yüzden Excel'de Yenile onu düz bir sayıya dönüştürür."
+        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count." => {
+            "Bu çalışma kitabında değer alanı “Benzersiz Sayı” olan bir PivotTable var. .xlsx dosyasında düz bir Sayı olarak ve yalnızca Nexus Sheet'in okuduğu bir işaretle saklanır; bu yüzden Excel'de Yenile onu düz bir sayıya dönüştürür."
         }
         "My list has headers" => "Verilerimde üst bilgi var",
         "Sort by" => "Sıralama ölçütü",

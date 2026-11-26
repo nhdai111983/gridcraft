@@ -14,8 +14,10 @@ pub fn is_nightly_version(version: &str) -> bool {
         && parts[3].strip_prefix('g').is_some_and(|sha| sha.len() == 12 && sha.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)))
 }
 
-pub fn windows_icon_path(nightly: bool) -> &'static str {
-    if nightly { "../../assets/app-icon/gridcraft-nightly.ico" } else { "../../assets/app-icon/gridcraft.ico" }
+/// NexusOffice: the fork ships one Windows icon for both channels (it publishes no nightly, and
+/// has no separate nightly artwork), so stable keeps the icon it always had.
+pub fn windows_icon_path(_nightly: bool) -> &'static str {
+    "../../nexus/assets/nexus-sheet.ico"
 }
 
 #[cfg(test)]
@@ -23,8 +25,9 @@ mod tests {
     use super::*;
     #[test]
     fn windows_resource_uses_the_flavor_specific_icon_without_changing_stable() {
-        assert_eq!(windows_icon_path(false), "../../assets/app-icon/gridcraft.ico");
-        assert_eq!(windows_icon_path(true), "../../assets/app-icon/gridcraft-nightly.ico");
+        assert_eq!(windows_icon_path(false), "../../nexus/assets/nexus-sheet.ico");
+        // The fork has no nightly artwork; a nightly build must still point at a file that exists.
+        assert_eq!(windows_icon_path(true), windows_icon_path(false));
     }
 
     #[test]

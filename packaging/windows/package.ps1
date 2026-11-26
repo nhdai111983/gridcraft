@@ -98,7 +98,7 @@ foreach ($check in @(@('gridcraft.exe', 2), @('gridcraft-cli.exe', 3))) {
 }
 # The nightly flavor has its own identity; shipping it as the stable app would hand a nightly window
 # the stable taskbar identity, data folder and update channel (#16335).
-if ((Get-Item -LiteralPath (Join-Path $Bin 'gridcraft.exe')).VersionInfo.ProductName -eq 'GridCraft Nightly') {
+if ((Get-Item -LiteralPath (Join-Path $Bin 'gridcraft.exe')).VersionInfo.ProductName -eq 'Nexus Sheet Nightly') {
   throw 'a nightly executable cannot be packaged as stable'
 }
 $Stage = Join-Path $TargetDir "windows-package\$Arch"

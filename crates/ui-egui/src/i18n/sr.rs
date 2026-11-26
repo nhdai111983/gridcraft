@@ -485,8 +485,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Distinct Count" => "Broj različitih",
         "Summarize by Distinct Count" => "Sažmi po broju različitih",
         "A calculated field can't use Distinct Count." => "Izračunato polje ne može koristiti broj različitih.",
-        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only GridCraft reads, so Excel's Refresh turns it into a plain count." => {
-            "Ova radna sveska ima zaokretnu tabelu sa poljem vrednosti „Broj različitih“. U .xlsx datoteci čuva se kao običan Broj uz oznaku koju čita samo GridCraft, pa ga Osveži u Excelu pretvara u običan broj."
+        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count." => {
+            "Ova radna sveska ima zaokretnu tabelu sa poljem vrednosti „Broj različitih“. U .xlsx datoteci čuva se kao običan Broj uz oznaku koju čita samo Nexus Sheet, pa ga Osveži u Excelu pretvara u običan broj."
         }
         "My list has headers" => "Moji podaci imaju zaglavlja",
         "Sort by" => "Sortiraj po",

@@ -521,8 +521,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Show" => "Anzeigen",
         "Collapse dialog" => "Dialogfeld reduzieren",
         "Expand dialog" => "Dialogfeld erweitern",
-        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only GridCraft reads, so Excel's Refresh turns it into a plain count." => {
-            "Diese Arbeitsmappe enthält eine PivotTable mit einem Wertfeld „Distinkte Anzahl“. In der .xlsx-Datei wird sie als normale Anzahl mit einer Markierung gespeichert, die nur GridCraft liest; Aktualisieren in Excel macht daraus eine normale Anzahl."
+        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count." => {
+            "Diese Arbeitsmappe enthält eine PivotTable mit einem Wertfeld „Distinkte Anzahl“. In der .xlsx-Datei wird sie als normale Anzahl mit einer Markierung gespeichert, die nur Nexus Sheet liest; Aktualisieren in Excel macht daraus eine normale Anzahl."
         }
         "Distinct Count" => "Distinkte Anzahl",
         "Summarize by Distinct Count" => "Nach Distinkter Anzahl zusammenfassen",

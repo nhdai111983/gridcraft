@@ -528,8 +528,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Show" => "Mostrar",
         "Collapse dialog" => "Contraer diálogo",
         "Expand dialog" => "Expandir diálogo",
-        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only GridCraft reads, so Excel's Refresh turns it into a plain count." => {
-            "Este libro tiene una tabla dinámica con un campo de valor «Recuento distinto». En el archivo .xlsx se guarda como un Recuento normal con una marca que solo lee GridCraft; Actualizar en Excel lo convierte en un recuento normal."
+        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count." => {
+            "Este libro tiene una tabla dinámica con un campo de valor «Recuento distinto». En el archivo .xlsx se guarda como un Recuento normal con una marca que solo lee Nexus Sheet; Actualizar en Excel lo convierte en un recuento normal."
         }
         "Distinct Count" => "Recuento distinto",
         "A calculated field can't use Distinct Count." => "Un campo calculado no puede usar «Recuento distinto».",

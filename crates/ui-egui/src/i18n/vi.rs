@@ -1566,8 +1566,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Distinct Count" => "Đếm riêng biệt",
         "Summarize by Distinct Count" => "Tóm tắt theo Đếm riêng biệt",
         "A calculated field can't use Distinct Count." => "Trường tính toán không thể dùng Đếm riêng biệt.",
-        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only GridCraft reads, so Excel's Refresh turns it into a plain count." => {
-            "Sổ làm việc này có PivotTable với trường giá trị “Đếm riêng biệt”. Trong tệp .xlsx, trường này được lưu dưới dạng Đếm thông thường cùng một dấu hiệu mà chỉ GridCraft đọc, nên Làm mới trong Excel sẽ biến nó thành đếm thông thường."
+        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count." => {
+            "Sổ làm việc này có PivotTable với trường giá trị “Đếm riêng biệt”. Trong tệp .xlsx, trường này được lưu dưới dạng Đếm thông thường cùng một dấu hiệu mà chỉ Nexus Sheet đọc, nên Làm mới trong Excel sẽ biến nó thành đếm thông thường."
         }
         "Add Level" => "Thêm cấp",
         "Delete Level" => "Xóa cấp",

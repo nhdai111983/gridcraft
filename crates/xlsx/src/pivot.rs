@@ -59,7 +59,7 @@ const NS_X14: &str = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/m
 /// GridCraft's `dataField` extension: `<gc:summary func="distinctCount"/>` marks a value field
 /// written as `subtotal="count"` as a Distinct Count (see the module documentation).
 const EXT_GC_DATA_FIELD: &str = "{80B1AD42-0C9F-45FF-B109-D57FB0F4F0B4}";
-const NS_GC: &str = "https://github.com/storytold/gridcraft/ns/pivot/2026";
+const NS_GC: &str = "https://github.com/sonnytech-vn/gridcraft/ns/pivot/2026";
 
 const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
