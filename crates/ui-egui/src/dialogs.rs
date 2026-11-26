@@ -283,6 +283,26 @@ impl Dialog {
         }
     }
 
+    /// The Solver dialog's starting fields: the sheet's saved model, else the active cell as
+    /// objective, with the fields given when opening it over either. Split out of
+    /// [`Dialog::open`] (unchanged behaviour) so that match stays within the complexity limit as
+    /// both the fork and upstream add dialogs.
+    fn solver_start_values(saved: Option<&Json>, active: &str, params: &Json) -> Json {
+        let mut values =
+            json!({"objective": active, "goal": "max", "value": "0", "variables": "", "constraints": [], "nonNegative": true, "method": "grg"});
+        for m in [saved, Some(params)].into_iter().flatten().filter_map(Json::as_object) {
+            if let Some(v) = values.as_object_mut() {
+                for (k, x) in m {
+                    v.insert(k.clone(), if k == "value" { json!(x.as_str().map_or_else(|| x.to_string(), str::to_string)) } else { x.clone() });
+                }
+            }
+        }
+        if let Some(v) = values.as_object_mut() {
+            v.insert("newOp".into(), json!("<="));
+        }
+        values
+    }
+
     /// Opens the named dialog with defaults from the active workbook, including a cell's stored hyperlink.
     pub fn open(app: &mut SheetApp, name: &str, params: Json) -> Option<Dialog> {
         let sel = app.session.active().map(|d| d.selection.current().a1()).unwrap_or_default();
@@ -775,20 +795,7 @@ impl Dialog {
                 // Starts from the sheet's saved model, else the active cell as objective; fields
                 // given when opening it go over either.
                 let saved = app.session.active().and_then(|doc| gridcraft_engine::cmd::solver::saved_model(&doc.wb, doc.wb.active_sheet()));
-                let mut values = json!({"objective": active, "goal": "max", "value": "0", "variables": "", "constraints": [], "nonNegative": true, "method": "grg"});
-                for m in [saved.as_ref(), Some(&params)].into_iter().flatten().filter_map(Json::as_object) {
-                    if let Some(v) = values.as_object_mut() {
-                        for (k, x) in m {
-                            v.insert(
-                                k.clone(),
-                                if k == "value" { json!(x.as_str().map_or_else(|| x.to_string(), str::to_string)) } else { x.clone() },
-                            );
-                        }
-                    }
-                }
-                if let Some(v) = values.as_object_mut() {
-                    v.insert("newOp".into(), json!("<="));
-                }
+                let mut values = Self::solver_start_values(saved.as_ref(), &active, &params);
                 // The saved model's numbers are en-US; the dialog shows and sends them the way
                 // the interface types them (`locale` goes with the command).
                 localize_solver_numbers(&mut values, app.ui.regional_format());
