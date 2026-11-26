@@ -30,6 +30,7 @@ mod nexus_save;
 mod paste;
 mod ref_edit;
 mod show;
+mod sort_dialog;
 mod spelling;
 mod zoom;
 
@@ -43,6 +44,7 @@ use nexus_locale::localize_solver_numbers;
 pub(crate) use ref_edit::SHEET_DELETED;
 pub(crate) use show::build_params;
 pub use show::show;
+pub(crate) use sort_dialog::{grid_sense, refuse_sheet_change};
 use zoom::zoom_preset;
 
 /// A form field. `Ref` is a range reference that can also be picked by selecting on the grid
@@ -69,6 +71,8 @@ pub struct Dialog {
     pub tab: String,
     pub search: String,
     pub list_index: usize,
+    /// Custom Sort's own state: the selection to restore and the column choices.
+    sort: sort_dialog::State,
     pub result: Option<Json>,
     /// "Show password" is ticked: password fields show their text.
     pub show_password: bool,
@@ -238,6 +242,7 @@ impl Dialog {
             tab: String::new(),
             search: String::new(),
             list_index: 0,
+            sort: Default::default(),
             result: None,
             show_password: false,
             focus_first_field: true,
@@ -263,6 +268,7 @@ impl Dialog {
             tab: String::new(),
             search: String::new(),
             list_index: 0,
+            sort: Default::default(),
             result: None,
             show_password: false,
             focus_first_field: false,
@@ -275,6 +281,26 @@ impl Dialog {
             original_link_text: None,
             refs: ref_edit::RefBoxes::default(),
         }
+    }
+
+    /// The Solver dialog's starting fields: the sheet's saved model, else the active cell as
+    /// objective, with the fields given when opening it over either. Split out of
+    /// [`Dialog::open`] (unchanged behaviour) so that match stays within the complexity limit as
+    /// both the fork and upstream add dialogs.
+    fn solver_start_values(saved: Option<&Json>, active: &str, params: &Json) -> Json {
+        let mut values =
+            json!({"objective": active, "goal": "max", "value": "0", "variables": "", "constraints": [], "nonNegative": true, "method": "grg"});
+        for m in [saved, Some(params)].into_iter().flatten().filter_map(Json::as_object) {
+            if let Some(v) = values.as_object_mut() {
+                for (k, x) in m {
+                    v.insert(k.clone(), if k == "value" { json!(x.as_str().map_or_else(|| x.to_string(), str::to_string)) } else { x.clone() });
+                }
+            }
+        }
+        if let Some(v) = values.as_object_mut() {
+            v.insert("newOp".into(), json!("<="));
+        }
+        values
     }
 
     /// Opens the named dialog with defaults from the active workbook, including a cell's stored hyperlink.
@@ -769,20 +795,7 @@ impl Dialog {
                 // Starts from the sheet's saved model, else the active cell as objective; fields
                 // given when opening it go over either.
                 let saved = app.session.active().and_then(|doc| gridcraft_engine::cmd::solver::saved_model(&doc.wb, doc.wb.active_sheet()));
-                let mut values = json!({"objective": active, "goal": "max", "value": "0", "variables": "", "constraints": [], "nonNegative": true, "method": "grg"});
-                for m in [saved.as_ref(), Some(&params)].into_iter().flatten().filter_map(Json::as_object) {
-                    if let Some(v) = values.as_object_mut() {
-                        for (k, x) in m {
-                            v.insert(
-                                k.clone(),
-                                if k == "value" { json!(x.as_str().map_or_else(|| x.to_string(), str::to_string)) } else { x.clone() },
-                            );
-                        }
-                    }
-                }
-                if let Some(v) = values.as_object_mut() {
-                    v.insert("newOp".into(), json!("<="));
-                }
+                let mut values = Self::solver_start_values(saved.as_ref(), &active, &params);
                 // The saved model's numbers are en-US; the dialog shows and sends them the way
                 // the interface types them (`locale` goes with the command).
                 localize_solver_numbers(&mut values, app.ui.regional_format());
@@ -1020,11 +1033,7 @@ impl Dialog {
                 }],
                 json!({"kind": "blanks"}),
             ),
-            "sort" => {
-                // Seed "Sort by" from the column the user is actually in (#1906).
-                let col = app.session.active().map(|d| gridcraft_engine::core::col_to_letters(d.selection.active.col)).unwrap_or_else(|| "A".into());
-                Dialog::custom("sort", "Sort", json!({"header": true, "levels": [{"column": col, "order": "asc"}]}))
-            }
+            "sort" => sort_dialog::open(app, &params)?,
             "nameManager" => Dialog::custom("nameManager", "Name Manager", json!({})),
             "pasteName" => {
                 // F3 opens it only when the workbook has names to paste, as in Excel.

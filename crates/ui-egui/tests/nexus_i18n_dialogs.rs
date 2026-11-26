@@ -115,7 +115,21 @@ const KEEP: &[&str] = &[
 /// Accessibility names egui itself gives its widgets (the window close button), which it offers
 /// no way to translate. Screen readers only; nothing on screen.
 // egui 0.37 names a resizable window's splitter "Resize panel" itself (no hook to translate it).
-const EGUI_OWN: &[&str] = &["Close window", "Resize panel"];
+// It also names a resizable window's eight grab handles (`containers/window.rs`,
+// `do_resize_interaction`), again as string literals with no hook: the Custom Sort window that
+// upstream made resizable in the 2026-11-26 sync is the first dialog here to show them.
+const EGUI_OWN: &[&str] = &[
+    "Close window",
+    "Resize panel",
+    "Resize window top edge",
+    "Resize window bottom edge",
+    "Resize window left edge",
+    "Resize window right edge",
+    "Resize window top-left corner",
+    "Resize window top-right corner",
+    "Resize window bottom-left corner",
+    "Resize window bottom-right corner",
+];
 
 /// A number format code (`dd/mm/yyyy`, `#.##0;[Red]-#.##0`, `General`): codes are the same in
 /// every language.

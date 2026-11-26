@@ -384,6 +384,9 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Recent" => "Gần đây",
         "No recent workbooks yet." => "Chưa có sổ làm việc gần đây.",
         "More workbooks" => "Sổ làm việc khác",
+        "More entries not shown" => "Còn mục khác chưa được hiển thị",
+        // Fork đổi hai câu này có chủ ý: đây là cột trong danh sách tệp, nên "Ngày sửa" /
+        // "Không có" gọn và đúng ngữ cảnh hơn bản của upstream.
         "Modified" => "Ngày sửa",
         "Not available" => "Không có",
         "Just now" => "Vừa xong",
@@ -1560,6 +1563,24 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "New Macro" => "Macro Mới",
         "Collapse dialog" => "Thu gọn hộp thoại",
         "Expand dialog" => "Mở rộng hộp thoại",
+        "Distinct Count" => "Đếm riêng biệt",
+        "Summarize by Distinct Count" => "Tóm tắt theo Đếm riêng biệt",
+        "A calculated field can't use Distinct Count." => "Trường tính toán không thể dùng Đếm riêng biệt.",
+        "This workbook has a PivotTable with a Distinct Count value field. In the .xlsx file it is stored as a plain Count plus a marker that only Nexus Sheet reads, so Excel's Refresh turns it into a plain count." => {
+            "Sổ làm việc này có PivotTable với trường giá trị “Đếm riêng biệt”. Trong tệp .xlsx, trường này được lưu dưới dạng Đếm thông thường cùng một dấu hiệu mà chỉ Nexus Sheet đọc, nên Làm mới trong Excel sẽ biến nó thành đếm thông thường."
+        }
+        "Add Level" => "Thêm cấp",
+        "Delete Level" => "Xóa cấp",
+        "Copy Level" => "Sao chép cấp",
+        "Move Up" => "Di chuyển lên",
+        "Move Down" => "Di chuyển xuống",
+        "Order" => "Thứ tự",
+        "Sort|Column" => "Cột",
+        "Column {letters}" => "Cột {letters}",
+        "Smallest to Largest" => "Nhỏ nhất đến lớn nhất",
+        "Largest to Smallest" => "Lớn nhất đến nhỏ nhất",
+        "Close the Sort dialog before switching or changing worksheets." => "Hãy đóng hộp thoại Sắp xếp trước khi chuyển hoặc thay đổi trang tính.",
+        "Return to the original worksheet to sort, or cancel." => "Hãy quay lại trang tính ban đầu để sắp xếp, hoặc hủy.",
         "Numerical Count" => "Số đếm số",
         "Minimum" => "Tối thiểu",
         "Maximum" => "Tối đa",
@@ -1680,6 +1701,15 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Split tabs" => "Thanh chia thẻ trang tính",
         "Unprotect Sheet…" => "Bỏ bảo vệ trang tính…",
         "Click to copy" => "Bấm để sao chép",
+        // Đồng bộ 2026-11-26: khoá mới của upstream ("Auto Fill Options" giữ bản dịch của fork ở trên).
+        "Copy Cells" => "Sao chép ô",
+        "Fill Series" => "Điền chuỗi",
+        "Fill Formatting Only" => "Chỉ điền định dạng",
+        "Fill Without Formatting" => "Điền không kèm định dạng",
+        "Fill Days" => "Điền theo ngày",
+        "Fill Weekdays" => "Điền theo ngày làm việc",
+        "Fill Months" => "Điền theo tháng",
+        "Fill Years" => "Điền theo năm",
         _ => return None,
     })
 }
