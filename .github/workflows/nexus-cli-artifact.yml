@@ -59,7 +59,7 @@ jobs:
           git config --global url."https://github.com/nhdai111983/craft-libs".insteadOf "https://github.com/storytold/craft-libs"
           git config --global url."https://github.com/nhdai111983/winprint.rs".insteadOf "https://github.com/storytold/winprint.rs"
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -100,7 +100,7 @@ jobs:
           rustup default stable
           rustc --version
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@v2.9.2
         with:
           workspaces: ". -> target-nexus-cli"
           save-if: ${{ github.ref == 'refs/heads/nexus' }}
@@ -123,7 +123,7 @@ jobs:
           cat cli-out/BUILD_INFO.json
           ls -l cli-out
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: nexus-cli-${{ github.event.repository.name }}
           path: cli-out/
@@ -141,7 +141,7 @@ jobs:
           git config --global url."https://github.com/nhdai111983/craft-libs".insteadOf "https://github.com/storytold/craft-libs"
           git config --global url."https://github.com/nhdai111983/winprint.rs".insteadOf "https://github.com/storytold/winprint.rs"
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -174,7 +174,7 @@ jobs:
           rustup default stable
           rustc --version
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@v2.9.2
         with:
           workspaces: ". -> target-nexus-cli"
           save-if: ${{ github.ref == 'refs/heads/nexus' }}
@@ -228,7 +228,7 @@ jobs:
           cat "$out/fuzz.json"
           echo "FUZZ_JSON=$out/fuzz.json" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: nexus-fuzz-${{ github.event.repository.name }}
           path: ${{ env.FUZZ_JSON }}

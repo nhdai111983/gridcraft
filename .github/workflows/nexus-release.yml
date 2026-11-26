@@ -86,7 +86,7 @@ jobs:
       publish: ${{ steps.meta.outputs.publish }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -216,7 +216,7 @@ jobs:
           git config --global url."https://github.com/nhdai111983/craft-libs".insteadOf "https://github.com/storytold/craft-libs"
           git config --global url."https://github.com/nhdai111983/winprint.rs".insteadOf "https://github.com/storytold/winprint.rs"
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -302,7 +302,7 @@ jobs:
           list=""; for f in out/*; do list="$list $(basename "$f") ($(wc -c < "$f" | tr -d ' ') bytes);"; done
           echo "::notice title=assets ($APP $VERSION_NEXUS)::$list"
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: nexus-windows
           path: out/*
@@ -333,7 +333,7 @@ jobs:
           git config --global url."https://github.com/nhdai111983/craft-libs".insteadOf "https://github.com/storytold/craft-libs"
           git config --global url."https://github.com/nhdai111983/winprint.rs".insteadOf "https://github.com/storytold/winprint.rs"
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -409,14 +409,14 @@ jobs:
           list=""; for f in out/*; do list="$list $(basename "$f") ($(wc -c < "$f" | tr -d ' ') bytes);"; done
           echo "::notice title=assets ($APP $VERSION_NEXUS)::$list"
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: nexus-macos
           path: out/*
           if-no-files-found: error
           retention-days: 7
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: scan-macos
           path: scan-macos/*
@@ -447,7 +447,7 @@ jobs:
           git config --global url."https://github.com/nhdai111983/craft-libs".insteadOf "https://github.com/storytold/craft-libs"
           git config --global url."https://github.com/nhdai111983/winprint.rs".insteadOf "https://github.com/storytold/winprint.rs"
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -598,7 +598,7 @@ jobs:
           dpkg-deb --info "out/$APP-$VERSION_NEXUS-linux-x86_64.deb"
           dpkg-deb --contents "out/$APP-$VERSION_NEXUS-linux-x86_64.deb" | grep -E 'usr/bin/|metainfo|applications' || true
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: nexus-linux
           path: out/*
@@ -628,7 +628,7 @@ jobs:
           git config --global url."https://github.com/nhdai111983/craft-libs".insteadOf "https://github.com/storytold/craft-libs"
           git config --global url."https://github.com/nhdai111983/winprint.rs".insteadOf "https://github.com/storytold/winprint.rs"
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -712,7 +712,7 @@ jobs:
           list=""; for f in out/*; do list="$list $(basename "$f") ($(wc -c < "$f" | tr -d ' ') bytes);"; done
           echo "::notice title=assets ($APP $VERSION_NEXUS)::$list"
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: nexus-web
           path: out/*
@@ -761,7 +761,7 @@ jobs:
       UPGRADE_CODE: ${{ needs.prepare.outputs.upgrade_code }}
       VERSION_NEXUS: ${{ needs.prepare.outputs.version }}
     steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: "{nexus-*,scan-macos}"
           path: artifacts
@@ -839,12 +839,12 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           path: fork
           persist-credentials: false
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           repository: nhdai111983/NexusOffices
           ref: ${{ env.NEXUS_TOOLS_REF }}
@@ -921,7 +921,7 @@ jobs:
       VERSION_NEXUS: ${{ needs.prepare.outputs.version }}
       PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
     steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: nexus-*
           path: artifacts
@@ -1013,7 +1013,7 @@ jobs:
             echo "::warning title=Pages status unknown::could not read the Pages settings ($(head -c 200 "$RUNNER_TEMP/pages.err")); trying the deploy anyway"
           fi
 
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: nexus-web
           path: artifacts
@@ -1029,10 +1029,10 @@ jobs:
           touch site/.nojekyll
           ls -l site
 
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+      - uses: actions/upload-pages-artifact@v5.0.0
         with:
           path: site
 
       - name: Deploy
         id: deploy
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        uses: actions/deploy-pages@v5.0.1
